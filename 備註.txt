@@ -1,0 +1,4 @@
+到時候水箱溫度用OBD去讀取
+轉速讀取ENGINE_RPM1
+油箱讀取FUEL
+速度讀取SPEED_FL
