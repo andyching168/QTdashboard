@@ -1,0 +1,134 @@
+"""
+Spotify 整合到 datagrab.py 主程式
+"""
+
+import sys
+import os
+
+# 添加專案根目錄到路徑
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import logging
+from spotify_auth import SpotifyAuthManager
+from spotify_listener import SpotifyListener
+
+logger = logging.getLogger(__name__)
+
+
+class SpotifyIntegration:
+    """Spotify 整合類別 - 用於 datagrab.py"""
+    
+    def __init__(self, dashboard):
+        """
+        初始化 Spotify 整合
+        
+        Args:
+            dashboard: Dashboard 實例（main.py 的 Dashboard 類別）
+        """
+        self.dashboard = dashboard
+        self.auth = None
+        self.listener = None
+        self.enabled = False
+        
+    def initialize(self):
+        """初始化 Spotify 連線"""
+        try:
+            logger.info("正在初始化 Spotify 連線...")
+            
+            # 建立認證管理器
+            self.auth = SpotifyAuthManager()
+            
+            # 執行認證
+            if not self.auth.authenticate():
+                logger.error("Spotify 認證失敗")
+                return False
+            
+            logger.info("Spotify 認證成功")
+            
+            # 建立監聽器
+            self.listener = SpotifyListener(self.auth, update_interval=1.0)
+            
+            # 設定回調函數
+            self.listener.set_callback('on_track_change', self._on_track_change)
+            self.listener.set_callback('on_album_art_loaded', self._on_album_art_loaded)
+            self.listener.set_callback('on_progress_update', self._on_progress_update)
+            self.listener.set_callback('on_error', self._on_error)
+            
+            # 啟動監聽
+            self.listener.start()
+            
+            self.enabled = True
+            logger.info("Spotify 整合已啟用")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Spotify 初始化失敗: {e}")
+            return False
+    
+    def _on_track_change(self, track_info):
+        """歌曲變更回調（立即顯示文字資訊）"""
+        try:
+            logger.info(f"🎵 {track_info['name']} - {track_info['artists']}")
+            if self.dashboard:
+                # 使用執行緒安全的方法更新
+                self.dashboard.update_spotify_track(
+                    track_info['name'],
+                    track_info['artists']
+                )
+        except Exception as e:
+            logger.error(f"更新歌曲資訊失敗: {e}")
+    
+    def _on_album_art_loaded(self, album_art):
+        """專輯封面載入完成回調（非同步）"""
+        try:
+            if self.dashboard:
+                # 使用執行緒安全的方法更新
+                self.dashboard.update_spotify_art(album_art)
+        except Exception as e:
+            logger.error(f"更新專輯封面失敗: {e}")
+    
+    def _on_progress_update(self, progress_data):
+        """播放進度更新回調"""
+        try:
+            if self.dashboard:
+                progress_ms = progress_data['progress_ms']
+                duration_ms = progress_data['duration_ms']
+                # 使用執行緒安全的方法更新
+                self.dashboard.update_spotify_progress(
+                    progress_ms / 1000, 
+                    duration_ms / 1000
+                )
+        except Exception as e:
+            logger.error(f"更新播放進度失敗: {e}")
+    
+    def _on_error(self, error):
+        """錯誤處理回調"""
+        logger.error(f"Spotify 錯誤: {error}")
+    
+    def stop(self):
+        """停止 Spotify 監聽"""
+        if self.listener:
+            self.listener.stop()
+            logger.info("Spotify 監聽器已停止")
+        self.enabled = False
+
+
+# 提供給 datagrab.py 使用的簡單介面
+def setup_spotify(dashboard):
+    """
+    為 datagrab.py 設定 Spotify 整合
+    
+    Args:
+        dashboard: Dashboard 實例
+        
+    Returns:
+        SpotifyIntegration 實例，若失敗則返回 None
+    """
+    try:
+        integration = SpotifyIntegration(dashboard)
+        if integration.initialize():
+            return integration
+        return None
+    except Exception as e:
+        logger.error(f"設定 Spotify 整合失敗: {e}")
+        return None

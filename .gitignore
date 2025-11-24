@@ -36,3 +36,5 @@ wheels/
 # OS
 .DS_Store
 Thumbs.db
+spotify_config.json
+.spotify_cache

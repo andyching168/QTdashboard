@@ -3,3 +3,7 @@ python-can>=4.6.0
 cantools>=41.0.0
 pyserial>=3.5
 rich>=14.2.0
+spotipy>=2.25.0
+requests>=2.32.0
+Pillow>=12.0.0
+qrcode[pil]>=8.2

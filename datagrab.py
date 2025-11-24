@@ -5,15 +5,16 @@ import logging
 import can
 import cantools
 import serial.tools.list_ports
-from rich.live import Live
-from rich.layout import Layout
-from rich.panel import Panel
-from rich.table import Table
 from rich.console import Console
+from rich.panel import Panel
 from rich.align import Align
+
+# PyQt6 Imports
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import QTimer
-from main import Dashboard
+from PyQt6.QtCore import QObject, pyqtSignal
+
+# 引入你的儀表板類別
+from main import Dashboard 
 
 # 配置日誌
 logging.basicConfig(
@@ -26,18 +27,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- 0. 信號類別 (關鍵修正：用於跨執行緒通訊) ---
+class WorkerSignals(QObject):
+    """
+    定義所有從背景執行緒發送到 GUI 的信號。
+    必須繼承自 QObject 才能使用 pyqtSignal。
+    """
+    update_rpm = pyqtSignal(float)   # 發送轉速 (float)
+    update_speed = pyqtSignal(float) # 發送車速 (float)
+    update_temp = pyqtSignal(float)  # 發送水溫百分比 (float)
+    update_fuel = pyqtSignal(float)  # 發送油量百分比 (float)
+    update_gear = pyqtSignal(str)    # 發送檔位 (str)
+    # update_nav_icon = pyqtSignal(str) # 預留給導航圖片
+
 # --- 全局變數 ---
-current_mode = "HYBRID" # HYBRID (同時跑), CAN_ONLY, OBD_ONLY
+current_mode = "HYBRID" 
 data_store = {
-    "CAN": {"rpm": 0, "speed": 0, "fuel": 0, "update_count": 0, "last_update": 0, "hz": 0},
-    "OBD": {"rpm": 0, "speed": 0, "temp": 0, "update_count": 0, "last_update": 0, "hz": 0}
+    "CAN": {"rpm": 0, "speed": 0, "fuel": 0, "hz": 0, "last_update": 0},
+    "OBD": {"rpm": 0, "speed": 0, "temp": 0, "hz": 0, "last_update": 0}
 }
 stop_threads = False
 console = Console()
-dashboard = None  # PyQt6 儀表板實例
-
-# 新增一個鎖，只用來保護「發送」操作，避免寫入衝突
-send_lock = threading.Lock()
+send_lock = threading.Lock() # 保護寫入操作
 
 # --- 1. 硬體連接 ---
 def select_serial_port():
@@ -92,14 +103,24 @@ def select_serial_port():
         return all_ports[0][0]
 
 # --- 2. 核心邏輯 (監聽與查詢) ---
-# --- 合併後的單一接收邏輯 ---
-def unified_receiver(bus, db):
-    """統一處理所有接收到的 CAN 訊息 (包含 DBC 解碼和 OBD 解析)"""
-    global data_store, dashboard
+def unified_receiver(bus, db, signals):
+    """
+    統一處理所有接收到的 CAN 訊息 (包含 DBC 解碼和 OBD 解析)
+    關鍵修改：使用 signals.emit() 取代 dashboard.set_xxx()
+    """
+    global data_store
     last_can_hz_calc = time.time()
     can_count = 0
     error_count = 0
     max_consecutive_errors = 100
+    
+    # RPM 平滑參數
+    current_rpm_smoothed = 0.0
+    rpm_alpha = 0.15  # 平滑係數 (0.0~1.0)，越小越平滑但反應越慢
+    
+    # 檔位切換狀態追蹤
+    last_gear_str = None
+    last_gear_change_time = 0
     
     logger.info("CAN 訊息接收執行緒已啟動")
     
@@ -114,25 +135,36 @@ def unified_receiver(bus, db):
             # 重置錯誤計數（收到有效訊息）
             error_count = 0
 
-            # 1. 處理 OBD 回應 (ID 0x7E8)
-            if msg.arbitration_id == 0x7E8:
+            # 1. 處理 OBD 回應 (ID 0x7E8 ECU / 0x7E9 TCM)
+            if msg.arbitration_id in [0x7E8, 0x7E9]:
                 try:
                     if len(msg.data) < 3:
-                        logger.warning(f"OBD 訊息長度不足: {len(msg.data)} bytes")
                         continue
                     
                     # PID 0C (RPM)
                     if msg.data[2] == 0x0C:
                         if len(msg.data) < 5:
-                            logger.warning("RPM 資料長度不足")
                             continue
-                        rpm = (msg.data[3] * 256 + msg.data[4]) / 4
-                        data_store["OBD"]["rpm"] = rpm
+                        raw_rpm = (msg.data[3] * 256 + msg.data[4]) / 4
+                        
+                        # 平滑處理 (EMA - Exponential Moving Average)
+                        if current_rpm_smoothed == 0:
+                            current_rpm_smoothed = raw_rpm
+                        else:
+                            current_rpm_smoothed = (current_rpm_smoothed * (1 - rpm_alpha)) + (raw_rpm * rpm_alpha)
+                        
+                        # 記錄來源
+                        source = "ECU" if msg.arbitration_id == 0x7E8 else "TCM"
+                        data_store["OBD"]["rpm"] = raw_rpm
                         data_store["OBD"]["last_update"] = time.time()
-                        logger.debug(f"OBD RPM: {rpm}")
+                        
+                        # [修改] 放棄 CAN RPM，直接使用 OBD 數據更新介面
+                        # 雖然頻率較低，但數值是標準且準確的
+                        signals.update_rpm.emit(current_rpm_smoothed / 1000.0)
                     
-                    # PID 05 (Temp) - 水箱溫度
-                    elif msg.data[2] == 0x05:
+                    # PID 05 (Temp) - 水箱溫度 (通常只在 ECU 0x7E8)
+                    # PID 05 (Temp) - 水箱溫度 (通常只在 ECU 0x7E8)
+                    elif msg.data[2] == 0x05 and msg.arbitration_id == 0x7E8:
                         if len(msg.data) < 4:
                             logger.warning("水溫資料長度不足")
                             continue
@@ -142,33 +174,50 @@ def unified_receiver(bus, db):
                         
                         # 更新前端水溫顯示
                         # 40°C -> 0%, 80°C -> 50%, 120°C -> 100%
-                        if dashboard:
-                            try:
-                                temp_normalized = ((temp - 40) / 80.0) * 100
-                                temp_normalized = max(0, min(100, temp_normalized))
-                                dashboard.set_temperature(temp_normalized)
-                            except Exception as e:
-                                logger.error(f"更新前端水溫失敗: {e}")
-                                
+                        temp_normalized = ((temp - 40) / 80.0) * 100
+                        temp_normalized = max(0, min(100, temp_normalized))
+                        signals.update_temp.emit(temp_normalized)  # ✅ 安全發送
+                        
                 except (IndexError, KeyError) as e:
-                    logger.error(f"解析 OBD 訊息錯誤 (ID 0x7E8): {e}, data: {msg.data.hex()}")
+                    logger.error(f"解析 OBD 訊息錯誤: {e}, data: {msg.data.hex()}")
                 except Exception as e:
                     logger.error(f"處理 OBD 訊息未預期錯誤: {e}")
 
             # 2. 處理 ENGINE_RPM1 (ID 0x340 / 832)
             elif msg.arbitration_id == 0x340:
                 try:
-                    decoded = db.decode_message(msg.arbitration_id, msg.data)
-                    rpm_raw = decoded.get('ENGINE_RPM1', 0)
-                    data_store["CAN"]["rpm"] = rpm_raw
-                    data_store["CAN"]["last_update"] = time.time()
+                    # decoded = db.decode_message(msg.arbitration_id, msg.data)
+                    # 改為純手動解析，因為 DBC Multiplexing 對未定義的 ID (如 8) 會報錯導致中斷
                     
-                    # 更新前端轉速顯示 (轉換為千轉)
-                    if dashboard:
-                        try:
-                            dashboard.set_rpm(rpm_raw / 1000.0)
-                        except Exception as e:
-                            logger.error(f"更新前端轉速失敗: {e}")
+                    # 取得檔位模式 (Byte 0)
+                    # DBC: TRANS_MODE : 7|5@1+ (Byte 0 bits 0-4)
+                    trans_mode = msg.data[0] & 0x1F
+                    
+                    # --- 僅保留檔位解析 (RPM 改用 OBD) ---
+                    gear_str = "P" # 預設
+                    
+                    if trans_mode == 0x00: # P/N 檔
+                        # 區分 P 和 N (根據 Byte 1)
+                        # P: 00 80 ... (Byte 1 & 0x0F = 0)
+                        # N: 00 84 ... (Byte 1 & 0x0F = 4)
+                        if (msg.data[1] & 0x0F) == 4:
+                            gear_str = "N"
+                        else:
+                            gear_str = "P"
+                        
+                    elif trans_mode in [0x01, 0x07]: # D 檔 (0x01) 或 R 檔 (0x07)
+                        gear_str = "D" if trans_mode == 0x01 else "R"
+                            
+                    else:
+                        # 其他檔位 (S/L 等)
+                        gear_str = str(trans_mode)
+                    
+                    # 更新前端檔位顯示
+                    signals.update_gear.emit(gear_str)
+                    
+                    # [已移除] 複雜的 CAN RPM 解析邏輯
+                    # 由於 Luxgen M7 的 RPM 訊號在 D/R 檔位使用了特殊的 Base+Delta 編碼，
+                    # 且實測發現極不穩定，故決定回退到使用標準 OBD-II PID 0x0C 讀取轉速。
                     
                     # 計算 CAN Hz
                     can_count += 1
@@ -188,16 +237,18 @@ def unified_receiver(bus, db):
             elif msg.arbitration_id == 0x335:
                 try:
                     decoded = db.decode_message(msg.arbitration_id, msg.data)
-                    fuel = decoded.get('FUEL', 0)
+                    # FUEL 縮放 (0.3984, 0)，範圍 0-100%
+                    fuel_value = decoded['FUEL']
+                    if hasattr(fuel_value, 'value'):
+                        fuel = float(fuel_value.value)
+                    else:
+                        fuel = float(fuel_value)
+
                     data_store["CAN"]["fuel"] = fuel
                     logger.debug(f"油量: {fuel}%")
                     
                     # 更新前端油量顯示 (0-100%)
-                    if dashboard:
-                        try:
-                            dashboard.set_fuel(fuel)
-                        except Exception as e:
-                            logger.error(f"更新前端油量失敗: {e}")
+                    signals.update_fuel.emit(fuel)  # ✅ 安全發送
                             
                 except cantools.database.errors.DecodeError as e:
                     logger.error(f"DBC 解碼錯誤 (FUEL): {e}")
@@ -208,21 +259,35 @@ def unified_receiver(bus, db):
             elif msg.arbitration_id == 0x38A:
                 try:
                     decoded = db.decode_message(msg.arbitration_id, msg.data)
-                    speed = decoded.get('SPEED_FL', 0)
+                    # SPEED_FL 縮放 (1, 0)，範圍 0-255 km/h
+                    speed_value = decoded['SPEED_FL']
+                    if hasattr(speed_value, 'value'):
+                        speed = float(speed_value.value)
+                    else:
+                        speed = float(speed_value)
+
                     data_store["CAN"]["speed"] = speed
                     logger.debug(f"速度: {speed} km/h")
                     
                     # 更新前端速度顯示
-                    if dashboard:
-                        try:
-                            dashboard.set_speed(speed)
-                        except Exception as e:
-                            logger.error(f"更新前端速度失敗: {e}")
+                    signals.update_speed.emit(speed)  # ✅ 安全發送
+
+                    # --- 隱藏版 RPM 解析 (針對 R/D 檔) ---
+                    # [已移除] ID 0x38A 證實為輪速訊號，轉彎時會失準，故移除此邏輯。
+                    # 改為優化 OBD 查詢頻率與多來源接收。
+                    # --------------------------------------
                             
                 except cantools.database.errors.DecodeError as e:
                     logger.error(f"DBC 解碼錯誤 (SPEED_FL): {e}")
                 except Exception as e:
                     logger.error(f"處理速度訊息錯誤: {e}")
+
+            # 5. 偵測潛在的 RPM 訊號 (ID 0x316 / 790 ENGINE_DATA)
+            # elif msg.arbitration_id == 0x316:
+            #     # 當主要 RPM (ID 832) 失效時，記錄此 ID 的數據以供分析
+            #     if time.time() - data_store["CAN"].get("last_update", 0) > 1.0:
+            #         if error_count % 20 == 0: # 降低頻率
+            #             logger.info(f"尋找 RPM 候選 - ID 790 Raw: {msg.data.hex()}")
                 
         except ValueError as e:
             # 捕捉 fromhex error，忽略這條損壞的訊息
@@ -247,135 +312,50 @@ def unified_receiver(bus, db):
     
     logger.info("CAN 訊息接收執行緒已停止")
 
-def obd_query(bus):
-    """主動查詢 OBD-II (保持獨立執行緒，但加鎖)"""
+def obd_query(bus, signals):
+    """主動查詢 OBD-II"""
     global data_store
-    last_hz_calc = time.time()
-    count = 0
-    error_count = 0
-    max_errors = 50
-    
     logger.info("OBD-II 查詢執行緒已啟動")
     
     while not stop_threads:
         if current_mode == "CAN_ONLY":
-            time.sleep(0.5)
+            time.sleep(1)
             continue
 
         try:
-            # 1. 查 RPM
+            # 查詢 RPM (PID 0x0C)
             msg_rpm = can.Message(
                 arbitration_id=0x7DF, 
                 data=[0x02, 0x01, 0x0C, 0, 0, 0, 0, 0], 
                 is_extended_id=False
             )
-            
-            # 2. 查 水溫
+            with send_lock:
+                bus.send(msg_rpm)
+            time.sleep(0.1)
+
+            # 查詢 水溫 (PID 0x05)
             msg_temp = can.Message(
                 arbitration_id=0x7DF, 
                 data=[0x02, 0x01, 0x05, 0, 0, 0, 0, 0], 
                 is_extended_id=False
             )
-
-            try:
-                with send_lock:  # 加鎖保護寫入
-                    bus.send(msg_rpm)
-                    logger.debug("已發送 OBD RPM 查詢")
-                time.sleep(0.05)  # 間隔一下
-                
-                with send_lock:  # 加鎖保護寫入
-                    bus.send(msg_temp)
-                    logger.debug("已發送 OBD 水溫查詢")
-                
-                # 重置錯誤計數（成功發送）
-                error_count = 0
-                
-            except can.CanError as e:
-                error_count += 1
-                logger.error(f"OBD 查詢發送失敗: {e}")
-                if error_count >= max_errors:
-                    logger.critical(f"OBD 查詢連續失敗 {max_errors} 次，執行緒即將停止")
-                    break
-                time.sleep(1.0)  # 錯誤後延長等待時間
-                continue
-                
-            except Exception as e:
-                error_count += 1
-                logger.error(f"OBD 查詢未預期錯誤: {e}", exc_info=True)
-                if error_count >= max_errors:
-                    logger.critical(f"OBD 查詢連續失敗 {max_errors} 次，執行緒即將停止")
-                    break
-                time.sleep(1.0)
-                continue
-
-            time.sleep(0.2)  # 稍微放慢查詢速度，避免塞爆 slcan 緩衝區
             
-            count += 1
-            now = time.time()
-            if now - last_hz_calc >= 1.0:
-                data_store["OBD"]["hz"] = count
-                logger.debug(f"OBD 查詢率: {count} Hz")
-                count = 0
-                last_hz_calc = now
-                
+            with send_lock:
+                bus.send(msg_temp)
+            
+            time.sleep(0.05)  # 加速查詢頻率 (20Hz) 以獲得更流暢的指針
+            
+        except can.CanError:
+            time.sleep(1)
         except Exception as e:
-            logger.error(f"OBD 查詢迴圈錯誤: {e}", exc_info=True)
-            time.sleep(1.0)
+            logger.error(f"OBD 查詢錯誤: {e}")
+            time.sleep(1)
     
     logger.info("OBD-II 查詢執行緒已停止")
 
-# --- 3. UI 顯示 ---
-def generate_layout():
-    layout = Layout()
-    layout.split_column(
-        Layout(name="header", size=3),
-        Layout(name="body", ratio=1),
-        Layout(name="footer", size=3)
-    )
-    layout["body"].split_row(
-        Layout(name="can_panel"),
-        Layout(name="obd_panel")
-    )
-    return layout
-
-def update_display(layout):
-    # Header
-    mode_text = f"[bold white on blue] 目前模式: {current_mode} (按 'm' 切換, 'q' 退出) [/]"
-    layout["header"].update(Panel(Align.center(mode_text), title="Luxgen 7 MPV Dashboard Demo"))
-
-    # CAN Panel
-    can_table = Table(expand=True)
-    can_table.add_column("Metric", style="cyan")
-    can_table.add_column("Value", style="bold green")
-    can_table.add_row("RPM", f"{float(data_store['CAN']['rpm']):.0f}")
-    can_table.add_row("更新率 (Hz)", f"{data_store['CAN']['hz']}")
-    can_table.add_row("資料來源", "被動監聽 (DBC)")
-    can_table.add_row("特點", "極低延遲，無需請求")
-    
-    can_style = "green" if current_mode in ["HYBRID", "CAN_ONLY"] else "dim"
-    layout["can_panel"].update(Panel(can_table, title="CAN Bus (儀表級數據)", border_style=can_style))
-
-    # OBD Panel
-    obd_table = Table(expand=True)
-    obd_table.add_column("Metric", style="magenta")
-    obd_table.add_column("Value", style="bold yellow")
-    obd_table.add_row("RPM", f"{float(data_store['OBD']['rpm']):.0f}")
-    obd_table.add_row("水溫", f"{data_store['OBD']['temp']} °C")
-    obd_table.add_row("請求率 (Hz)", f"{data_store['OBD']['hz']}")
-    obd_table.add_row("資料來源", "主動詢答 (OBD-II)")
-    obd_table.add_row("特點", "通用但有延遲")
-
-    obd_style = "yellow" if current_mode in ["HYBRID", "OBD_ONLY"] else "dim"
-    layout["obd_panel"].update(Panel(obd_table, title="OBD-II (診斷級數據)", border_style=obd_style))
-
-    # Footer comparison
-    diff = abs(float(data_store['CAN']['rpm']) - float(data_store['OBD']['rpm']))
-    footer_text = f"RPM 差異: {diff:.0f} | CAN 更新速度是 OBD 的 {data_store['CAN']['hz'] / max(1, data_store['OBD']['hz']):.1f} 倍"
-    layout["footer"].update(Panel(Align.center(footer_text), title="即時對比"))
-
-# --- 主程式 ---
+# --- 3. 主程式 ---
 def main():
-    global current_mode, stop_threads, dashboard
+    global current_mode, stop_threads
     
     bus = None
     db = None
@@ -384,10 +364,16 @@ def main():
     
     try:
         logger.info("=" * 50)
-        logger.info("Luxgen M7 儀表板系統啟動")
+        logger.info("Luxgen M7 儀表板系統啟動 (Safe Mode)")
         logger.info("=" * 50)
         
-        # 1. 連接
+        # 1. 優先建立 Qt Application (這是使用 QObject/Signals 的前提)
+        app = QApplication(sys.argv)
+        
+        # 2. 建立信號物件
+        signals = WorkerSignals()
+        
+        # 3. 選擇並連接硬體
         port = select_serial_port()
         if not port:
             logger.error("未選擇 Serial 裝置，程式退出")
@@ -396,46 +382,19 @@ def main():
         logger.info(f"已選擇裝置: {port}")
 
         try:
-            # 初始化 CAN Bus
             logger.info("正在初始化 CAN Bus...")
-            logger.info("注意: SLCAN 初始化可能需要 5-10 秒...")
+            # 設定 SLCAN 介面
+            # 注意: 這裡使用 slcan interface，需要 python-can 的 serial 支持
+            bus = can.interface.Bus(
+                interface='slcan', 
+                channel=port, 
+                bitrate=500000,
+                timeout=0.1
+            )
+            logger.info(f"CAN Bus 已連接: {bus}")
             
-            import signal
-            
-            def timeout_handler(signum, frame):
-                raise TimeoutError("CAN Bus 初始化超時")
-            
-            # 設定 15 秒超時
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(15)
-            
-            try:
-                bus = can.interface.Bus(
-                    interface='slcan',  # 使用 interface 取代 bustype
-                    channel=port, 
-                    bitrate=500000,
-                    timeout=5  # 設定通訊超時
-                )
-                signal.alarm(0)  # 取消超時
-                logger.info(f"CAN Bus 已連接: {bus}")
-            except TimeoutError:
-                signal.alarm(0)
-                raise TimeoutError("SLCAN 初始化超時 (15秒)，請檢查設備連接")
-            
-        except TimeoutError as e:
-            console.print(f"[red]CAN Bus 初始化超時: {e}[/red]")
-            console.print("[yellow]提示: 使用 simple_simulator.py 時無法直接連接 SLCAN[/yellow]")
-            console.print("[yellow]請改用前端測試模式: python main.py[/yellow]")
-            logger.error(f"CAN Bus 初始化超時: {e}")
-            return
-        except OSError as e:
-            console.print(f"[red]無法開啟 CAN Bus 裝置: {e}[/red]")
-            console.print("[yellow]提示: 虛擬 serial port 可能不支援 SLCAN 協定[/yellow]")
-            logger.error(f"CAN Bus 連接失敗: {e}")
-            return
         except Exception as e:
-            console.print(f"[red]CAN Bus 初始化錯誤: {e}[/red]")
-            console.print("[yellow]如要測試前端介面，請直接執行: python main.py[/yellow]")
+            console.print(f"[red]CAN Bus 初始化失敗: {e}[/red]")
             logger.error(f"CAN Bus 初始化失敗: {e}", exc_info=True)
             return
         
@@ -444,79 +403,66 @@ def main():
             logger.info("正在載入 DBC 檔案...")
             db = cantools.database.load_file('luxgen_m7_2009.dbc')
             logger.info(f"DBC 檔案已載入，共 {len(db.messages)} 個訊息定義")
-            
         except FileNotFoundError:
-            console.print("[red]找不到 luxgen_m7_2009.dbc 檔案！[/red]")
-            logger.error("DBC 檔案不存在")
-            return
-        except Exception as e:
-            console.print(f"[red]載入 DBC 檔案失敗: {e}[/red]")
-            logger.error(f"DBC 載入錯誤: {e}", exc_info=True)
+            console.print("[red]DBC 檔案遺失！將無法解碼 CAN 訊號[/red]")
             return
 
-        # 2. 啟動執行緒
+        # 4. 初始化介面並連接信號
+        console.print("[green]啟動儀表板前端...[/green]")
+        dashboard = Dashboard()
+        
+        # ★★★ 關鍵連接步驟 ★★★
+        signals.update_rpm.connect(dashboard.set_rpm)
+        signals.update_speed.connect(dashboard.set_speed)
+        signals.update_temp.connect(dashboard.set_temperature)
+        signals.update_fuel.connect(dashboard.set_fuel)
+        signals.update_gear.connect(dashboard.set_gear)
+        
+        dashboard.show()
+
+        # 5. 啟動背景執行緒 (傳入 signals)
         logger.info("正在啟動背景執行緒...")
-        t_receiver = threading.Thread(target=unified_receiver, args=(bus, db), daemon=True, name="CAN-Receiver")
-        t_query = threading.Thread(target=obd_query, args=(bus,), daemon=True, name="OBD-Query")
+        t_receiver = threading.Thread(
+            target=unified_receiver, 
+            args=(bus, db, signals), 
+            daemon=True, 
+            name="CAN-Receiver"
+        )
+        t_query = threading.Thread(
+            target=obd_query, 
+            args=(bus, signals), 
+            daemon=True, 
+            name="OBD-Query"
+        )
         
         t_receiver.start()
         t_query.start()
-        logger.info("背景執行緒已啟動")
 
-        # 3. 啟動 PyQt6 前端顯示
-        console.print("[green]啟動儀表板前端...[/green]")
-        logger.info("正在初始化 Qt 應用程式...")
+        # 6. 進入 Qt 事件循環 (這行會卡住主執行緒直到視窗關閉)
+        logger.info("儀表板運行中...")
+        exit_code = app.exec()
         
-        try:
-            app = QApplication(sys.argv)
-            dashboard = Dashboard()
-            dashboard.show()
-            logger.info("儀表板視窗已開啟")
-            
-            # 啟動 Qt 事件循環
-            exit_code = app.exec()
-            logger.info(f"Qt 應用程式已關閉，退出碼: {exit_code}")
-            sys.exit(exit_code)
-            
-        except Exception as e:
-            console.print(f"[red]前端啟動失敗: {e}[/red]")
-            logger.error(f"Qt 應用程式錯誤: {e}", exc_info=True)
-            raise
-            
+        sys.exit(exit_code)
+
     except KeyboardInterrupt:
-        console.print("\n[yellow]收到中斷信號 (Ctrl+C)[/yellow]")
-        logger.info("使用者中斷程式")
+        console.print("\n[yellow]收到中斷信號[/yellow]")
         
     except Exception as e:
-        console.print(f"[red]程式發生嚴重錯誤: {e}[/red]")
-        logger.critical(f"主程式嚴重錯誤: {e}", exc_info=True)
+        console.print(f"[red]嚴重錯誤: {e}[/red]")
+        logger.critical(f"主程式崩潰: {e}", exc_info=True)
         
     finally:
         # 清理資源
-        logger.info("正在清理資源...")
+        logger.info("正在關閉系統...")
         stop_threads = True
         
-        # 等待執行緒結束
-        if t_receiver and t_receiver.is_alive():
-            logger.info("等待接收執行緒結束...")
-            t_receiver.join(timeout=2.0)
-            
-        if t_query and t_query.is_alive():
-            logger.info("等待查詢執行緒結束...")
-            t_query.join(timeout=2.0)
-        
-        # 關閉 CAN Bus
         if bus:
             try:
-                logger.info("正在關閉 CAN Bus...")
                 bus.shutdown()
-                logger.info("CAN Bus 已關閉")
-            except Exception as e:
-                logger.error(f"關閉 CAN Bus 時發生錯誤: {e}")
+            except:
+                pass
         
         console.print("[green]程式已安全結束[/green]")
-        logger.info("程式結束")
-        logger.info("=" * 50)
 
 if __name__ == "__main__":
     main()

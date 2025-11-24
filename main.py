@@ -1,8 +1,14 @@
 import sys
+import os
 import math
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout
-from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
-from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton
+from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot
+from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QPixmap, QMouseEvent
+
+# Spotify Imports
+from spotify_integration import setup_spotify
+from spotify_auth import SpotifyAuthManager
+from spotify_qr_auth import SpotifyQRAuthDialog
 
 class GaugeStyle:
     def __init__(self, major_ticks=8, minor_ticks=4, start_angle=225, span_angle=270, 
@@ -17,6 +23,297 @@ class GaugeStyle:
         self.needle_color = needle_color
         self.text_scale = text_scale
         self.show_center_circle = show_center_circle
+
+class MusicCard(QWidget):
+    """音樂播放器卡片"""
+    
+    # Signal to notify dashboard to start binding process
+    request_bind = pyqtSignal()
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(380, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # Main layout with StackedWidget
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.stack = QStackedWidget()
+        self.main_layout.addWidget(self.stack)
+        
+        # Page 1: Not Configured (Bind UI)
+        self.bind_page = QWidget()
+        self.setup_bind_ui()
+        self.stack.addWidget(self.bind_page)
+        
+        # Page 2: Player UI
+        self.player_page = QWidget()
+        self.setup_player_ui()
+        self.stack.addWidget(self.player_page)
+        
+        # Default to Bind page if config missing (logic handled by Dashboard)
+        self.stack.setCurrentWidget(self.bind_page)
+
+    def setup_bind_ui(self):
+        layout = QVBoxLayout(self.bind_page)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(20)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        icon_label = QLabel("🎵")
+        icon_label.setStyleSheet("font-size: 80px; background: transparent;")
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        text_label = QLabel("Spotify 未連結")
+        text_label.setStyleSheet("color: white; font-size: 24px; font-weight: bold; background: transparent;")
+        text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        desc_label = QLabel("請點擊下方按鈕進行綁定\n以顯示播放資訊")
+        desc_label.setStyleSheet("color: #aaa; font-size: 16px; background: transparent;")
+        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc_label.setWordWrap(True)
+        
+        self.bind_btn = QPushButton("綁定 Spotify")
+        self.bind_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.bind_btn.setFixedSize(200, 50)
+        self.bind_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1DB954;
+                color: white;
+                border-radius: 25px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1ed760;
+            }
+            QPushButton:pressed {
+                background-color: #1aa34a;
+            }
+        """)
+        self.bind_btn.clicked.connect(self.request_bind.emit)
+        
+        layout.addStretch()
+        layout.addWidget(icon_label)
+        layout.addWidget(text_label)
+        layout.addWidget(desc_label)
+        layout.addSpacing(20)
+        layout.addWidget(self.bind_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addStretch()
+
+    def setup_player_ui(self):
+        layout = QVBoxLayout(self.player_page)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # 標題
+        title_label = QLabel("Now Playing")
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 14px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 專輯封面
+        self.album_art = QLabel()
+        self.album_art.setFixedSize(180, 180)
+        self.album_art.setStyleSheet("""
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #4a5568, stop:0.5 #2d3748, stop:1 #1a202c);
+            border-radius: 15px;
+            border: 3px solid #4a5568;
+        """)
+        self.album_art.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 創建專輯圖標 (音符符號)
+        album_icon = QLabel("♪")
+        album_icon.setStyleSheet("""
+            color: #6af;
+            font-size: 80px;
+            background: transparent;
+        """)
+        album_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        album_icon.setParent(self.album_art)
+        album_icon.setGeometry(0, 0, 180, 180)
+        
+        # 歌曲名稱
+        self.song_title = QLabel("Waiting for music...")
+        self.song_title.setStyleSheet("""
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        self.song_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 演出者
+        self.artist_name = QLabel("-")
+        self.artist_name.setStyleSheet("""
+            color: #aaa;
+            font-size: 14px;
+            background: transparent;
+        """)
+        self.artist_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 進度條容器
+        progress_widget = QWidget()
+        progress_widget.setStyleSheet("background: transparent;")
+        progress_layout = QVBoxLayout(progress_widget)
+        progress_layout.setContentsMargins(0, 0, 0, 0)
+        progress_layout.setSpacing(5)
+        
+        # 進度條
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(6)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #2d3748;
+                border-radius: 3px;
+                border: none;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #6af, stop:1 #4a9eff);
+                border-radius: 3px;
+            }
+        """)
+        
+        # 時間標籤
+        time_layout = QHBoxLayout()
+        time_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.current_time = QLabel("0:00")
+        self.current_time.setStyleSheet("""
+            color: #888;
+            font-size: 11px;
+            background: transparent;
+        """)
+        
+        self.total_time = QLabel("0:00")
+        self.total_time.setStyleSheet("""
+            color: #888;
+            font-size: 11px;
+            background: transparent;
+        """)
+        
+        time_layout.addWidget(self.current_time)
+        time_layout.addStretch()
+        time_layout.addWidget(self.total_time)
+        
+        progress_layout.addWidget(self.progress_bar)
+        progress_layout.addLayout(time_layout)
+        
+        # 組合佈局
+        layout.addWidget(title_label)
+        layout.addStretch()
+        layout.addWidget(self.album_art, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addSpacing(10)
+        layout.addWidget(self.song_title)
+        layout.addWidget(self.artist_name)
+        layout.addStretch()
+        layout.addWidget(progress_widget)
+    
+    def show_bind_ui(self):
+        self.stack.setCurrentWidget(self.bind_page)
+        
+    def show_player_ui(self):
+        self.stack.setCurrentWidget(self.player_page)
+
+    def set_song(self, title, artist):
+        """設置歌曲信息"""
+        self.song_title.setText(title)
+        self.artist_name.setText(artist)
+    
+    def set_album_art(self, pixmap):
+        """
+        設置專輯封面圖片
+        
+        Args:
+            pixmap: QPixmap 物件
+        """
+        if pixmap and not pixmap.isNull():
+            # 縮放圖片以適應尺寸
+            scaled_pixmap = pixmap.scaled(
+                180, 180,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            self.album_art.setPixmap(scaled_pixmap)
+            # 移除預設的音符圖標
+            for child in self.album_art.children():
+                if isinstance(child, QLabel):
+                    child.hide()
+        else:
+            # 恢復預設樣式
+            self.album_art.clear()
+            for child in self.album_art.children():
+                if isinstance(child, QLabel):
+                    child.show()
+    
+    def set_progress(self, current_seconds, total_seconds):
+        """設置播放進度"""
+        if total_seconds > 0:
+            progress = int((current_seconds / total_seconds) * 100)
+            self.progress_bar.setValue(progress)
+        
+        # 格式化時間
+        self.current_time.setText(f"{int(current_seconds//60)}:{int(current_seconds%60):02d}")
+        self.total_time.setText(f"{int(total_seconds//60)}:{int(total_seconds%60):02d}")
+    
+    def update_from_spotify(self, track_info):
+        """
+        從 Spotify track_info 更新卡片內容
+        
+        Args:
+            track_info: 包含 name, artists, duration_ms, progress_ms, album_art 的字典
+        """
+        if not track_info:
+            return
+        
+        # 更新歌曲資訊
+        self.set_song(track_info.get('name', 'Unknown'), track_info.get('artists', 'Unknown'))
+        
+        # 更新進度
+        progress_ms = track_info.get('progress_ms', 0)
+        duration_ms = track_info.get('duration_ms', 0)
+        if duration_ms > 0:
+            self.set_progress(progress_ms / 1000, duration_ms / 1000)
+        
+        # 更新專輯封面 (如果有 PIL Image)
+        if 'album_art' in track_info and track_info['album_art']:
+            self.set_album_art_from_pil(track_info['album_art'])
+    
+    def set_album_art_from_pil(self, pil_image):
+        """
+        從 PIL Image 設置專輯封面
+        
+        Args:
+            pil_image: PIL.Image.Image 物件
+        """
+        try:
+            from PIL.ImageQt import ImageQt
+            # 轉換 PIL Image 為 QPixmap
+            qim = ImageQt(pil_image)
+            pixmap = QPixmap.fromImage(qim)
+            self.set_album_art(pixmap)
+        except Exception as e:
+            import logging
+            logging.error(f"設置專輯封面失敗: {e}")
+
 
 class AnalogGauge(QWidget):
     def __init__(self, min_val=0, max_val=100, style=None, labels=None, title="", 
@@ -195,9 +492,33 @@ class AnalogGauge(QWidget):
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.title)
 
 class Dashboard(QWidget):
+    # 定義 Qt Signals，用於從背景執行緒安全地更新 UI
+    signal_update_rpm = pyqtSignal(float)
+    signal_update_speed = pyqtSignal(float)
+    signal_update_temperature = pyqtSignal(float)
+    signal_update_fuel = pyqtSignal(float)
+    signal_update_gear = pyqtSignal(str)
+    
+    # Spotify 相關 Signals
+    signal_update_spotify_track = pyqtSignal(str, str)
+    signal_update_spotify_progress = pyqtSignal(float, float)
+    signal_update_spotify_art = pyqtSignal(object)  # 傳遞 PIL Image 物件
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("汽車儀表板模擬器 - 按 W/S:速度 Q/E:水溫 A/D:油量 1-4:檔位")
+        
+        # 連接 Signals 到 Slots
+        self.signal_update_rpm.connect(self._slot_set_rpm)
+        self.signal_update_speed.connect(self._slot_set_speed)
+        self.signal_update_temperature.connect(self._slot_set_temperature)
+        self.signal_update_fuel.connect(self._slot_set_fuel)
+        self.signal_update_gear.connect(self._slot_set_gear)
+        
+        # 連接 Spotify Signals
+        self.signal_update_spotify_track.connect(self._slot_update_spotify_track)
+        self.signal_update_spotify_progress.connect(self._slot_update_spotify_progress)
+        self.signal_update_spotify_art.connect(self._slot_update_spotify_art)
         
         # 適配 1920x480 螢幕
         self.setFixedSize(1920, 480)
@@ -241,7 +562,17 @@ class Dashboard(QWidget):
         self.rpm_gauge = AnalogGauge(0, 8, rpm_style, title="RPM x1000", red_zone_start=6.0)
         self.rpm_gauge.setFixedSize(450, 450)
         
-        # 右側：油量表（小型）
+        # 右側：油量表 / 音樂卡片 (可切換) - 帶容器
+        right_container = QWidget()
+        right_container.setFixedSize(380, 420)  # 稍微增加高度以容納指示器
+        right_layout = QVBoxLayout(right_container)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(5)
+        
+        self.right_stack = QStackedWidget()
+        self.right_stack.setFixedSize(380, 380)
+        
+        # 油量表
         fuel_style = GaugeStyle(
             major_ticks=4, minor_ticks=1,
             start_angle=225, span_angle=270,
@@ -253,6 +584,53 @@ class Dashboard(QWidget):
         fuel_labels = {0: "E", 50: "½", 100: "F"}
         self.fuel_gauge = AnalogGauge(0, 100, fuel_style, labels=fuel_labels, title="FUEL")
         self.fuel_gauge.setFixedSize(380, 380)
+        
+        # 音樂卡片
+        self.music_card = MusicCard()
+        self.music_card.request_bind.connect(self.start_spotify_auth)
+        
+        # 添加到堆疊
+        self.right_stack.addWidget(self.fuel_gauge)  # index 0
+        self.right_stack.addWidget(self.music_card)  # index 1
+        self.right_stack.setCurrentIndex(0)  # 預設顯示油量表
+        
+        # 滑動指示器
+        indicator_widget = QWidget()
+        indicator_widget.setFixedHeight(35)
+        indicator_widget.setStyleSheet("background: transparent;")
+        indicator_layout = QHBoxLayout(indicator_widget)
+        indicator_layout.setContentsMargins(0, 10, 0, 0)
+        indicator_layout.setSpacing(8)
+        
+        # 創建圓點指示器
+        self.indicators = []
+        for i in range(2):  # 2 張卡片
+            dot = QLabel("●")
+            dot.setFixedSize(12, 12)
+            dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            dot.setStyleSheet("""
+                color: #444;
+                font-size: 20px;
+            """)
+            self.indicators.append(dot)
+            indicator_layout.addWidget(dot)
+        
+        # 設置初始選中狀態
+        self.indicators[0].setStyleSheet("color: #6af; font-size: 20px;")
+        
+        # 組合佈局
+        right_layout.addWidget(self.right_stack)
+        right_layout.addWidget(indicator_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        # 當前卡片索引
+        self.current_card_index = 0
+        self.total_cards = 2
+        
+        # 觸控滑動相關
+        self.touch_start_pos = None
+        self.touch_start_time = None
+        self.swipe_threshold = 50  # 滑動閾值（像素）
+        self.is_swiping = False
 
         # 中央數位速度顯示區
         center_panel = QWidget()
@@ -311,7 +689,7 @@ class Dashboard(QWidget):
         main_layout.addSpacing(30)
         main_layout.addWidget(center_panel)
         main_layout.addSpacing(30)
-        main_layout.addWidget(self.fuel_gauge)
+        main_layout.addWidget(right_container)  # 使用包含指示器的容器
         main_layout.addSpacing(20)
 
     def init_data(self):
@@ -322,39 +700,223 @@ class Dashboard(QWidget):
         self.fuel = 60  # 稍微偏上的油量
         self.gear = "P"
         self.update_display()
+        
+        # 嘗試初始化 Spotify
+        self.check_spotify_config()
 
+    def check_spotify_config(self):
+        """檢查 Spotify 設定並初始化"""
+        config_path = "spotify_config.json"
+        if os.path.exists(config_path):
+            print("發現 Spotify 設定檔，正在初始化...")
+            self.music_card.show_player_ui()
+            # 在背景執行緒初始化，避免卡住 UI
+            QTimer.singleShot(100, lambda: setup_spotify(self))
+        else:
+            print("未發現 Spotify 設定檔，顯示綁定介面")
+            self.music_card.show_bind_ui()
+
+    def start_spotify_auth(self):
+        """啟動 Spotify 授權流程"""
+        print("啟動 Spotify 授權流程...")
+        self.auth_manager = SpotifyAuthManager()
+        self.auth_dialog = SpotifyQRAuthDialog(self.auth_manager)
+        self.auth_dialog.signals.auth_completed.connect(self.on_auth_completed)
+        self.auth_dialog.show()
+
+    def on_auth_completed(self, success):
+        """授權完成回調"""
+        if success:
+            print("Spotify 授權成功！")
+            self.music_card.show_player_ui()
+            setup_spotify(self)
+        else:
+            print("Spotify 授權失敗")
+            self.music_card.show_bind_ui()
+        
+        # 關閉對話框 (如果還沒關閉)
+        if hasattr(self, 'auth_dialog'):
+            self.auth_dialog.close()
+            del self.auth_dialog
+
+    # === 執行緒安全的公開方法 (從背景執行緒呼叫) ===
     def set_speed(self, speed):
-        """外部數據接口：設置速度 (0-200 km/h)"""
-        self.speed = max(0, min(200, speed))
-        self.update_display()
+        """外部數據接口：設置速度 (0-200 km/h)
+        執行緒安全：透過 Signal 發送，由主執行緒執行
+        """
+        self.signal_update_speed.emit(float(speed))
     
     def set_rpm(self, rpm):
-        """外部數據接口：設置轉速 (0-8 x1000rpm)"""
-        self.rpm = max(0, min(8, rpm))
-        self.update_display()
+        """外部數據接口：設置轉速 (0-8 x1000rpm)
+        執行緒安全：透過 Signal 發送，由主執行緒執行
+        """
+        self.signal_update_rpm.emit(float(rpm))
     
     def set_temperature(self, temp):
         """外部數據接口：設置水溫 (0-100，對應約 40-120°C)
         - 0-30: 冷車 (藍區)
         - 40-75: 正常 (中間區)
         - 85-100: 過熱 (紅區)
+        執行緒安全：透過 Signal 發送，由主執行緒執行
         """
+        self.signal_update_temperature.emit(float(temp))
+    
+    def set_fuel(self, fuel):
+        """外部數據接口：設置油量 (0-100)
+        執行緒安全：透過 Signal 發送，由主執行緒執行
+        """
+        self.signal_update_fuel.emit(float(fuel))
+    
+    def set_gear(self, gear):
+        """外部數據接口：設置檔位 (P/R/N/D/1/2/3/4/5/6)
+        執行緒安全：透過 Signal 發送，由主執行緒執行
+        """
+        self.signal_update_gear.emit(str(gear).upper())
+    
+    # === Spotify 執行緒安全接口 ===
+    def update_spotify_track(self, title, artist):
+        """更新 Spotify 歌曲資訊 (執行緒安全)"""
+        self.signal_update_spotify_track.emit(title, artist)
+
+    def update_spotify_progress(self, current, total):
+        """更新 Spotify 播放進度 (執行緒安全)"""
+        self.signal_update_spotify_progress.emit(float(current), float(total))
+
+    def update_spotify_art(self, pil_image):
+        """更新 Spotify 專輯封面 (執行緒安全)"""
+        self.signal_update_spotify_art.emit(pil_image)
+
+    # === 實際執行 UI 更新的 Slot 方法 (在主執行緒中執行) ===
+    @pyqtSlot(float)
+    def _slot_set_speed(self, speed):
+        """Slot: 在主執行緒中更新速度顯示"""
+        self.speed = max(0, min(200, speed))
+        self.update_display()
+    
+    @pyqtSlot(float)
+    def _slot_set_rpm(self, rpm):
+        """Slot: 在主執行緒中更新轉速顯示"""
+        self.rpm = max(0, min(8, rpm))
+        self.update_display()
+    
+    @pyqtSlot(float)
+    def _slot_set_temperature(self, temp):
+        """Slot: 在主執行緒中更新水溫顯示"""
         self.temp = max(0, min(100, temp))
         self.update_display()
     
-    def set_fuel(self, fuel):
-        """外部數據接口：設置油量 (0-100)"""
+    @pyqtSlot(float)
+    def _slot_set_fuel(self, fuel):
+        """Slot: 在主執行緒中更新油量顯示"""
         self.fuel = max(0, min(100, fuel))
         self.update_display()
     
-    def set_gear(self, gear):
-        """外部數據接口：設置檔位 (P/R/N/D/1/2/3/4/5/6)"""
-        self.gear = str(gear).upper()
+    @pyqtSlot(str)
+    def _slot_set_gear(self, gear):
+        """Slot: 在主執行緒中更新檔位顯示"""
+        self.gear = gear
         self.update_display()
 
+    # === Spotify Slots ===
+    @pyqtSlot(str, str)
+    def _slot_update_spotify_track(self, title, artist):
+        if hasattr(self, 'music_card'):
+            self.music_card.set_song(title, artist)
+
+    @pyqtSlot(float, float)
+    def _slot_update_spotify_progress(self, current, total):
+        if hasattr(self, 'music_card'):
+            self.music_card.set_progress(current, total)
+
+    @pyqtSlot(object)
+    def _slot_update_spotify_art(self, pil_image):
+        if hasattr(self, 'music_card'):
+            self.music_card.set_album_art_from_pil(pil_image)
+
+    def mousePressEvent(self, event):
+        """觸控/滑鼠按下事件"""
+        # 檢查是否在右側區域
+        right_stack_global = self.right_stack.mapToGlobal(QPoint(0, 0))
+        right_stack_rect = self.right_stack.geometry()
+        right_stack_rect.moveTopLeft(right_stack_global)
+        
+        if right_stack_rect.contains(event.globalPosition().toPoint()):
+            self.touch_start_pos = event.position().toPoint()
+            self.is_swiping = True
+            import time
+            self.touch_start_time = time.time()
+    
+    def mouseMoveEvent(self, event):
+        """觸控/滑鼠移動事件"""
+        if self.is_swiping and self.touch_start_pos:
+            # 計算滑動距離
+            delta = event.position().toPoint() - self.touch_start_pos
+            
+            # 顯示視覺回饋（可選）
+            if abs(delta.x()) > 10:
+                # 這裡可以添加拖曳視覺效果
+                pass
+    
+    def mouseReleaseEvent(self, event):
+        """觸控/滑鼠釋放事件"""
+        if self.is_swiping and self.touch_start_pos:
+            # 計算滑動距離和方向
+            end_pos = event.position().toPoint()
+            delta = end_pos - self.touch_start_pos
+            
+            # 判斷是否為有效滑動
+            if abs(delta.x()) > self.swipe_threshold:
+                if delta.x() > 0:
+                    # 向右滑動 - 切換到上一張
+                    self.switch_card(-1)
+                else:
+                    # 向左滑動 - 切換到下一張
+                    self.switch_card(1)
+            
+            # 重置狀態
+            self.touch_start_pos = None
+            self.is_swiping = False
+    
+    def switch_card(self, direction):
+        """切換卡片
+        Args:
+            direction: 1 為下一張，-1 為上一張
+        """
+        self.current_card_index = (self.current_card_index + direction) % self.total_cards
+        self.right_stack.setCurrentIndex(self.current_card_index)
+        
+        # 更新指示器
+        for i, indicator in enumerate(self.indicators):
+            if i == self.current_card_index:
+                indicator.setStyleSheet("color: #6af; font-size: 20px;")  # 選中：藍色
+            else:
+                indicator.setStyleSheet("color: #444; font-size: 20px;")  # 未選中：灰色
+        
+        # 顯示提示
+        card_names = ["油量表", "音樂播放器"]
+        print(f"切換到: {card_names[self.current_card_index]}")
+    
+    def wheelEvent(self, event):
+        """滑鼠滾輪切換右側卡片（桌面使用）"""
+        # 檢查滑鼠是否在右側區域
+        if self.right_stack.geometry().contains(event.position().toPoint()):
+            delta = event.angleDelta().y()
+            if delta > 0:  # 向上滾動
+                self.switch_card(-1)
+            else:  # 向下滾動
+                self.switch_card(1)
+    
     def keyPressEvent(self, event):
         """鍵盤模擬控制"""
         key = event.key()
+        
+        # 左右方向鍵切換卡片
+        if key == Qt.Key.Key_Left:
+            self.switch_card(-1)
+            return
+        elif key == Qt.Key.Key_Right:
+            self.switch_card(1)
+            return
         
         # W/S: 速度與轉速
         if key == Qt.Key.Key_W:

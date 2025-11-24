@@ -187,11 +187,32 @@ class CANSimulator:
     def send_vehicle_data(self):
         """發送車輛數據"""
         # 1. 轉速 (ID 0x340 / 832)
-        self.send_can_message('GEAR_RPM_SPEED_STATUS', {
-            'ENGINE_RPM1': int(self.vehicle.rpm),
-            'TRANS_GEAR_POS': self.vehicle.gear,
-            'TRANS_MODE': 5  # 簡化值：0-31 範圍內 (5 bit)
-        })
+        # 根據檔位決定發送的信號
+        rpm_data = {}
+        
+        # 映射檔位到 TRANS_MODE
+        # P=0, R=7, N=0, D=1
+        trans_mode = 0
+        if self.vehicle.gear == 7: # R
+            trans_mode = 7
+        elif self.vehicle.gear == 1: # D
+            trans_mode = 1
+        else: # P or N
+            trans_mode = 0
+            
+        rpm_data['TRANS_MODE'] = trans_mode
+        
+        if trans_mode == 0: # P/N
+            rpm_data['ENGINE_RPM_PN'] = int(self.vehicle.rpm)
+        elif trans_mode == 1: # D
+            # 模擬: 全部放在 Base，Delta 為 0
+            rpm_data['ENGINE_RPM_BASE'] = int(self.vehicle.rpm)
+            rpm_data['ENGINE_RPM_DELTA'] = 0
+        elif trans_mode == 7: # R
+            rpm_data['ENGINE_RPM_BASE_R'] = int(self.vehicle.rpm)
+            rpm_data['ENGINE_RPM_DELTA_R'] = 0
+            
+        self.send_can_message('GEAR_RPM_SPEED_STATUS', rpm_data)
         
         # 2. 油量和節氣門 (ID 0x335 / 821)
         self.send_can_message('THROTTLE_STATUS', {
