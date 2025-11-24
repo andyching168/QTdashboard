@@ -1,0 +1,113 @@
+2025-11-24 09:51:51,643 - __main__ - INFO - ==================================================
+2025-11-24 09:51:51,643 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-11-24 09:51:51,644 - __main__ - INFO - ==================================================
+2025-11-24 09:51:56,319 - __main__ - INFO - 已選擇裝置: /dev/cu.wlan-debug
+2025-11-24 09:51:56,320 - __main__ - INFO - 正在初始化 CAN Bus...
+2025-11-24 09:51:58,332 - __main__ - INFO - CAN Bus 已連接: unknown
+2025-11-24 09:51:58,332 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-11-24 09:51:58,343 - __main__ - ERROR - DBC 載入錯誤: DBC: "Invalid syntax at line 149, column 30: "BA_DEF_DEF_ "filterlabeling" >>!<<true;""
+Traceback (most recent call last):
+  File "/opt/miniconda3/envs/QTdashboard/lib/python3.14/site-packages/textparser.py", line 887, in parse
+    return Grammar(self.grammar()).parse(tokens, token_tree)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/QTdashboard/lib/python3.14/site-packages/textparser.py", line 684, in parse
+    raise GrammarError(tokens.peek_max().offset)
+textparser.GrammarError: Invalid syntax at offset 4618.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/opt/miniconda3/envs/QTdashboard/lib/python3.14/site-packages/cantools/database/__init__.py", line 331, in load_string
+    return load_can_database('dbc')
+  File "/opt/miniconda3/envs/QTdashboard/lib/python3.14/site-packages/cantools/database/__init__.py", line 312, in load_can_database
+    db.add_dbc_string(string)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/opt/miniconda3/envs/QTdashboard/lib/python3.14/site-packages/cantools/database/can/database.py", line 305, in add_dbc_string
+    database = dbc.load_string(string, self._strict, sort_signals=self._sort_signals)
+  File "/opt/miniconda3/envs/QTdashboard/lib/python3.14/site-packages/cantools/database/can/formats/dbc.py", line 2094, in load_string
+    tokens = Parser().parse(string)
+  File "/opt/miniconda3/envs/QTdashboard/lib/python3.14/site-packages/textparser.py", line 889, in parse
+    raise ParseError(text, e.offset)
+textparser.ParseError: Invalid syntax at line 149, column 30: "BA_DEF_DEF_ "filterlabeling" >>!<<true;"
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/ac/Documents/GitHub/QTdashboard/datagrab.py", line 384, in main
+    db = cantools.database.load_file('luxgen_m7_2009.dbc')
+  File "/opt/miniconda3/envs/QTdashboard/lib/python3.14/site-packages/cantools/database/__init__.py", line 156, in load_file
+    db = load(fin,
+            database_format,
+    ...<2 lines>...
+            strict,
+            sort_signals)
+  File "/opt/miniconda3/envs/QTdashboard/lib/python3.14/site-packages/cantools/database/__init__.py", line 245, in load
+    return load_string(fp.read(),
+                       database_format,
+    ...<2 lines>...
+                       strict,
+                       sort_signals)
+  File "/opt/miniconda3/envs/QTdashboard/lib/python3.14/site-packages/cantools/database/__init__.py", line 361, in load_string
+    raise UnsupportedDatabaseFormatError(e_arxml,
+    ...<3 lines>...
+                                         e_cdd) from exc
+cantools.database.errors.UnsupportedDatabaseFormatError: DBC: "Invalid syntax at line 149, column 30: "BA_DEF_DEF_ "filterlabeling" >>!<<true;""
+2025-11-24 09:51:58,346 - __main__ - INFO - 正在清理資源...
+2025-11-24 09:51:58,347 - __main__ - INFO - 正在關閉 CAN Bus...
+2025-11-24 09:51:58,347 - __main__ - INFO - CAN Bus 已關閉
+2025-11-24 09:51:58,347 - __main__ - INFO - 程式結束
+2025-11-24 09:51:58,347 - __main__ - INFO - ==================================================
+2025-11-24 09:58:03,915 - __main__ - INFO - ==================================================
+2025-11-24 09:58:03,916 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-11-24 09:58:03,916 - __main__ - INFO - ==================================================
+2025-11-24 09:58:12,815 - __main__ - INFO - 使用者中斷程式
+2025-11-24 09:58:12,815 - __main__ - INFO - 正在清理資源...
+2025-11-24 09:58:12,816 - __main__ - INFO - 程式結束
+2025-11-24 09:58:12,816 - __main__ - INFO - ==================================================
+2025-11-24 10:01:12,039 - __main__ - INFO - ==================================================
+2025-11-24 10:01:12,039 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-11-24 10:01:12,039 - __main__ - INFO - ==================================================
+2025-11-24 10:02:02,745 - __main__ - INFO - 使用者中斷程式
+2025-11-24 10:02:02,747 - __main__ - INFO - 正在清理資源...
+2025-11-24 10:02:02,747 - __main__ - INFO - 程式結束
+2025-11-24 10:02:02,747 - __main__ - INFO - ==================================================
+2025-11-24 10:02:27,124 - __main__ - INFO - ==================================================
+2025-11-24 10:02:27,125 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-11-24 10:02:27,125 - __main__ - INFO - ==================================================
+2025-11-24 10:02:34,663 - __main__ - INFO - 已選擇裝置: /dev/ttys013
+2025-11-24 10:02:34,664 - __main__ - INFO - 正在初始化 CAN Bus...
+2025-11-24 10:03:13,775 - __main__ - INFO - 使用者中斷程式
+2025-11-24 10:03:13,776 - __main__ - INFO - 正在清理資源...
+2025-11-24 10:03:13,777 - __main__ - INFO - 程式結束
+2025-11-24 10:03:13,777 - __main__ - INFO - ==================================================
+2025-11-24 10:05:51,492 - __main__ - INFO - ==================================================
+2025-11-24 10:05:51,493 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-11-24 10:05:51,493 - __main__ - INFO - ==================================================
+2025-11-24 10:06:09,897 - __main__ - INFO - 使用手動輸入的路徑: /dev/ttys013
+2025-11-24 10:06:09,897 - __main__ - INFO - 已選擇裝置: /dev/ttys013
+2025-11-24 10:06:09,898 - __main__ - INFO - 正在初始化 CAN Bus...
+2025-11-24 10:07:59,157 - __main__ - INFO - 使用者中斷程式
+2025-11-24 10:07:59,159 - __main__ - INFO - 正在清理資源...
+2025-11-24 10:07:59,159 - __main__ - INFO - 程式結束
+2025-11-24 10:07:59,159 - __main__ - INFO - ==================================================
+2025-11-24 10:19:21,600 - __main__ - INFO - ==================================================
+2025-11-24 10:19:21,600 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-11-24 10:19:21,600 - __main__ - INFO - ==================================================
+2025-11-24 10:19:47,368 - __main__ - INFO - 使用者中斷程式
+2025-11-24 10:19:47,369 - __main__ - INFO - 正在清理資源...
+2025-11-24 10:19:47,370 - __main__ - INFO - 程式結束
+2025-11-24 10:19:47,370 - __main__ - INFO - ==================================================
+2025-11-24 10:21:50,049 - __main__ - INFO - ==================================================
+2025-11-24 10:21:50,050 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-11-24 10:21:50,050 - __main__ - INFO - ==================================================
+2025-11-24 10:21:53,503 - __main__ - INFO - 使用者中斷程式
+2025-11-24 10:21:53,503 - __main__ - INFO - 正在清理資源...
+2025-11-24 10:21:53,503 - __main__ - INFO - 程式結束
+2025-11-24 10:21:53,503 - __main__ - INFO - ==================================================
+2025-11-24 10:22:02,437 - __main__ - INFO - ==================================================
+2025-11-24 10:22:02,437 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-11-24 10:22:02,437 - __main__ - INFO - ==================================================
+2025-11-24 10:22:39,494 - __main__ - INFO - 使用者中斷程式
+2025-11-24 10:22:39,494 - __main__ - INFO - 正在清理資源...
+2025-11-24 10:22:39,494 - __main__ - INFO - 程式結束
+2025-11-24 10:22:39,494 - __main__ - INFO - ==================================================

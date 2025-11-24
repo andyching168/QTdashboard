@@ -222,11 +222,12 @@ class Dashboard(QWidget):
             major_ticks=4, minor_ticks=1,
             start_angle=225, span_angle=270,
             tick_color=QColor(100, 150, 255),
-            needle_color=QColor(100, 150, 255),
+            needle_color=QColor(100, 200, 255),  # 稍微偏藍綠色
             text_scale=1.0
         )
-        temp_labels = {0: "C", 100: "H"}
-        self.temp_gauge = AnalogGauge(0, 100, temp_style, labels=temp_labels, title="")
+        # 水溫標籤：C(冷) - 中間正常 - H(熱)
+        temp_labels = {0: "C", 50: "•", 100: "H"}
+        self.temp_gauge = AnalogGauge(0, 100, temp_style, labels=temp_labels, title="TEMP", red_zone_start=85)
         self.temp_gauge.setFixedSize(380, 380)
         
         # 中間：轉速表（主要儀表 - 較大）
@@ -234,10 +235,10 @@ class Dashboard(QWidget):
             major_ticks=8, minor_ticks=4,
             start_angle=225, span_angle=270,
             tick_color=QColor(100, 150, 255),
-            needle_color=QColor(100, 150, 255),
+            needle_color=QColor(255, 100, 100),  # 紅色指針
             text_scale=1.4
         )
-        self.rpm_gauge = AnalogGauge(0, 8, rpm_style, title="x1000rpm", red_zone_start=6.5)
+        self.rpm_gauge = AnalogGauge(0, 8, rpm_style, title="RPM x1000", red_zone_start=6.0)
         self.rpm_gauge.setFixedSize(450, 450)
         
         # 右側：油量表（小型）
@@ -245,11 +246,12 @@ class Dashboard(QWidget):
             major_ticks=4, minor_ticks=1,
             start_angle=225, span_angle=270,
             tick_color=QColor(100, 150, 255),
-            needle_color=QColor(100, 150, 255),
+            needle_color=QColor(255, 200, 100),  # 橙黃色（油料顏色）
             text_scale=1.0
         )
-        fuel_labels = {0: "E", 100: "F"}
-        self.fuel_gauge = AnalogGauge(0, 100, fuel_style, labels=fuel_labels, title="")
+        # 油量標籤：E(空) - 1/2 - F(滿)
+        fuel_labels = {0: "E", 50: "½", 100: "F"}
+        self.fuel_gauge = AnalogGauge(0, 100, fuel_style, labels=fuel_labels, title="FUEL")
         self.fuel_gauge.setFixedSize(380, 380)
 
         # 中央數位速度顯示區
@@ -316,8 +318,8 @@ class Dashboard(QWidget):
         """初始化儀表數據，可以從外部數據源更新"""
         self.speed = 0
         self.rpm = 0
-        self.temp = 50
-        self.fuel = 75
+        self.temp = 45  # 正常水溫約在 45-50% 位置（對應 85-95°C）
+        self.fuel = 60  # 稍微偏上的油量
         self.gear = "P"
         self.update_display()
 
@@ -332,7 +334,11 @@ class Dashboard(QWidget):
         self.update_display()
     
     def set_temperature(self, temp):
-        """外部數據接口：設置水溫 (0-100)"""
+        """外部數據接口：設置水溫 (0-100，對應約 40-120°C)
+        - 0-30: 冷車 (藍區)
+        - 40-75: 正常 (中間區)
+        - 85-100: 過熱 (紅區)
+        """
         self.temp = max(0, min(100, temp))
         self.update_display()
     
@@ -352,17 +358,22 @@ class Dashboard(QWidget):
         
         # W/S: 速度與轉速
         if key == Qt.Key.Key_W:
-            self.speed = min(200, self.speed + 5)
-            self.rpm = min(8, self.rpm + 0.3)
+            self.speed = min(180, self.speed + 5)
+            # 轉速與速度成比例，但不超過紅區
+            self.rpm = min(7, 0.8 + (self.speed / 180.0) * 5.0)
         elif key == Qt.Key.Key_S:
             self.speed = max(0, self.speed - 5)
-            self.rpm = max(0, self.rpm - 0.3)
+            # 減速時轉速下降到怠速
+            if self.speed < 5:
+                self.rpm = 0.8  # 怠速
+            else:
+                self.rpm = max(0.8, 0.8 + (self.speed / 180.0) * 5.0)
             
         # Q/E: 水溫
         elif key == Qt.Key.Key_Q:
-            self.temp = max(0, self.temp - 5)
+            self.temp = max(0, self.temp - 3)
         elif key == Qt.Key.Key_E:
-            self.temp = min(100, self.temp + 5)
+            self.temp = min(100, self.temp + 3)
             
         # A/D: 油量
         elif key == Qt.Key.Key_A:

@@ -49,9 +49,9 @@ BO_ 1056 BODY_ECU_STATUS: 8 XXX
    SG_ RIGHT_SIGNAL_STATUS : 9|1@0+ (1,0) [0|1] "" XXX
 
 BO_ 832 GEAR_RPM_SPEED_STATUS: 8 XXX
-   SG_ TRANS_MODE : 7|5@1+ (1,0) [0|0] "" XXX
-   SG_ TRANS_GEAR_POS : 2|3@0+ (1,0) [0|1] "" XXX
-   SG_ ENGINE_RPM1 : 55|16@0+ (2,0) [0|8000] "rpm" Vector__XXX
+   SG_ TRANS_MODE : 7|5@1+ (1,0) [0|255] "" XXX
+   SG_ TRANS_GEAR_POS : 2|3@0+ (1,0) [0|7] "" XXX
+   SG_ ENGINE_RPM1 : 55|16@0+ (2,0) [0|16000] "rpm" Vector__XXX
 
 BO_ 821 THROTTLE_STATUS: 8 XXX
    SG_ CRUSE_ONOFF : 2|1@0+ (1,0) [0|1] "on/off" XXX
@@ -145,8 +145,6 @@ BA_DEF_DEF_ "GenMsgBackgroundColor" "#1e1e1e";
 BA_DEF_DEF_ "GenMsgForegroundColor" "#ffffff";
 BA_DEF_DEF_ "matchingcriteria" 0;
 BA_DEF_DEF_ "filterlabeling" 0;
-BA_DEF_DEF_ "matchingcriteria" 0;
-BA_DEF_DEF_ "filterlabeling" true;
 CM_ SG_ 1104 DRIVER_SEAT_BELT_ONOFF "0 - on , 1 = off";
 CM_ SG_ 1056 DOOR_RL_STATUS "04 - RL - open";
 CM_ SG_ 1056 DOOR_FL_STATUS "28 - FL open , 38 - FR";
