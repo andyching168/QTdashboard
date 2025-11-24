@@ -377,10 +377,10 @@ class MarqueeLabel(QLabel):
                     self._scroll_pos = 0
                     self._at_home = True
                     
-                    # 檢查是否所有標籤都到起點了
+                    # 檢查是否所有標籤都到起點了(包含不可捲動的標籤)
                     all_at_home = all(
                         inst._at_home for inst in MarqueeLabel._instances
-                        if inst.isVisible() and inst._is_scrollable
+                        if inst.isVisible()
                     )
                     
                     if all_at_home:
@@ -404,9 +404,28 @@ class MarqueeLabel(QLabel):
             self._scroll_pos = 0
             self._at_home = True
             
-            # 有標籤回到起點了，進入等待同步狀態
-            if not MarqueeLabel._waiting_for_sync:
-                print("[MarqueeLabel] 有標籤回到起點，等待其他標籤同步")  # Debug
+            # 檢查是否所有標籤都已經在起點(包含不可捲動的標籤)
+            all_at_home = all(
+                inst._at_home for inst in MarqueeLabel._instances
+                if inst.isVisible()
+            )
+            
+            if all_at_home:
+                # 所有標籤都在起點了，直接開始暫停
+                print("[MarqueeLabel] 所有標籤已同步到起點，開始暫停")  # Debug
+                MarqueeLabel._global_pause_counter = MarqueeLabel._global_pause_threshold
+                MarqueeLabel._waiting_for_sync = False
+            elif not MarqueeLabel._waiting_for_sync:
+                # 還有其他標籤沒到起點，進入等待同步狀態
+                at_home_count = sum(
+                    1 for inst in MarqueeLabel._instances
+                    if inst.isVisible() and inst._at_home
+                )
+                total_count = sum(
+                    1 for inst in MarqueeLabel._instances
+                    if inst.isVisible()
+                )
+                print(f"[MarqueeLabel] 有標籤回到起點，等待其他標籤同步 ({at_home_count}/{total_count} 個標籤在起點)")  # Debug
                 MarqueeLabel._waiting_for_sync = True
             
         self.update()
