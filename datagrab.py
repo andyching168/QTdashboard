@@ -35,7 +35,7 @@ class WorkerSignals(QObject):
     """
     update_rpm = pyqtSignal(float)   # 發送轉速 (float)
     update_speed = pyqtSignal(float) # 發送車速 (float)
-    signal_update_temp = pyqtSignal(float)  # 發送水溫百分比 (float)
+    update_temp = pyqtSignal(float)  # 發送水溫百分比 (float)
     update_fuel = pyqtSignal(float)  # 發送油量百分比 (float)
     update_gear = pyqtSignal(str)    # 發送檔位 (str)
     update_turn_signal = pyqtSignal(str)  # 發送方向燈狀態 (str: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off")
