@@ -483,13 +483,46 @@ class MusicCard(QWidget):
             pixmap: QPixmap 物件
         """
         if pixmap and not pixmap.isNull():
-            # 縮放圖片以適應尺寸
+            # 縮放並裁切圖片以完全填滿正方形區域
             scaled_pixmap = pixmap.scaled(
                 180, 180,
-                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation
             )
-            self.album_art.setPixmap(scaled_pixmap)
+            
+            # 如果圖片大於目標尺寸，進行中心裁切
+            if scaled_pixmap.width() > 180 or scaled_pixmap.height() > 180:
+                x = (scaled_pixmap.width() - 180) // 2
+                y = (scaled_pixmap.height() - 180) // 2
+                scaled_pixmap = scaled_pixmap.copy(x, y, 180, 180)
+            
+            # 創建圓角遮罩
+            rounded_pixmap = QPixmap(180, 180)
+            rounded_pixmap.fill(Qt.GlobalColor.transparent)
+            
+            painter = QPainter(rounded_pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            
+            # 創建圓角路徑
+            path = QPainterPath()
+            path.addRoundedRect(0, 0, 180, 180, 15, 15)
+            
+            # 設置裁切路徑並繪製圖片
+            painter.setClipPath(path)
+            painter.drawPixmap(0, 0, scaled_pixmap)
+            
+            # 繪製邊框 (保持風格一致)
+            # 使用 6px 筆寬，因為路徑在邊緣，一半在內一半在外，裁切後只剩 3px 在內
+            pen = QPen(QColor("#4a5568"))
+            pen.setWidth(6)
+            painter.strokePath(path, pen)
+            
+            painter.end()
+            
+            self.album_art.setPixmap(rounded_pixmap)
+            # 移除 stylesheet 中的 border 和 padding，避免壓縮圖片顯示區域
+            self.album_art.setStyleSheet("background: transparent; border: none;")
+            
             # 移除預設的音符圖標
             for child in self.album_art.children():
                 if isinstance(child, QLabel):
@@ -497,6 +530,12 @@ class MusicCard(QWidget):
         else:
             # 恢復預設樣式
             self.album_art.clear()
+            self.album_art.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #4a5568, stop:0.5 #2d3748, stop:1 #1a202c);
+                border-radius: 15px;
+                border: 3px solid #4a5568;
+            """)
             for child in self.album_art.children():
                 if isinstance(child, QLabel):
                     child.show()

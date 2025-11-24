@@ -7,10 +7,7 @@ echo ""
 echo "準備測試環境..."
 
 # 備份現有的配置檔和快取（如果存在）
-if [ -f "spotify_config.json" ]; then
-    echo "備份現有配置檔..."
-    mv spotify_config.json spotify_config.json.backup
-fi
+
 
 if [ -f ".spotify_cache" ]; then
     echo "備份現有快取..."
@@ -39,10 +36,6 @@ python main.py
 echo ""
 echo "測試結束，恢復環境..."
 
-if [ -f "spotify_config.json.backup" ]; then
-    echo "恢復配置檔..."
-    mv spotify_config.json.backup spotify_config.json
-fi
 
 if [ -f ".spotify_cache.backup" ]; then
     echo "恢復快取..."
