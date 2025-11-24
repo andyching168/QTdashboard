@@ -39,6 +39,7 @@ class WorkerSignals(QObject):
     update_fuel = pyqtSignal(float)  # 發送油量百分比 (float)
     update_gear = pyqtSignal(str)    # 發送檔位 (str)
     update_turn_signal = pyqtSignal(str)  # 發送方向燈狀態 (str: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off")
+    update_door_status = pyqtSignal(str, bool)  # 發送門狀態 (door: str, is_closed: bool)
     # update_nav_icon = pyqtSignal(str) # 預留給導航圖片
 
 # --- 全局變數 ---
@@ -283,12 +284,12 @@ def unified_receiver(bus, db, signals):
                 except Exception as e:
                     logger.error(f"處理速度訊息錯誤: {e}")
 
-            # 5. 處理方向燈 BODY_ECU_STATUS (ID 0x420 / 1056)
+            # 5. 處理方向燈和門狀態 BODY_ECU_STATUS (ID 0x420 / 1056)
             elif msg.arbitration_id == 0x420:
                 try:
                     decoded = db.decode_message(msg.arbitration_id, msg.data)
                     
-                    # 讀取方向燈狀態 (bit signals)
+                    # === 方向燈狀態 ===
                     left_signal = decoded.get('LEFT_SIGNAL_STATUS', 0)
                     right_signal = decoded.get('RIGHT_SIGNAL_STATUS', 0)
                     
@@ -316,10 +317,53 @@ def unified_receiver(bus, db, signals):
                     
                     logger.debug(f"方向燈: L={left_signal} R={right_signal}")
                     
+                    # === 門狀態 ===
+                    # 根據 DBC: 0=關閉, 1=打開
+                    door_fl = decoded.get('DOOR_FL_STATUS', 0)
+                    door_fr = decoded.get('DOOR_FR_STATUS', 0)
+                    door_rl = decoded.get('DOOR_RL_STATUS', 0)
+                    door_rr = decoded.get('DOOR_RR_STATUS', 0)
+                    door_bk = decoded.get('DOOR_BACK_DOOR_STATUS', 0)
+                    
+                    # 轉換為 int
+                    if hasattr(door_fl, 'value'):
+                        door_fl = int(door_fl.value)
+                    else:
+                        door_fl = int(door_fl)
+                    
+                    if hasattr(door_fr, 'value'):
+                        door_fr = int(door_fr.value)
+                    else:
+                        door_fr = int(door_fr)
+                    
+                    if hasattr(door_rl, 'value'):
+                        door_rl = int(door_rl.value)
+                    else:
+                        door_rl = int(door_rl)
+                    
+                    if hasattr(door_rr, 'value'):
+                        door_rr = int(door_rr.value)
+                    else:
+                        door_rr = int(door_rr)
+                    
+                    if hasattr(door_bk, 'value'):
+                        door_bk = int(door_bk.value)
+                    else:
+                        door_bk = int(door_bk)
+                    
+                    # 發送門狀態到前端 (0=關閉, 1=打開，需要轉換為 is_closed)
+                    signals.update_door_status.emit("FL", door_fl == 0)
+                    signals.update_door_status.emit("FR", door_fr == 0)
+                    signals.update_door_status.emit("RL", door_rl == 0)
+                    signals.update_door_status.emit("RR", door_rr == 0)
+                    signals.update_door_status.emit("BK", door_bk == 0)
+                    
+                    logger.debug(f"門狀態: FL={door_fl} FR={door_fr} RL={door_rl} RR={door_rr} BK={door_bk}")
+                    
                 except cantools.database.errors.DecodeError as e:
                     logger.error(f"DBC 解碼錯誤 (BODY_ECU_STATUS): {e}")
                 except Exception as e:
-                    logger.error(f"處理方向燈訊息錯誤: {e}")
+                    logger.error(f"處理車身狀態訊息錯誤: {e}")
             
             # 6. 偵測潛在的 RPM 訊號 (ID 0x316 / 790 ENGINE_DATA)
             # elif msg.arbitration_id == 0x316:
@@ -457,6 +501,7 @@ def main():
         signals.update_fuel.connect(dashboard.set_fuel)
         signals.update_gear.connect(dashboard.set_gear)
         signals.update_turn_signal.connect(dashboard.set_turn_signal)
+        signals.update_door_status.connect(dashboard.set_door_status)
         
         dashboard.show()
 

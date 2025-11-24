@@ -24,6 +24,243 @@ class GaugeStyle:
         self.text_scale = text_scale
         self.show_center_circle = show_center_circle
 
+class DoorStatusCard(QWidget):
+    """門狀態顯示卡片"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(380, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # 門狀態
+        self.door_fl_closed = True  # 左前門 (false=開, true=關)
+        self.door_fr_closed = True  # 右前門
+        self.door_rl_closed = True  # 左後門
+        self.door_rr_closed = True  # 右後門
+        self.door_bk_closed = True  # 尾門
+        
+        # Main layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
+        
+        # 標題
+        title_label = QLabel("Door Status")
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 16px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 圖片顯示區域（使用絕對定位來疊加圖層）
+        self.image_container = QWidget()
+        self.image_container.setFixedSize(340, 280)
+        self.image_container.setStyleSheet("background: transparent;")
+        
+        # 基底圖層
+        self.base_layer = QLabel(self.image_container)
+        self.base_layer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 左前門把手圖層
+        self.fl_handle_layer = QLabel(self.image_container)
+        self.fl_handle_layer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 右前門把手圖層
+        self.fr_handle_layer = QLabel(self.image_container)
+        self.fr_handle_layer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 左前門開啟圖層
+        self.fl_open_layer = QLabel(self.image_container)
+        self.fl_open_layer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 右前門開啟圖層
+        self.fr_open_layer = QLabel(self.image_container)
+        self.fr_open_layer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 左後門開啟圖層
+        self.rl_open_layer = QLabel(self.image_container)
+        self.rl_open_layer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 右後門開啟圖層
+        self.rr_open_layer = QLabel(self.image_container)
+        self.rr_open_layer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 尾門開啟圖層
+        self.bk_open_layer = QLabel(self.image_container)
+        self.bk_open_layer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 設置所有圖層的位置和大小，使其疊加
+        for layer in [self.base_layer, self.fl_handle_layer, self.fr_handle_layer,
+                      self.fl_open_layer, self.fr_open_layer, self.rl_open_layer,
+                      self.rr_open_layer, self.bk_open_layer]:
+            layer.setGeometry(0, 0, 340, 280)
+        
+        # 載入圖片
+        self.load_images()
+        
+        # 狀態文字
+        self.status_label = QLabel("All Doors Closed")
+        self.status_label.setStyleSheet("""
+            color: #6f6;
+            font-size: 14px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 組合佈局
+        layout.addWidget(title_label)
+        layout.addStretch()
+        layout.addWidget(self.image_container, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addStretch()
+        layout.addWidget(self.status_label)
+        
+        # 初始更新
+        self.update_display()
+    
+    def load_images(self):
+        """載入所有門狀態圖片"""
+        sprite_path = "carSprite"
+        
+        # 載入基底圖並縮放保持比例
+        base_pixmap = QPixmap(os.path.join(sprite_path, "closed_base.png"))
+        if not base_pixmap.isNull():
+            scaled_base = base_pixmap.scaled(340, 280, 
+                                            Qt.AspectRatioMode.KeepAspectRatio,
+                                            Qt.TransformationMode.SmoothTransformation)
+            self.base_layer.setPixmap(scaled_base)
+        
+        # 載入把手圖片
+        self.fl_handle_pixmap = QPixmap(os.path.join(sprite_path, "closed_fl_handle.png"))
+        self.fr_handle_pixmap = QPixmap(os.path.join(sprite_path, "closed_fr_handle.png"))
+        
+        # 載入門開啟圖片
+        self.fl_open_pixmap = QPixmap(os.path.join(sprite_path, "FL.png"))
+        self.fr_open_pixmap = QPixmap(os.path.join(sprite_path, "FR.png"))
+        self.rl_open_pixmap = QPixmap(os.path.join(sprite_path, "RL.png"))
+        self.rr_open_pixmap = QPixmap(os.path.join(sprite_path, "RR.png"))
+        self.bk_open_pixmap = QPixmap(os.path.join(sprite_path, "BK.png"))
+    
+    def set_door_status(self, door, is_closed):
+        """設置門的狀態
+        Args:
+            door: "FL", "FR", "RL", "RR", "BK"
+            is_closed: True=關閉, False=開啟
+        """
+        door = door.upper()
+        if door == "FL":
+            self.door_fl_closed = is_closed
+        elif door == "FR":
+            self.door_fr_closed = is_closed
+        elif door == "RL":
+            self.door_rl_closed = is_closed
+        elif door == "RR":
+            self.door_rr_closed = is_closed
+        elif door == "BK":
+            self.door_bk_closed = is_closed
+        
+        self.update_display()
+    
+    def update_display(self):
+        """更新顯示 - 根據門的狀態疊加圖層"""
+        # 1. 基底圖永遠顯示（已經在 base_layer 上）
+        
+        # 2. 左前門：關閉時顯示把手，打開時顯示開啟狀態
+        if self.door_fl_closed:
+            scaled_pixmap = self.fl_handle_pixmap.scaled(340, 280,
+                                                         Qt.AspectRatioMode.KeepAspectRatio,
+                                                         Qt.TransformationMode.SmoothTransformation)
+            self.fl_handle_layer.setPixmap(scaled_pixmap)
+            self.fl_open_layer.clear()
+        else:
+            self.fl_handle_layer.clear()
+            scaled_pixmap = self.fl_open_pixmap.scaled(340, 280,
+                                                       Qt.AspectRatioMode.KeepAspectRatio,
+                                                       Qt.TransformationMode.SmoothTransformation)
+            self.fl_open_layer.setPixmap(scaled_pixmap)
+        
+        # 3. 右前門：關閉時顯示把手，打開時顯示開啟狀態
+        if self.door_fr_closed:
+            scaled_pixmap = self.fr_handle_pixmap.scaled(340, 280,
+                                                         Qt.AspectRatioMode.KeepAspectRatio,
+                                                         Qt.TransformationMode.SmoothTransformation)
+            self.fr_handle_layer.setPixmap(scaled_pixmap)
+            self.fr_open_layer.clear()
+        else:
+            self.fr_handle_layer.clear()
+            scaled_pixmap = self.fr_open_pixmap.scaled(340, 280,
+                                                       Qt.AspectRatioMode.KeepAspectRatio,
+                                                       Qt.TransformationMode.SmoothTransformation)
+            self.fr_open_layer.setPixmap(scaled_pixmap)
+        
+        # 4. 左後門：只在打開時顯示
+        if not self.door_rl_closed:
+            scaled_pixmap = self.rl_open_pixmap.scaled(340, 280,
+                                                       Qt.AspectRatioMode.KeepAspectRatio,
+                                                       Qt.TransformationMode.SmoothTransformation)
+            self.rl_open_layer.setPixmap(scaled_pixmap)
+        else:
+            self.rl_open_layer.clear()
+        
+        # 5. 右後門：只在打開時顯示
+        if not self.door_rr_closed:
+            scaled_pixmap = self.rr_open_pixmap.scaled(340, 280,
+                                                       Qt.AspectRatioMode.KeepAspectRatio,
+                                                       Qt.TransformationMode.SmoothTransformation)
+            self.rr_open_layer.setPixmap(scaled_pixmap)
+        else:
+            self.rr_open_layer.clear()
+        
+        # 6. 尾門：只在打開時顯示
+        if not self.door_bk_closed:
+            scaled_pixmap = self.bk_open_pixmap.scaled(340, 280,
+                                                       Qt.AspectRatioMode.KeepAspectRatio,
+                                                       Qt.TransformationMode.SmoothTransformation)
+            self.bk_open_layer.setPixmap(scaled_pixmap)
+        else:
+            self.bk_open_layer.clear()
+        
+        # 更新狀態文字
+        open_doors = []
+        if not self.door_fl_closed:
+            open_doors.append("FL")
+        if not self.door_fr_closed:
+            open_doors.append("FR")
+        if not self.door_rl_closed:
+            open_doors.append("RL")
+        if not self.door_rr_closed:
+            open_doors.append("RR")
+        if not self.door_bk_closed:
+            open_doors.append("BK")
+        
+        if open_doors:
+            self.status_label.setText(f"Doors Open: {', '.join(open_doors)}")
+            self.status_label.setStyleSheet("""
+                color: #f66;
+                font-size: 14px;
+                font-weight: bold;
+                background: transparent;
+            """)
+        else:
+            self.status_label.setText("All Doors Closed")
+            self.status_label.setStyleSheet("""
+                color: #6f6;
+                font-size: 14px;
+                font-weight: bold;
+                background: transparent;
+            """)
+
+
 class MusicCard(QWidget):
     """音樂播放器卡片"""
     
@@ -507,7 +744,7 @@ class Dashboard(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("汽車儀表板模擬器 - W/S:速度 Q/E:水溫 A/D:油量 1-6:檔位 Z/X/C:方向燈")
+        self.setWindowTitle("汽車儀表板模擬器 - W/S:速度 Q/E:水溫 A/D:油量 1-6:檔位 Z/X/C:方向燈 7/8/9/0/-:門")
         
         # 連接 Signals 到 Slots
         self.signal_update_rpm.connect(self._slot_set_rpm)
@@ -833,7 +1070,7 @@ class Dashboard(QWidget):
         self.rpm_gauge = AnalogGauge(0, 8, rpm_style, title="RPM x1000", red_zone_start=6.0)
         self.rpm_gauge.setFixedSize(450, 450)
         
-        # 右側：油量表 / 音樂卡片 (可切換) - 帶容器
+        # 右側：油量表 / 音樂卡片 / 門狀態卡片 (可切換) - 帶容器
         right_container = QWidget()
         right_container.setFixedSize(380, 420)  # 稍微增加高度以容納指示器
         right_layout = QVBoxLayout(right_container)
@@ -860,9 +1097,13 @@ class Dashboard(QWidget):
         self.music_card = MusicCard()
         self.music_card.request_bind.connect(self.start_spotify_auth)
         
+        # 門狀態卡片
+        self.door_card = DoorStatusCard()
+        
         # 添加到堆疊
         self.right_stack.addWidget(self.fuel_gauge)  # index 0
         self.right_stack.addWidget(self.music_card)  # index 1
+        self.right_stack.addWidget(self.door_card)   # index 2
         self.right_stack.setCurrentIndex(0)  # 預設顯示油量表
         
         # 滑動指示器
@@ -875,7 +1116,7 @@ class Dashboard(QWidget):
         
         # 創建圓點指示器
         self.indicators = []
-        for i in range(2):  # 2 張卡片
+        for i in range(3):  # 3 張卡片
             dot = QLabel("●")
             dot.setFixedSize(12, 12)
             dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -895,7 +1136,7 @@ class Dashboard(QWidget):
         
         # 當前卡片索引
         self.current_card_index = 0
-        self.total_cards = 2
+        self.total_cards = 3
         
         # 觸控滑動相關
         self.touch_start_pos = None
@@ -1090,6 +1331,16 @@ class Dashboard(QWidget):
         if state in valid_states:
             self.signal_update_turn_signal.emit(state)
     
+    def set_door_status(self, door, is_closed):
+        """外部數據接口：設置門的狀態
+        Args:
+            door: "FL", "FR", "RL", "RR", "BK"
+            is_closed: True=關閉, False=開啟
+        直接在主執行緒中調用（因為通常從主執行緒觸發）
+        """
+        if hasattr(self, 'door_card'):
+            self.door_card.set_door_status(door, is_closed)
+    
     # === Spotify 執行緒安全接口 ===
     def update_spotify_track(self, title, artist):
         """更新 Spotify 歌曲資訊 (執行緒安全)"""
@@ -1244,7 +1495,7 @@ class Dashboard(QWidget):
                 indicator.setStyleSheet("color: #444; font-size: 20px;")  # 未選中：灰色
         
         # 顯示提示
-        card_names = ["油量表", "音樂播放器"]
+        card_names = ["油量表", "音樂播放器", "門狀態"]
         print(f"切換到: {card_names[self.current_card_index]}")
     
     def wheelEvent(self, event):
@@ -1327,6 +1578,33 @@ class Dashboard(QWidget):
                 self.set_turn_signal("both_off")
             else:
                 self.set_turn_signal("both_on")
+        
+        # 7/8/9/0: 門狀態測試
+        elif key == Qt.Key.Key_7:
+            # 左前門切換
+            if hasattr(self, 'door_card'):
+                self.door_card.door_fl_closed = not self.door_card.door_fl_closed
+                self.door_card.update_display()
+        elif key == Qt.Key.Key_8:
+            # 右前門切換
+            if hasattr(self, 'door_card'):
+                self.door_card.door_fr_closed = not self.door_card.door_fr_closed
+                self.door_card.update_display()
+        elif key == Qt.Key.Key_9:
+            # 左後門切換
+            if hasattr(self, 'door_card'):
+                self.door_card.door_rl_closed = not self.door_card.door_rl_closed
+                self.door_card.update_display()
+        elif key == Qt.Key.Key_0:
+            # 右後門切換
+            if hasattr(self, 'door_card'):
+                self.door_card.door_rr_closed = not self.door_card.door_rr_closed
+                self.door_card.update_display()
+        elif key == Qt.Key.Key_Minus:
+            # 尾門切換
+            if hasattr(self, 'door_card'):
+                self.door_card.door_bk_closed = not self.door_card.door_bk_closed
+                self.door_card.update_display()
 
         self.update_display()
 
