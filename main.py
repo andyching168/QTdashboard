@@ -261,6 +261,165 @@ class DoorStatusCard(QWidget):
             """)
 
 
+class MarqueeLabel(QLabel):
+    """跑馬燈標籤：當文字過長時自動捲動，全部回到定點後暫停再重新開始"""
+    # 類別變數：用於同步所有 MarqueeLabel 實例
+    _global_pause_counter = 0
+    _global_pause_threshold = 166  # 約 5 秒 (166 * 30ms ≈ 5000ms)
+    _instances = []  # 追蹤所有實例
+    _waiting_for_sync = False  # 是否在等待其他標籤回到起點
+    
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self._scroll_pos = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._on_timeout)
+        self._timer.setInterval(30)
+        self._is_scrollable = False
+        self._at_home = True  # 是否在起始位置
+        
+        # 註冊實例
+        MarqueeLabel._instances.append(self)
+
+    def setText(self, text):
+        if text == self.text():
+            return
+        print(f"[MarqueeLabel] setText called: '{text[:30]}...'")  # Debug
+        super().setText(text)
+        self._scroll_pos = 0
+        self._at_home = True
+        MarqueeLabel._waiting_for_sync = False
+        MarqueeLabel._global_pause_counter = MarqueeLabel._global_pause_threshold  # 新文字設定時先暫停
+        self._check_scrollable()
+        
+        # 確保計時器啟動
+        if not self._timer.isActive():
+            self._timer.start()
+        
+        self.update()
+
+    def _check_scrollable(self):
+        """檢查文字是否需要捲動"""
+        fm = self.fontMetrics()
+        text_width = fm.horizontalAdvance(self.text())
+        self._is_scrollable = text_width > self.width()
+        
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        
+        # 獲取樣式表設定的顏色
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        painter.setFont(self.font())
+        
+        fm = self.fontMetrics()
+        text_width = fm.horizontalAdvance(self.text())
+        
+        # 如果文字寬度小於元件寬度，則置中顯示且不捲動
+        if text_width <= self.width():
+            if self._timer.isActive():
+                self._timer.stop()
+            self._is_scrollable = False
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
+            return
+
+        # 標記為需要捲動
+        self._is_scrollable = True
+        
+        if not self._timer.isActive():
+            self._timer.start()
+
+        painter.save()
+        painter.setClipRect(self.rect())
+        
+        # 繪製文字
+        x = -self._scroll_pos
+        y = (self.height() + fm.ascent() - fm.descent()) / 2
+        
+        painter.drawText(int(x), int(y), self.text())
+        
+        # 如果文字已經開始移出視野，在右側繼續繪製以實現無縫循環
+        if self._scroll_pos > 0:
+            painter.drawText(int(x + text_width + 20), int(y), self.text())
+        
+        painter.restore()
+
+    def _on_timeout(self):
+        # 檢查是否在全域暫停中
+        if MarqueeLabel._global_pause_counter > 0:
+            MarqueeLabel._global_pause_counter -= 1
+            if MarqueeLabel._global_pause_counter == 165:  # 只在開始暫停時 print 一次
+                print(f"[MarqueeLabel] 開始暫停 5 秒...")  # Debug
+            if MarqueeLabel._global_pause_counter == 0:
+                print(f"[MarqueeLabel] 暫停結束，重新開始捲動")  # Debug
+                MarqueeLabel._waiting_for_sync = False  # 重置等待狀態
+            self.update()
+            return
+        
+        # 如果不需要捲動，保持在起始位置
+        if not self._is_scrollable:
+            self._at_home = True
+            return
+        
+        # 如果在等待同步狀態，只有還沒到起點的才能繼續捲動
+        if MarqueeLabel._waiting_for_sync:
+            if self._scroll_pos == 0:
+                # 已經在起點了，停止捲動
+                self._at_home = True
+                self.update()
+                return
+            else:
+                # 還沒到起點，繼續捲動
+                self._scroll_pos += 1
+                fm = self.fontMetrics()
+                text_width = fm.horizontalAdvance(self.text())
+                
+                if self._scroll_pos >= text_width + 20:
+                    self._scroll_pos = 0
+                    self._at_home = True
+                    
+                    # 檢查是否所有標籤都到起點了
+                    all_at_home = all(
+                        inst._at_home for inst in MarqueeLabel._instances
+                        if inst.isVisible() and inst._is_scrollable
+                    )
+                    
+                    if all_at_home:
+                        print("[MarqueeLabel] 所有標籤已同步到起點，開始暫停")  # Debug
+                        MarqueeLabel._global_pause_counter = MarqueeLabel._global_pause_threshold
+                        MarqueeLabel._waiting_for_sync = False
+                
+                self.update()
+                return
+        
+        # 正常捲動
+        self._at_home = False
+        self._scroll_pos += 1
+        
+        # 計算是否完成一次循環
+        fm = self.fontMetrics()
+        text_width = fm.horizontalAdvance(self.text())
+        
+        # 當文字完全移出並回到起始位置時
+        if self._scroll_pos >= text_width + 20:
+            self._scroll_pos = 0
+            self._at_home = True
+            
+            # 有標籤回到起點了，進入等待同步狀態
+            if not MarqueeLabel._waiting_for_sync:
+                print("[MarqueeLabel] 有標籤回到起點，等待其他標籤同步")  # Debug
+                MarqueeLabel._waiting_for_sync = True
+            
+        self.update()
+    
+    def __del__(self):
+        """清理實例"""
+        try:
+            if self in MarqueeLabel._instances:
+                MarqueeLabel._instances.remove(self)
+        except:
+            pass
+
+
 class MusicCard(QWidget):
     """音樂播放器卡片"""
     
@@ -349,8 +508,8 @@ class MusicCard(QWidget):
 
     def setup_player_ui(self):
         layout = QVBoxLayout(self.player_page)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setContentsMargins(20, 15, 20, 15)
+        layout.setSpacing(5)
         
         # 標題
         title_label = QLabel("Now Playing")
@@ -384,8 +543,15 @@ class MusicCard(QWidget):
         album_icon.setParent(self.album_art)
         album_icon.setGeometry(0, 0, 180, 180)
         
+        # 文字資訊容器
+        info_container = QWidget()
+        info_container.setStyleSheet("background: transparent;")
+        info_layout = QVBoxLayout(info_container)
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        info_layout.setSpacing(2)
+        
         # 歌曲名稱
-        self.song_title = QLabel("Waiting for music...")
+        self.song_title = MarqueeLabel("Waiting for music...")
         self.song_title.setStyleSheet("""
             color: white;
             font-size: 18px;
@@ -393,15 +559,31 @@ class MusicCard(QWidget):
             background: transparent;
         """)
         self.song_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.song_title.setFixedHeight(30)  # 固定高度避免跳動
         
         # 演出者
-        self.artist_name = QLabel("-")
+        self.artist_name = MarqueeLabel("-")
         self.artist_name.setStyleSheet("""
             color: #aaa;
             font-size: 14px;
             background: transparent;
         """)
         self.artist_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.artist_name.setFixedHeight(25)
+        
+        # 專輯名稱
+        self.album_name = MarqueeLabel("-")
+        self.album_name.setStyleSheet("""
+            color: #888;
+            font-size: 12px;
+            background: transparent;
+        """)
+        self.album_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.album_name.setFixedHeight(20)
+        
+        info_layout.addWidget(self.song_title)
+        info_layout.addWidget(self.artist_name)
+        info_layout.addWidget(self.album_name)
         
         # 進度條容器
         progress_widget = QWidget()
@@ -456,12 +638,11 @@ class MusicCard(QWidget):
         
         # 組合佈局
         layout.addWidget(title_label)
-        layout.addStretch()
+        layout.addStretch(1)
         layout.addWidget(self.album_art, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addSpacing(10)
-        layout.addWidget(self.song_title)
-        layout.addWidget(self.artist_name)
-        layout.addStretch()
+        layout.addWidget(info_container)
+        layout.addStretch(1)
         layout.addWidget(progress_widget)
     
     def show_bind_ui(self):
@@ -470,10 +651,11 @@ class MusicCard(QWidget):
     def show_player_ui(self):
         self.stack.setCurrentWidget(self.player_page)
 
-    def set_song(self, title, artist):
+    def set_song(self, title, artist, album=""):
         """設置歌曲信息"""
         self.song_title.setText(title)
         self.artist_name.setText(artist)
+        self.album_name.setText(album)
     
     def set_album_art(self, pixmap):
         """
@@ -561,7 +743,11 @@ class MusicCard(QWidget):
             return
         
         # 更新歌曲資訊
-        self.set_song(track_info.get('name', 'Unknown'), track_info.get('artists', 'Unknown'))
+        self.set_song(
+            track_info.get('name', 'Unknown'), 
+            track_info.get('artists', 'Unknown'),
+            track_info.get('album', '')
+        )
         
         # 更新進度
         progress_ms = track_info.get('progress_ms', 0)
@@ -777,7 +963,7 @@ class Dashboard(QWidget):
     signal_update_turn_signal = pyqtSignal(str)  # "left", "right", "both", "off"
     
     # Spotify 相關 Signals
-    signal_update_spotify_track = pyqtSignal(str, str)
+    signal_update_spotify_track = pyqtSignal(str, str, str)
     signal_update_spotify_progress = pyqtSignal(float, float)
     signal_update_spotify_art = pyqtSignal(object)  # 傳遞 PIL Image 物件
 
@@ -1381,9 +1567,9 @@ class Dashboard(QWidget):
             self.door_card.set_door_status(door, is_closed)
     
     # === Spotify 執行緒安全接口 ===
-    def update_spotify_track(self, title, artist):
+    def update_spotify_track(self, title, artist, album=""):
         """更新 Spotify 歌曲資訊 (執行緒安全)"""
-        self.signal_update_spotify_track.emit(title, artist)
+        self.signal_update_spotify_track.emit(title, artist, album)
 
     def update_spotify_progress(self, current, total):
         """更新 Spotify 播放進度 (執行緒安全)"""
@@ -1459,10 +1645,11 @@ class Dashboard(QWidget):
             self.right_turn_on = False
 
     # === Spotify Slots ===
-    @pyqtSlot(str, str)
-    def _slot_update_spotify_track(self, title, artist):
+    @pyqtSlot(str, str, str)
+    def _slot_update_spotify_track(self, title, artist, album):
+        print(f"DEBUG: UI Received - Title: {title}, Artist: {artist}, Album: '{album}'")
         if hasattr(self, 'music_card'):
-            self.music_card.set_song(title, artist)
+            self.music_card.set_song(title, artist, album)
 
     @pyqtSlot(float, float)
     def _slot_update_spotify_progress(self, current, total):
@@ -1675,9 +1862,3 @@ class Dashboard(QWidget):
             padding: 15px 30px;
         """)
         self.gear_label.setText(self.gear)
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    dashboard = Dashboard()
-    dashboard.show()
-    sys.exit(app.exec())

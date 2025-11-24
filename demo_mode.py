@@ -280,7 +280,11 @@ def main():
         
         def update_track_info(track_info):
             """在主執行緒更新歌曲資訊"""
-            dashboard.music_card.set_song(track_info['name'], track_info['artists'])
+            dashboard.music_card.set_song(
+                track_info['name'], 
+                track_info['artists'],
+                track_info.get('album', '')
+            )
             if track_info.get('album_art'):
                 dashboard.music_card.set_album_art_from_pil(track_info['album_art'])
                 
@@ -334,7 +338,10 @@ def main():
         # 注意：這裡直接呼叫 music_card 方法是安全的，因為在主執行緒
         if not spotify_enabled:
             song_title, artist, _ = simulator.playlist[simulator.current_song_index]
-            dashboard.music_card.set_song(song_title, artist)
+            # 只在歌曲改變時更新（避免重複調用 setText 導致跑馬燈重置）
+            if not hasattr(update_data, 'last_song_index') or update_data.last_song_index != simulator.current_song_index:
+                dashboard.music_card.set_song(song_title, artist, "")
+                update_data.last_song_index = simulator.current_song_index
             dashboard.music_card.set_progress(simulator.music_time, simulator.song_duration)
     
     timer = QTimer()

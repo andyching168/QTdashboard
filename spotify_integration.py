@@ -68,12 +68,15 @@ class SpotifyIntegration:
     def _on_track_change(self, track_info):
         """歌曲變更回調（立即顯示文字資訊）"""
         try:
-            logger.info(f"🎵 {track_info['name']} - {track_info['artists']}")
+            album_name = track_info.get('album', '')
+            logger.info(f"🎵 {track_info['name']} - {track_info['artists']} | Album: '{album_name}'")
+            
             if self.dashboard:
                 # 使用執行緒安全的方法更新
                 self.dashboard.update_spotify_track(
                     track_info['name'],
-                    track_info['artists']
+                    track_info['artists'],
+                    album_name
                 )
         except Exception as e:
             logger.error(f"更新歌曲資訊失敗: {e}")
