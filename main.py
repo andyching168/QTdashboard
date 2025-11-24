@@ -970,6 +970,11 @@ class Dashboard(QWidget):
         self.temp = 45  # 正常水溫約在 45-50% 位置（對應 85-95°C）
         self.fuel = 60  # 稍微偏上的油量
         self.gear = "P"
+        
+        # RPM 動畫平滑 (GUI 端二次平滑)
+        self.target_rpm = 0.0  # 目標轉速
+        self.rpm_animation_alpha = 0.3  # GUI 端平滑係數
+        
         self.update_display()
         
         # 嘗試初始化 Spotify
@@ -1107,8 +1112,16 @@ class Dashboard(QWidget):
     
     @pyqtSlot(float)
     def _slot_set_rpm(self, rpm):
-        """Slot: 在主執行緒中更新轉速顯示"""
-        self.rpm = max(0, min(8, rpm))
+        """Slot: 在主執行緒中更新轉速顯示 (含 GUI 端平滑)"""
+        target = max(0, min(8, rpm))
+        
+        # GUI 端二次平滑：使用 EMA 讓指針移動更絲滑
+        if self.rpm == 0:
+            self.rpm = target  # 首次直接設定
+        else:
+            # 平滑插值：越接近目標越慢
+            self.rpm = self.rpm * (1 - self.rpm_animation_alpha) + target * self.rpm_animation_alpha
+        
         self.update_display()
     
     @pyqtSlot(float)

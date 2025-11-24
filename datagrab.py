@@ -35,9 +35,10 @@ class WorkerSignals(QObject):
     """
     update_rpm = pyqtSignal(float)   # 發送轉速 (float)
     update_speed = pyqtSignal(float) # 發送車速 (float)
-    update_temp = pyqtSignal(float)  # 發送水溫百分比 (float)
+    signal_update_temp = pyqtSignal(float)  # 發送水溫百分比 (float)
     update_fuel = pyqtSignal(float)  # 發送油量百分比 (float)
     update_gear = pyqtSignal(str)    # 發送檔位 (str)
+    update_turn_signal = pyqtSignal(str)  # 發送方向燈狀態 (str: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off")
     # update_nav_icon = pyqtSignal(str) # 預留給導航圖片
 
 # --- 全局變數 ---
@@ -116,7 +117,7 @@ def unified_receiver(bus, db, signals):
     
     # RPM 平滑參數
     current_rpm_smoothed = 0.0
-    rpm_alpha = 0.15  # 平滑係數 (0.0~1.0)，越小越平滑但反應越慢
+    rpm_alpha = 0.25  # 平滑係數 (0.0~1.0)，越小越平滑但反應越慢
     
     # 檔位切換狀態追蹤
     last_gear_str = None
@@ -282,7 +283,45 @@ def unified_receiver(bus, db, signals):
                 except Exception as e:
                     logger.error(f"處理速度訊息錯誤: {e}")
 
-            # 5. 偵測潛在的 RPM 訊號 (ID 0x316 / 790 ENGINE_DATA)
+            # 5. 處理方向燈 BODY_ECU_STATUS (ID 0x420 / 1056)
+            elif msg.arbitration_id == 0x420:
+                try:
+                    decoded = db.decode_message(msg.arbitration_id, msg.data)
+                    
+                    # 讀取方向燈狀態 (bit signals)
+                    left_signal = decoded.get('LEFT_SIGNAL_STATUS', 0)
+                    right_signal = decoded.get('RIGHT_SIGNAL_STATUS', 0)
+                    
+                    # 轉換為 int (如果是 NamedSignalValue)
+                    if hasattr(left_signal, 'value'):
+                        left_signal = int(left_signal.value)
+                    else:
+                        left_signal = int(left_signal)
+                    
+                    if hasattr(right_signal, 'value'):
+                        right_signal = int(right_signal.value)
+                    else:
+                        right_signal = int(right_signal)
+                    
+                    # 判斷方向燈狀態並發送
+                    # 根據 DBC 註解：R,L shows at same time means hazard (雙閃)
+                    if left_signal == 1 and right_signal == 1:
+                        signals.update_turn_signal.emit("both_on")
+                    elif left_signal == 1 and right_signal == 0:
+                        signals.update_turn_signal.emit("left_on")
+                    elif left_signal == 0 and right_signal == 1:
+                        signals.update_turn_signal.emit("right_on")
+                    else:
+                        signals.update_turn_signal.emit("off")
+                    
+                    logger.debug(f"方向燈: L={left_signal} R={right_signal}")
+                    
+                except cantools.database.errors.DecodeError as e:
+                    logger.error(f"DBC 解碼錯誤 (BODY_ECU_STATUS): {e}")
+                except Exception as e:
+                    logger.error(f"處理方向燈訊息錯誤: {e}")
+            
+            # 6. 偵測潛在的 RPM 訊號 (ID 0x316 / 790 ENGINE_DATA)
             # elif msg.arbitration_id == 0x316:
             #     # 當主要 RPM (ID 832) 失效時，記錄此 ID 的數據以供分析
             #     if time.time() - data_store["CAN"].get("last_update", 0) > 1.0:
@@ -417,6 +456,7 @@ def main():
         signals.update_temp.connect(dashboard.set_temperature)
         signals.update_fuel.connect(dashboard.set_fuel)
         signals.update_gear.connect(dashboard.set_gear)
+        signals.update_turn_signal.connect(dashboard.set_turn_signal)
         
         dashboard.show()
 
