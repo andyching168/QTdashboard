@@ -203,20 +203,26 @@ def main():
                     if use_qr == "2":
                         from spotify_qr_auth import show_qr_auth_dialog
                         print("\n開啟 QR Code 授權視窗...")
-                        if not show_qr_auth_dialog(auth):
-                            print("\n❌ QR 授權失敗或已取消")
+                        try:
+                            if not show_qr_auth_dialog(auth):
+                                print("\n❌ QR 授權失敗或已取消")
+                                auth = None
+                        except Exception as qr_error:
+                            print(f"\n❌ QR 授權過程錯誤: {qr_error}")
                             auth = None
                     else:
                         if not auth.authenticate():
                             print("\n❌ 瀏覽器授權失敗")
                             auth = None
                 
-                if auth and auth.is_authenticated():
+                # 確保認證完全成功才初始化 Spotify Listener
+                if auth and auth.is_authenticated() and auth.get_client():
                     spotify_listener = SpotifyListener(auth, update_interval=1.0)
                     spotify_enabled = True
                     print("\n✅ Spotify 認證成功")
                 else:
                     print("\n將使用模擬音樂資料")
+                    auth = None
                     
             except Exception as e:
                 print(f"\n⚠️  Spotify 初始化失敗: {e}")

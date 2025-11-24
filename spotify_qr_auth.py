@@ -9,6 +9,7 @@ import socket
 import qrcode
 import threading
 import time
+import logging
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from io import BytesIO
@@ -19,6 +20,8 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QPixmap, QImage, QFont
 
 from spotify_auth import SpotifyAuthManager
+
+logger = logging.getLogger(__name__)
 
 
 class AuthCallbackHandler(BaseHTTPRequestHandler):
@@ -111,6 +114,8 @@ class SpotifyQRAuthDialog(QWidget):
         self.server = None
         self.server_thread = None
         self.auth_success = False
+        self._is_closing = False  # 標記是否正在關閉
+        self.oauth = None  # 儲存 OAuth 管理器
         
         # 預先取得 IP 和 Redirect URI
         self.local_ip = self.get_local_ip()
@@ -448,33 +453,57 @@ class SpotifyQRAuthDialog(QWidget):
 
     def start_auth_flow(self):
         """啟動授權流程"""
-        # 啟動 HTTP 伺服器
-        self.server_thread = threading.Thread(target=self.run_server, daemon=True)
-        self.server_thread.start()
-        
-        # 生成授權 URL
-        auth_url = self.get_auth_url()
-        
-        # 生成 QR Code
-        self.generate_qr_code(auth_url)
-        
-        # 啟動檢查授權的定時器
-        self.check_timer = QTimer()
-        self.check_timer.timeout.connect(self.check_auth_status)
-        self.check_timer.start(500)  # 每 0.5 秒檢查一次
+        try:
+            # 啟動 HTTP 伺服器
+            self.server_thread = threading.Thread(target=self.run_server, daemon=True)
+            self.server_thread.start()
+            
+            # 生成授權 URL
+            auth_url = self.get_auth_url()
+            
+            # 生成 QR Code
+            self.generate_qr_code(auth_url)
+            
+            # 啟動檢查授權的定時器
+            self.check_timer = QTimer()
+            self.check_timer.timeout.connect(self.check_auth_status)
+            self.check_timer.start(500)  # 每 0.5 秒檢查一次
+            
+        except Exception as e:
+            # 初始化失敗
+            self.signals.status_update.emit(f"初始化失敗: {e}")
+            self.auth_success = False
+            # 延遲關閉讓使用者看到錯誤訊息
+            QTimer.singleShot(2000, self.cleanup_and_close)
     
     def run_server(self):
         """運行 HTTP 伺服器"""
         try:
             self.server = HTTPServer(('0.0.0.0', 8888), AuthCallbackHandler)
-            self.signals.status_update.emit("伺服器已啟動，等待掃描...")
+            # 檢查視窗是否已關閉
+            if not self._is_closing:
+                try:
+                    self.signals.status_update.emit("伺服器已啟動,等待掃描...")
+                except RuntimeError:
+                    # 訊號對象已被刪除,視窗已關閉
+                    return
             self.server.serve_forever()
         except Exception as e:
-            self.signals.status_update.emit(f"伺服器錯誤: {e}")
+            # 檢查視窗是否已關閉
+            if not self._is_closing:
+                try:
+                    self.signals.status_update.emit(f"伺服器錯誤: {e}")
+                except RuntimeError:
+                    # 訊號對象已被刪除,視窗已關閉
+                    pass
     
     def get_auth_url(self) -> str:
         """取得授權 URL"""
         from spotipy.oauth2 import SpotifyOAuth
+        
+        # 檢查 config 是否存在
+        if not self.auth_manager.config:
+            raise ValueError("Spotify 配置檔未正確載入，請檢查 spotify_config.json")
         
         # 使用預先計算的 redirect_uri
         print(f"Redirect URI: {self.redirect_uri}")
@@ -487,16 +516,36 @@ class SpotifyQRAuthDialog(QWidget):
             msg = f"Redirect URI: {self.redirect_uri}"
             self.ip_label.setText(msg)
         
-        oauth = SpotifyOAuth(
+        # 建立 OAuth 管理器並儲存
+        self.oauth = SpotifyOAuth(
             client_id=self.auth_manager.config['client_id'],
             client_secret=self.auth_manager.config['client_secret'],
             redirect_uri=self.redirect_uri,
             scope=" ".join(self.auth_manager.SCOPES),
             cache_path=self.auth_manager.cache_path,
-            open_browser=False
+            open_browser=False,
+            show_dialog=True
         )
         
-        return oauth.get_authorize_url()
+        # 直接構建授權 URL，避免觸發 spotipy 的互動式提示
+        import urllib.parse
+        
+        # 生成 state 參數（用於 CSRF 保護）
+        if not self.oauth.state:
+            import secrets
+            self.oauth.state = secrets.token_urlsafe(16)
+        
+        params = {
+            'client_id': self.oauth.client_id,
+            'response_type': 'code',
+            'redirect_uri': self.oauth.redirect_uri,
+            'scope': self.oauth.scope,
+            'show_dialog': 'true',
+            'state': self.oauth.state
+        }
+        
+        query_string = urllib.parse.urlencode(params)
+        return f"{self.oauth.OAUTH_AUTHORIZE_URL}?{query_string}"
     
     def generate_qr_code(self, url: str):
         """生成 QR Code"""
@@ -517,23 +566,42 @@ class SpotifyQRAuthDialog(QWidget):
     def complete_auth(self):
         """完成授權流程"""
         try:
-            # 使用授權碼完成認證
-            success = self.auth_manager.authenticate()
+            from spotipy import Spotify
+            
+            if not self.oauth:
+                raise ValueError("OAuth 管理器未初始化")
+            
+            # 使用授權碼取得 token
+            auth_code = AuthCallbackHandler.auth_code
+            if not auth_code:
+                raise ValueError("未取得授權碼")
+            
+            # 使用授權碼換取 access token
+            token_info = self.oauth.get_access_token(auth_code, as_dict=True, check_cache=False)
+            
+            if not token_info:
+                raise ValueError("無法取得 access token")
+            
+            # 更新 auth_manager
+            self.auth_manager.auth_manager = self.oauth
+            self.auth_manager.sp = Spotify(auth=token_info['access_token'])
+            
+            # 測試連線
+            user = self.auth_manager.sp.current_user()
+            logger.info(f"成功認證 Spotify 使用者: {user.get('display_name', 'Unknown')}")
             
             time.sleep(1)  # 給使用者看到成功訊息的時間
-            self.signals.auth_completed.emit(success)
+            self.signals.auth_completed.emit(True)
             
         except Exception as e:
+            logger.error(f"完成授權失敗: {e}")
             self.signals.status_update.emit(f"授權失敗: {e}")
             self.signals.auth_completed.emit(False)
     
     def on_auth_completed(self, success: bool):
         """授權完成"""
-        if self.server:
-            self.server.shutdown()
-        
         self.auth_success = success
-        self.close()
+        self.cleanup_and_close()
     
     def on_status_update(self, message: str):
         """更新狀態文字"""
@@ -541,14 +609,34 @@ class SpotifyQRAuthDialog(QWidget):
     
     def cancel_auth(self):
         """取消授權"""
+        self.cleanup_and_close()
+    
+    def cleanup_and_close(self):
+        """清理資源並關閉視窗"""
+        self._is_closing = True
+        
+        # 停止檢查計時器
+        if hasattr(self, 'check_timer'):
+            self.check_timer.stop()
+        
+        # 在背景執行緒中關閉伺服器,避免阻塞 UI
         if self.server:
-            self.server.shutdown()
+            def shutdown_server():
+                try:
+                    self.server.shutdown()
+                    self.server.server_close()
+                except:
+                    pass
+            
+            threading.Thread(target=shutdown_server, daemon=True).start()
+        
+        # 關閉視窗
         self.close()
     
     def closeEvent(self, event):
         """關閉事件"""
-        if self.server:
-            self.server.shutdown()
+        if not self._is_closing:
+            self.cleanup_and_close()
         event.accept()
 
 

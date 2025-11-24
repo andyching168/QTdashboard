@@ -498,6 +498,7 @@ class Dashboard(QWidget):
     signal_update_temperature = pyqtSignal(float)
     signal_update_fuel = pyqtSignal(float)
     signal_update_gear = pyqtSignal(str)
+    signal_update_turn_signal = pyqtSignal(str)  # "left", "right", "both", "off"
     
     # Spotify 相關 Signals
     signal_update_spotify_track = pyqtSignal(str, str)
@@ -506,7 +507,7 @@ class Dashboard(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("汽車儀表板模擬器 - 按 W/S:速度 Q/E:水溫 A/D:油量 1-4:檔位")
+        self.setWindowTitle("汽車儀表板模擬器 - W/S:速度 Q/E:水溫 A/D:油量 1-6:檔位 Z/X/C:方向燈")
         
         # 連接 Signals 到 Slots
         self.signal_update_rpm.connect(self._slot_set_rpm)
@@ -519,6 +520,9 @@ class Dashboard(QWidget):
         self.signal_update_spotify_track.connect(self._slot_update_spotify_track)
         self.signal_update_spotify_progress.connect(self._slot_update_spotify_progress)
         self.signal_update_spotify_art.connect(self._slot_update_spotify_art)
+        
+        # 連接方向燈 Signal
+        self.signal_update_turn_signal.connect(self._slot_update_turn_signal)
         
         # 適配 1920x480 螢幕
         self.setFixedSize(1920, 480)
@@ -533,10 +537,277 @@ class Dashboard(QWidget):
 
         self.init_ui()
         self.init_data()
+    
+    def create_status_bar(self):
+        """創建頂部狀態欄，包含方向燈指示"""
+        status_bar = QWidget()
+        status_bar.setFixedHeight(50)
+        status_bar.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a1f, stop:1 #0f0f14);
+                border-bottom: 2px solid #2a2a35;
+            }
+        """)
+        
+        layout = QHBoxLayout(status_bar)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # === 左側區域：漸層條（從最左到1/4）+ 圖標疊在上面 ===
+        left_container = QWidget()
+        left_container.setFixedWidth(480)  # 1920 * 0.25 = 480 (1/4 螢幕寬)
+        left_container.setStyleSheet("background: transparent;")
+        
+        # 漸層條從最邊緣到整個 1/4 區域
+        self.left_gradient_bar = QWidget(left_container)
+        self.left_gradient_bar.setGeometry(0, 5, 480, 40)  # 整個左側 1/4 區域
+        
+        # 左轉燈圖標（疊在條的最左邊上方）
+        self.left_turn_indicator = QLabel("⬅", left_container)
+        self.left_turn_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.left_turn_indicator.setGeometry(10, 5, 60, 40)
+        self.left_turn_indicator.setStyleSheet("""
+            QLabel {
+                color: #2a2a2a;
+                font-size: 28px;
+                font-weight: bold;
+                background: transparent;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        # 確保圖標在上層
+        self.left_turn_indicator.raise_()
+        
+        # === 中間區域 - 時間顯示 ===
+        center_container = QWidget()
+        center_container.setStyleSheet("background: transparent;")
+        center_layout = QVBoxLayout(center_container)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.time_label = QLabel("--:--")
+        self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.time_label.setStyleSheet("""
+            QLabel {
+                color: #6af;
+                font-size: 24px;
+                font-weight: bold;
+                background: transparent;
+                letter-spacing: 2px;
+            }
+        """)
+        center_layout.addWidget(self.time_label)
+        
+        # 更新時間
+        self.time_timer = QTimer()
+        self.time_timer.timeout.connect(self.update_time_display)
+        self.time_timer.start(1000)
+        self.update_time_display()
+        
+        # === 右側區域：漸層條（從1/4到最右）+ 圖標疊在上面 ===
+        right_container = QWidget()
+        right_container.setFixedWidth(480)  # 1920 * 0.25 = 480 (1/4 螢幕寬)
+        right_container.setStyleSheet("background: transparent;")
+        
+        # 漸層條從整個 1/4 區域到最邊緣
+        self.right_gradient_bar = QWidget(right_container)
+        self.right_gradient_bar.setGeometry(0, 5, 480, 40)  # 整個右側 1/4 區域
+        
+        # 右轉燈圖標（疊在條的最右邊上方）
+        self.right_turn_indicator = QLabel("➡", right_container)
+        self.right_turn_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.right_turn_indicator.setGeometry(410, 5, 60, 40)
+        self.right_turn_indicator.setStyleSheet("""
+            QLabel {
+                color: #2a2a2a;
+                font-size: 28px;
+                font-weight: bold;
+                background: transparent;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """)
+        # 確保圖標在上層
+        self.right_turn_indicator.raise_()
+        
+        # 組合佈局
+        layout.addWidget(left_container)
+        layout.addWidget(center_container, 1)
+        layout.addWidget(right_container)
+        
+        # 方向燈狀態（直接反映 CAN 訊號的亮滅狀態）
+        self.left_turn_on = False   # 左轉燈當前是否為亮
+        self.right_turn_on = False  # 右轉燈當前是否為亮
+        
+        # 漸層動畫位置 (0.0 到 1.0)
+        self.left_gradient_pos = 0.0
+        self.right_gradient_pos = 0.0
+        
+        # 動畫計時器 - 用於平滑的漸層效果
+        self.animation_timer = QTimer()
+        self.animation_timer.timeout.connect(self.update_gradient_animation)
+        self.animation_timer.start(16)  # 約 60 FPS
+        
+        return status_bar
+    
+    def update_time_display(self):
+        """更新時間顯示"""
+        from datetime import datetime
+        current_time = datetime.now().strftime("%H:%M")
+        self.time_label.setText(current_time)
+    
+    def update_gradient_animation(self):
+        """更新漸層動畫效果"""
+        # 熄滅動畫速度
+        fade_speed = 0.05
+        
+        # 左轉燈動畫
+        if self.left_turn_on:
+            # 亮起時直接全滿
+            self.left_gradient_pos = 1.0
+        else:
+            # 熄滅時從中間向外漸暗
+            self.left_gradient_pos = max(0.0, self.left_gradient_pos - fade_speed)
+        
+        # 右轉燈動畫
+        if self.right_turn_on:
+            # 亮起時直接全滿
+            self.right_gradient_pos = 1.0
+        else:
+            # 熄滅時從中間向外漸暗
+            self.right_gradient_pos = max(0.0, self.right_gradient_pos - fade_speed)
+        
+        # 更新樣式
+        self.update_turn_signal_style()
+    
+    def update_turn_signal_style(self):
+        """更新方向燈的視覺樣式"""
+        # 方向燈圖標樣式
+        indicator_inactive = """
+            QLabel {
+                color: #2a2a2a;
+                font-size: 28px;
+                font-weight: bold;
+                background: transparent;
+                border: 2px solid #2a2a2a;
+                border-radius: 8px;
+            }
+        """
+        
+        indicator_active = """
+            QLabel {
+                color: #00FF00;
+                font-size: 28px;
+                font-weight: bold;
+                background: transparent;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """
+        
+        # 漸層條背景樣式（關閉時）
+        gradient_inactive = """
+            QWidget {
+                background: transparent;
+            }
+        """
+        
+        # === 左轉燈 ===
+        # 圖標的亮滅只看 left_turn_on，不受動畫影響
+        if self.left_turn_on:
+            self.left_turn_indicator.setStyleSheet(indicator_active)
+        else:
+            self.left_turn_indicator.setStyleSheet(indicator_inactive)
+        
+        # 漸層條的動畫效果
+        pos = self.left_gradient_pos
+        
+        if pos > 0:
+            # pos=1.0 時：整條均勻亮橙色
+            # pos<1.0 時：從中間向外漸暗
+            if pos >= 1.0:
+                # 完全亮起：整條均勻的亮綠色
+                left_gradient_style = """
+                    QWidget {
+                        background: rgba(177, 255, 0, 0.7);
+                        border-radius: 4px;
+                    }
+                """
+            else:
+                # 熄滅中：從中間向外漸暗
+                left_gradient_style = f"""
+                    QWidget {{
+                        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                            stop:0 rgba(177, 255, 0, {pos * 0.7:.2f}),
+                            stop:{0.3 * pos:.2f} rgba(177, 255, 0, {pos * 0.7:.2f}),
+                            stop:{0.5 * pos:.2f} rgba(177, 255, 0, {pos * 0.5:.2f}),
+                            stop:{0.7 * pos:.2f} rgba(140, 255, 0, {pos * 0.3:.2f}),
+                            stop:{0.85 * pos:.2f} rgba(120, 255, 0, {pos * 0.15:.2f}),
+                            stop:1 rgba(30, 30, 30, 0.1));
+                        border-radius: 4px;
+                    }}
+                """
+            self.left_gradient_bar.setStyleSheet(left_gradient_style)
+        else:
+            self.left_gradient_bar.setStyleSheet(gradient_inactive)
+        
+        # === 右轉燈 ===
+        # 圖標的亮滅只看 right_turn_on，不受動畫影響
+        if self.right_turn_on:
+            self.right_turn_indicator.setStyleSheet(indicator_active)
+        else:
+            self.right_turn_indicator.setStyleSheet(indicator_inactive)
+        
+        # 漸層條的動畫效果
+        pos = self.right_gradient_pos
+        
+        if pos > 0:
+            # pos=1.0 時：整條均勻亮橙色
+            # pos<1.0 時：從中間向外漸暗
+            if pos >= 1.0:
+                # 完全亮起：整條均勻的亮綠色
+                right_gradient_style = """
+                    QWidget {
+                        background: rgba(177, 255, 0, 0.7);
+                        border-radius: 4px;
+                    }
+                """
+            else:
+                # 熄滅中：從中間向外漸暗
+                right_gradient_style = f"""
+                    QWidget {{
+                        background: qlineargradient(x1:1, y1:0, x2:0, y2:0,
+                            stop:0 rgba(177, 255, 0, {pos * 0.7:.2f}),
+                            stop:{0.3 * pos:.2f} rgba(177, 255, 0, {pos * 0.7:.2f}),
+                            stop:{0.5 * pos:.2f} rgba(177, 255, 0, {pos * 0.5:.2f}),
+                            stop:{0.7 * pos:.2f} rgba(140, 255, 0, {pos * 0.3:.2f}),
+                            stop:{0.85 * pos:.2f} rgba(120, 255, 0, {pos * 0.15:.2f}),
+                            stop:1 rgba(30, 30, 30, 0.1));
+                        border-radius: 4px;
+                    }}
+                """
+            self.right_gradient_bar.setStyleSheet(right_gradient_style)
+        else:
+            self.right_gradient_bar.setStyleSheet(gradient_inactive)
 
     def init_ui(self):
+        # 主垂直佈局（包含狀態欄和儀表板）
+        main_vertical_layout = QVBoxLayout()
+        main_vertical_layout.setContentsMargins(0, 0, 0, 0)
+        main_vertical_layout.setSpacing(0)
+        self.setLayout(main_vertical_layout)
+        
+        # === 頂部狀態欄 ===
+        self.status_bar = self.create_status_bar()
+        main_vertical_layout.addWidget(self.status_bar)
+        
+        # === 主儀表板區域 ===
+        dashboard_container = QWidget()
         main_layout = QHBoxLayout()
-        self.setLayout(main_layout)
+        dashboard_container.setLayout(main_layout)
+        main_vertical_layout.addWidget(dashboard_container)
         
         # 左側：水溫表（小型）
         temp_style = GaugeStyle(
@@ -707,13 +978,19 @@ class Dashboard(QWidget):
     def check_spotify_config(self):
         """檢查 Spotify 設定並初始化"""
         config_path = "spotify_config.json"
-        if os.path.exists(config_path):
-            print("發現 Spotify 設定檔，正在初始化...")
+        cache_path = ".spotify_cache"
+        
+        # 只有當配置檔和快取都存在時才自動初始化
+        if os.path.exists(config_path) and os.path.exists(cache_path):
+            print("發現 Spotify 設定檔和快取，正在初始化...")
             self.music_card.show_player_ui()
             # 在背景執行緒初始化，避免卡住 UI
             QTimer.singleShot(100, lambda: setup_spotify(self))
         else:
-            print("未發現 Spotify 設定檔，顯示綁定介面")
+            if not os.path.exists(config_path):
+                print("未發現 Spotify 設定檔，顯示綁定介面")
+            else:
+                print("未發現授權快取，顯示綁定介面")
             self.music_card.show_bind_ui()
 
     def start_spotify_auth(self):
@@ -722,7 +999,26 @@ class Dashboard(QWidget):
         self.auth_manager = SpotifyAuthManager()
         self.auth_dialog = SpotifyQRAuthDialog(self.auth_manager)
         self.auth_dialog.signals.auth_completed.connect(self.on_auth_completed)
+        
+        # 設定為模態對話框，確保在全螢幕模式下也能正常顯示
+        self.auth_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        
+        # 設定視窗標誌，確保置於最前方
+        self.auth_dialog.setWindowFlags(
+            Qt.WindowType.Dialog | 
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.FramelessWindowHint  # 無邊框，更適合觸控螢幕
+        )
+        
+        # 顯示對話框
         self.auth_dialog.show()
+        
+        # 確保對話框置於螢幕中央
+        screen_geometry = QApplication.primaryScreen().geometry()
+        dialog_geometry = self.auth_dialog.geometry()
+        x = (screen_geometry.width() - dialog_geometry.width()) // 2
+        y = (screen_geometry.height() - dialog_geometry.height()) // 2
+        self.auth_dialog.move(x, y)
 
     def on_auth_completed(self, success):
         """授權完成回調"""
@@ -773,6 +1069,22 @@ class Dashboard(QWidget):
         """
         self.signal_update_gear.emit(str(gear).upper())
     
+    def set_turn_signal(self, state):
+        """外部數據接口：設置方向燈狀態（接收 CAN 訊號的亮滅狀態）
+        Args:
+            state: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off"
+        執行緒安全：透過 Signal 發送，由主執行緒執行
+        
+        典型使用方式（85 BPM 閃爍，由 CAN bus 控制）：
+            # CAN 訊號指示左轉燈亮
+            dashboard.set_turn_signal("left_on")
+            # CAN 訊號指示左轉燈滅
+            dashboard.set_turn_signal("left_off")
+        """
+        valid_states = ["left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off"]
+        if state in valid_states:
+            self.signal_update_turn_signal.emit(state)
+    
     # === Spotify 執行緒安全接口 ===
     def update_spotify_track(self, title, artist):
         """更新 Spotify 歌曲資訊 (執行緒安全)"""
@@ -816,6 +1128,32 @@ class Dashboard(QWidget):
         """Slot: 在主執行緒中更新檔位顯示"""
         self.gear = gear
         self.update_display()
+    
+    @pyqtSlot(str)
+    def _slot_update_turn_signal(self, state):
+        """Slot: 在主執行緒中更新方向燈狀態（從 CAN 訊號）
+        Args:
+            state: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off"
+        """
+        if state == "left_on":
+            self.left_turn_on = True
+            self.right_turn_on = False
+        elif state == "left_off":
+            self.left_turn_on = False
+        elif state == "right_on":
+            self.right_turn_on = True
+            self.left_turn_on = False
+        elif state == "right_off":
+            self.right_turn_on = False
+        elif state == "both_on":
+            self.left_turn_on = True
+            self.right_turn_on = True
+        elif state == "both_off":
+            self.left_turn_on = False
+            self.right_turn_on = False
+        elif state == "off":
+            self.left_turn_on = False
+            self.right_turn_on = False
 
     # === Spotify Slots ===
     @pyqtSlot(str, str)
@@ -956,6 +1294,26 @@ class Dashboard(QWidget):
             self.gear = "S"
         elif key == Qt.Key.Key_6:
             self.gear = "L"
+        
+        # Z/X/C: 方向燈測試（模擬 CAN 訊號的切換）
+        elif key == Qt.Key.Key_Z:
+            # 左轉燈切換
+            if self.left_turn_on:
+                self.set_turn_signal("left_off")
+            else:
+                self.set_turn_signal("left_on")
+        elif key == Qt.Key.Key_X:
+            # 右轉燈切換
+            if self.right_turn_on:
+                self.set_turn_signal("right_off")
+            else:
+                self.set_turn_signal("right_on")
+        elif key == Qt.Key.Key_C:
+            # 雙閃切換
+            if self.left_turn_on and self.right_turn_on:
+                self.set_turn_signal("both_off")
+            else:
+                self.set_turn_signal("both_on")
 
         self.update_display()
 
