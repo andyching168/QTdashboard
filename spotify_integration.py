@@ -105,8 +105,10 @@ class SpotifyIntegration:
             logger.error(f"更新播放進度失敗: {e}")
     
     def _on_error(self, error):
-        """錯誤處理回調"""
-        logger.error(f"Spotify 錯誤: {error}")
+        """錯誤處理回調（只在嚴重錯誤時觸發）"""
+        # 網路相關錯誤已在 listener 層級處理，這裡只記錄非網路錯誤
+        if 'timeout' not in error.lower() and 'connection' not in error.lower():
+            logger.warning(f"Spotify 錯誤: {error}")
     
     def stop(self):
         """停止 Spotify 監聽"""

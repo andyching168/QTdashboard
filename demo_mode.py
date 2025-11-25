@@ -13,7 +13,7 @@ import argparse
 import logging
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer, pyqtSignal, QObject
-from main import Dashboard
+from main import Dashboard, SplashScreen, is_production_environment
 
 # Spotify 整合（可選）
 try:
@@ -168,6 +168,11 @@ def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
+    # 降低第三方套件的日誌級別，避免網路錯誤訊息刷屏
+    logging.getLogger('urllib3').setLevel(logging.ERROR)
+    logging.getLogger('requests').setLevel(logging.ERROR)
+    logging.getLogger('spotify_listener').setLevel(logging.INFO)
+    
     print("=" * 50)
     print("演示模式 - Luxgen M7 數位儀表板")
     print("無需 CAN Bus 硬體")
@@ -251,6 +256,8 @@ def main():
     print("=" * 50)
     
     app = QApplication(sys.argv)
+    
+    # 建立主儀表板（先不顯示）
     dashboard = Dashboard()
     
     if spotify_enabled:
@@ -268,7 +275,29 @@ def main():
     vehicle_signals.update_fuel.connect(dashboard.set_fuel)
     vehicle_signals.update_gear.connect(dashboard.set_gear)
     
-    dashboard.show()
+    # 檢測環境
+    is_production = is_production_environment()
+    
+    # 建立並顯示啟動畫面
+    splash = SplashScreen("Splash.mp4")
+    
+    def show_dashboard():
+        """啟動畫面結束後顯示主畫面"""
+        splash.close()
+        if is_production:
+            dashboard.showFullScreen()
+        else:
+            dashboard.show()
+    
+    # 連接信號
+    splash.finished.connect(show_dashboard)
+    
+    # 顯示啟動畫面
+    if is_production:
+        splash.showFullScreen()
+    else:
+        splash.resize(800, 600)
+        splash.show()
     
     # 建立模擬器
     simulator = VehicleSimulator()

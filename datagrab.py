@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QObject, pyqtSignal
 
 # 引入你的儀表板類別
-from main import Dashboard 
+from main import Dashboard, SplashScreen, is_production_environment 
 
 # 配置日誌
 logging.basicConfig(
@@ -26,6 +26,11 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# 降低第三方套件的日誌級別，避免網路錯誤訊息刷屏
+logging.getLogger('urllib3').setLevel(logging.ERROR)
+logging.getLogger('requests').setLevel(logging.ERROR)
+logging.getLogger('spotify_listener').setLevel(logging.INFO)
 
 # --- 0. 信號類別 (關鍵修正：用於跨執行緒通訊) ---
 class WorkerSignals(QObject):
@@ -503,7 +508,29 @@ def main():
         signals.update_turn_signal.connect(dashboard.set_turn_signal)
         signals.update_door_status.connect(dashboard.set_door_status)
         
-        dashboard.show()
+        # 檢測環境
+        is_production = is_production_environment()
+        
+        # 建立並顯示啟動畫面
+        splash = SplashScreen("Splash.mp4")
+        
+        def show_dashboard():
+            """啟動畫面結束後顯示主畫面"""
+            splash.close()
+            if is_production:
+                dashboard.showFullScreen()
+            else:
+                dashboard.show()
+        
+        # 連接信號
+        splash.finished.connect(show_dashboard)
+        
+        # 顯示啟動畫面
+        if is_production:
+            splash.showFullScreen()
+        else:
+            splash.resize(800, 600)
+            splash.show()
 
         # 5. 啟動背景執行緒 (傳入 signals)
         logger.info("正在啟動背景執行緒...")

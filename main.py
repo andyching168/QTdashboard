@@ -1,14 +1,193 @@
 import sys
 import os
 import math
+import platform
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton
-from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot, QUrl
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QPixmap, QMouseEvent
+from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PyQt6.QtMultimediaWidgets import QVideoWidget
 
 # Spotify Imports
 from spotify_integration import setup_spotify
 from spotify_auth import SpotifyAuthManager
 from spotify_qr_auth import SpotifyQRAuthDialog
+
+
+def is_raspberry_pi():
+    """檢測是否在樹莓派上運行"""
+    try:
+        with open('/proc/cpuinfo', 'r') as f:
+            cpuinfo = f.read()
+            return 'Raspberry Pi' in cpuinfo or 'BCM' in cpuinfo
+    except:
+        return False
+
+
+def is_production_environment():
+    """
+    檢測是否為生產環境（應使用全螢幕）
+    
+    Returns:
+        bool: True = 生產環境（樹莓派或 Linux 嵌入式），False = 開發環境（Mac/Windows）
+    """
+    # 檢查是否為樹莓派
+    if is_raspberry_pi():
+        return True
+    
+    # 檢查環境變數
+    if os.environ.get('QTDASHBOARD_FULLSCREEN', '').lower() in ('1', 'true', 'yes'):
+        return True
+    
+    # macOS 和 Windows 視為開發環境
+    system = platform.system()
+    if system in ('Darwin', 'Windows'):
+        return False
+    
+    # Linux 但非樹莓派，檢查是否有桌面環境
+    if system == 'Linux':
+        # 如果有 DISPLAY 且不是樹莓派，視為開發環境
+        if os.environ.get('DISPLAY'):
+            # 檢查是否為嵌入式 Linux（通常沒有完整桌面環境）
+            has_desktop = os.environ.get('XDG_CURRENT_DESKTOP') or os.environ.get('DESKTOP_SESSION')
+            return not has_desktop  # 無桌面環境 = 生產環境
+    
+    # 預設為開發環境
+    return False
+
+
+class SplashScreen(QWidget):
+    """啟動畫面：全螢幕播放影片"""
+    
+    finished = pyqtSignal()  # 播放完成信號
+    
+    # 類別變數：記錄今天是否已經播放過完整影片
+    _last_full_play_date = None
+    _marker_file = ".splash_played_today"
+    
+    def __init__(self, video_path="Splash.mp4", skip_start_seconds=14):
+        super().__init__()
+        self.video_path = video_path
+        self.skip_start_seconds = skip_start_seconds
+        self.is_first_play_today = self._check_if_first_play_today()
+        
+        # 設置為全螢幕無邊框
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        
+        # 設置黑色背景
+        self.setStyleSheet("background-color: black;")
+        
+        # 建立佈局
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 建立影片播放器
+        self.video_widget = QVideoWidget()
+        self.video_widget.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatioByExpanding)
+        
+        self.player = QMediaPlayer()
+        self.player.setVideoOutput(self.video_widget)
+        
+        # 設置靜音
+        self.audio_output = QAudioOutput()
+        self.audio_output.setMuted(True)
+        self.player.setAudioOutput(self.audio_output)
+        
+        # 連接信號
+        self.player.mediaStatusChanged.connect(self.on_media_status_changed)
+        self.player.positionChanged.connect(self.on_position_changed)
+        
+        self.has_seeked = False  # 標記是否已經跳轉過
+        
+        layout.addWidget(self.video_widget)
+    
+    @staticmethod
+    def _check_if_first_play_today():
+        """檢查今天是否第一次播放"""
+        from datetime import datetime
+        
+        today = datetime.now().date()
+        marker_file = SplashScreen._marker_file
+        
+        # 檢查標記檔案
+        if os.path.exists(marker_file):
+            try:
+                with open(marker_file, 'r') as f:
+                    last_date_str = f.read().strip()
+                    from datetime import datetime
+                    last_date = datetime.strptime(last_date_str, '%Y-%m-%d').date()
+                    
+                    if last_date == today:
+                        # 今天已經播放過
+                        return False
+            except:
+                pass
+        
+        # 第一次播放，寫入標記
+        try:
+            with open(marker_file, 'w') as f:
+                f.write(today.strftime('%Y-%m-%d'))
+        except:
+            pass
+        
+        return True
+        
+    def showEvent(self, event):
+        """視窗顯示時自動播放"""
+        super().showEvent(event)
+        # 延遲一下確保視窗完全顯示
+        QTimer.singleShot(100, self.play_video)
+    
+    def play_video(self):
+        """播放影片"""
+        if os.path.exists(self.video_path):
+            video_url = QUrl.fromLocalFile(os.path.abspath(self.video_path))
+            self.player.setSource(video_url)
+            
+            if self.is_first_play_today:
+                print(f"今天第一次啟動，播放完整啟動畫面: {self.video_path}")
+                self.player.play()
+            else:
+                print(f"今天非第一次啟動，從 {self.skip_start_seconds} 秒開始播放")
+                # 先播放，然後在 positionChanged 中跳轉
+                self.player.play()
+        else:
+            print(f"找不到啟動影片: {self.video_path}")
+            # 如果找不到影片，直接發出完成信號
+            QTimer.singleShot(100, self.finished.emit)
+    
+    def on_position_changed(self, position):
+        """播放位置變更處理"""
+        # 如果不是第一次播放且還沒跳轉過，跳到指定位置
+        if not self.is_first_play_today and not self.has_seeked and position > 0:
+            target_position = self.skip_start_seconds * 1000  # 轉換為毫秒
+            self.player.setPosition(target_position)
+            self.has_seeked = True
+            print(f"已跳轉到 {self.skip_start_seconds} 秒位置")
+    
+    def on_media_status_changed(self, status):
+        """媒體狀態變更處理"""
+        if status == QMediaPlayer.MediaStatus.EndOfMedia:
+            print("啟動畫面播放完成")
+            self.finished.emit()
+        elif status == QMediaPlayer.MediaStatus.InvalidMedia:
+            print("無效的媒體檔案")
+            self.finished.emit()
+    
+    def keyPressEvent(self, event):
+        """按任意鍵跳過啟動畫面"""
+        if event.key() in (Qt.Key.Key_Escape, Qt.Key.Key_Space, Qt.Key.Key_Return):
+            print("使用者跳過啟動畫面")
+            self.player.stop()
+            self.finished.emit()
+    
+    def mousePressEvent(self, event):
+        """點擊滑鼠跳過啟動畫面"""
+        print("使用者跳過啟動畫面")
+        self.player.stop()
+        self.finished.emit()
+
 
 class GaugeStyle:
     def __init__(self, major_ticks=8, minor_ticks=4, start_angle=225, span_angle=270, 
@@ -1460,6 +1639,12 @@ class Dashboard(QWidget):
         self.target_rpm = 0.0  # 目標轉速
         self.rpm_animation_alpha = 0.3  # GUI 端平滑係數
         
+        # 門狀態卡片自動切換
+        self.door_auto_switch_timer = QTimer()
+        self.door_auto_switch_timer.setSingleShot(True)
+        self.door_auto_switch_timer.timeout.connect(self._auto_switch_back_from_door)
+        self.previous_card_index = 0  # 記錄切換前的卡片索引
+        
         self.update_display()
         
         # 嘗試初始化 Spotify
@@ -1582,8 +1767,65 @@ class Dashboard(QWidget):
             is_closed: True=關閉, False=開啟
         直接在主執行緒中調用（因為通常從主執行緒觸發）
         """
-        if hasattr(self, 'door_card'):
-            self.door_card.set_door_status(door, is_closed)
+        if not hasattr(self, 'door_card'):
+            return
+        
+        # 更新門狀態
+        self.door_card.set_door_status(door, is_closed)
+        
+        DOOR_CARD_INDEX = 2
+        
+        # 當有門狀態變更時，自動切換到門狀態卡片
+        if self.current_card_index != DOOR_CARD_INDEX:
+            # 記錄切換前的卡片索引
+            self.previous_card_index = self.current_card_index
+            
+            # 切換到門狀態卡片
+            self.current_card_index = DOOR_CARD_INDEX
+            self.right_stack.setCurrentIndex(DOOR_CARD_INDEX)
+            
+            # 更新指示器
+            for i, indicator in enumerate(self.indicators):
+                if i == DOOR_CARD_INDEX:
+                    indicator.setStyleSheet("color: #6af; font-size: 20px;")
+                else:
+                    indicator.setStyleSheet("color: #444; font-size: 20px;")
+            
+            print(f"檢測到門狀態變更 ({door} = {'關閉' if is_closed else '開啟'})，自動切換到門狀態卡片")
+        
+        # 重置自動回退計時器
+        # 如果所有門都關閉，5秒後自動切回
+        if (self.door_card.door_fl_closed and 
+            self.door_card.door_fr_closed and 
+            self.door_card.door_rl_closed and 
+            self.door_card.door_rr_closed and 
+            self.door_card.door_bk_closed):
+            # 所有門都關閉，啟動計時器
+            if hasattr(self, 'door_auto_switch_timer'):
+                self.door_auto_switch_timer.start(5000)  # 5秒後切回
+                print("所有門已關閉，5秒後將自動切回")
+        else:
+            # 有門開啟，停止計時器
+            if hasattr(self, 'door_auto_switch_timer'):
+                self.door_auto_switch_timer.stop()
+    
+    def _auto_switch_back_from_door(self):
+        """自動從門狀態卡片切回之前的卡片"""
+        DOOR_CARD_INDEX = 2
+        if self.current_card_index == DOOR_CARD_INDEX:
+            # 切回之前的卡片
+            self.current_card_index = self.previous_card_index
+            self.right_stack.setCurrentIndex(self.previous_card_index)
+            
+            # 更新指示器
+            for i, indicator in enumerate(self.indicators):
+                if i == self.previous_card_index:
+                    indicator.setStyleSheet("color: #6af; font-size: 20px;")
+                else:
+                    indicator.setStyleSheet("color: #444; font-size: 20px;")
+            
+            card_names = ["油量表", "音樂播放器", "門狀態"]
+            print(f"所有門已關閉，自動切回 {card_names[self.previous_card_index]}")
     
     # === Spotify 執行緒安全接口 ===
     def update_spotify_track(self, title, artist, album=""):
@@ -1729,6 +1971,10 @@ class Dashboard(QWidget):
         Args:
             direction: 1 為下一張，-1 為上一張
         """
+        # 停止門狀態自動回退計時器（因為使用者手動切換）
+        if hasattr(self, 'door_auto_switch_timer'):
+            self.door_auto_switch_timer.stop()
+        
         self.current_card_index = (self.current_card_index + direction) % self.total_cards
         self.right_stack.setCurrentIndex(self.current_card_index)
         
@@ -1824,32 +2070,32 @@ class Dashboard(QWidget):
             else:
                 self.set_turn_signal("both_on")
         
-        # 7/8/9/0: 門狀態測試
+        # 7/8/9/0/-: 門狀態測試
         elif key == Qt.Key.Key_7:
             # 左前門切換
             if hasattr(self, 'door_card'):
-                self.door_card.door_fl_closed = not self.door_card.door_fl_closed
-                self.door_card.update_display()
+                new_state = not self.door_card.door_fl_closed
+                self.set_door_status("FL", new_state)
         elif key == Qt.Key.Key_8:
             # 右前門切換
             if hasattr(self, 'door_card'):
-                self.door_card.door_fr_closed = not self.door_card.door_fr_closed
-                self.door_card.update_display()
+                new_state = not self.door_card.door_fr_closed
+                self.set_door_status("FR", new_state)
         elif key == Qt.Key.Key_9:
             # 左後門切換
             if hasattr(self, 'door_card'):
-                self.door_card.door_rl_closed = not self.door_card.door_rl_closed
-                self.door_card.update_display()
+                new_state = not self.door_card.door_rl_closed
+                self.set_door_status("RL", new_state)
         elif key == Qt.Key.Key_0:
             # 右後門切換
             if hasattr(self, 'door_card'):
-                self.door_card.door_rr_closed = not self.door_card.door_rr_closed
-                self.door_card.update_display()
+                new_state = not self.door_card.door_rr_closed
+                self.set_door_status("RR", new_state)
         elif key == Qt.Key.Key_Minus:
             # 尾門切換
             if hasattr(self, 'door_card'):
-                self.door_card.door_bk_closed = not self.door_card.door_bk_closed
-                self.door_card.update_display()
+                new_state = not self.door_card.door_bk_closed
+                self.set_door_status("BK", new_state)
 
         self.update_display()
 
@@ -1881,3 +2127,59 @@ class Dashboard(QWidget):
             padding: 15px 30px;
         """)
         self.gear_label.setText(self.gear)
+
+
+def main():
+    """主程式進入點"""
+    app = QApplication(sys.argv)
+    
+    # 檢測環境
+    is_production = is_production_environment()
+    env_name = "生產環境（樹莓派）" if is_production else "開發環境（Mac/Windows）"
+    print(f"檢測到 {env_name}")
+    print(f"系統: {platform.system()}, 全螢幕模式: {'是' if is_production else '否'}")
+    
+    # 建立主儀表板（先不顯示）
+    dashboard = Dashboard()
+    
+    # 檢查是否有啟動影片
+    has_splash = os.path.exists("Splash.mp4")
+    
+    if has_splash:
+        # 建立並顯示啟動畫面
+        splash = SplashScreen("Splash.mp4")
+        
+        def show_dashboard():
+            """啟動畫面結束後顯示主畫面"""
+            splash.close()
+            if is_production:
+                dashboard.showFullScreen()
+            else:
+                # 開發環境使用視窗模式
+                dashboard.show()
+                print("提示: 開發環境使用視窗模式，可設定環境變數 QTDASHBOARD_FULLSCREEN=1 強制全螢幕")
+        
+        # 連接信號
+        splash.finished.connect(show_dashboard)
+        
+        # 顯示啟動畫面
+        if is_production:
+            splash.showFullScreen()
+        else:
+            # 開發環境啟動畫面也用視窗模式
+            splash.resize(800, 600)
+            splash.show()
+    else:
+        # 沒有啟動影片，直接顯示儀表板
+        print("未找到 Splash.mp4，跳過啟動畫面")
+        if is_production:
+            dashboard.showFullScreen()
+        else:
+            dashboard.show()
+            print("提示: 開發環境使用視窗模式，可設定環境變數 QTDASHBOARD_FULLSCREEN=1 強制全螢幕")
+    
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

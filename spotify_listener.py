@@ -41,6 +41,11 @@ class SpotifyListener:
         self.last_playback = None
         self.last_album_art = None
         
+        # 錯誤處理
+        self.consecutive_errors = 0
+        self.max_silent_errors = 5  # 連續錯誤超過此數才輸出警告
+        self.error_backoff = 1.0  # 錯誤後的延遲倍數
+        
         # 回調函數
         self.callbacks = {
             'on_track_change': None,     # 歌曲變更時（不含專輯封面）
@@ -91,13 +96,23 @@ class SpotifyListener:
         while self.running:
             try:
                 self._update_playback_state()
+                # 成功後重置錯誤計數和退避
+                self.consecutive_errors = 0
+                self.error_backoff = 1.0
                 time.sleep(self.update_interval)
                 
             except Exception as e:
-                logger.error(f"監聽循環錯誤: {e}")
-                if self.callbacks['on_error']:
-                    self.callbacks['on_error'](str(e))
-                time.sleep(5)  # 錯誤後等待較長時間
+                self.consecutive_errors += 1
+                
+                # 只在錯誤累積到一定數量後才輸出警告
+                if self.consecutive_errors <= self.max_silent_errors:
+                    logger.debug(f"Spotify 連線錯誤 ({self.consecutive_errors}/{self.max_silent_errors}): {e}")
+                elif self.consecutive_errors == self.max_silent_errors + 1:
+                    logger.warning(f"Spotify 持續連線失敗，將降低更新頻率")
+                
+                # 指數退避：錯誤次數越多，等待時間越長
+                self.error_backoff = min(self.error_backoff * 1.5, 30.0)  # 最多 30 秒
+                time.sleep(self.update_interval * self.error_backoff)
     
     def _update_playback_state(self):
         """更新播放狀態"""
@@ -144,9 +159,17 @@ class SpotifyListener:
             self.last_playback = playback
             
         except Exception as e:
-            logger.error(f"更新播放狀態失敗: {e}")
-            if self.callbacks['on_error']:
+            # 網路相關錯誤使用 DEBUG 級別，避免刷屏
+            if 'timeout' in str(e).lower() or 'connection' in str(e).lower() or 'no route to host' in str(e).lower():
+                logger.debug(f"網路連線問題: {e}")
+            else:
+                logger.error(f"更新播放狀態失敗: {e}")
+            
+            # 只在嚴重錯誤時才觸發回調
+            if self.callbacks['on_error'] and self.consecutive_errors > self.max_silent_errors:
                 self.callbacks['on_error'](str(e))
+            
+            raise  # 重新拋出異常給 _listen_loop 處理
     
     def _handle_track_change(self, track: Dict[str, Any], playback: Dict[str, Any]):
         """處理歌曲變更"""
@@ -262,6 +285,10 @@ def main():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
+    
+    # 降低第三方套件的日誌級別
+    logging.getLogger('urllib3').setLevel(logging.ERROR)
+    logging.getLogger('requests').setLevel(logging.ERROR)
     
     print("=== Spotify 監聽器測試 ===")
     print()
