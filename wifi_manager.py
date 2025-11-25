@@ -1,0 +1,728 @@
+#!/usr/bin/env python3
+"""
+WiFi 管理器 - 用於樹莓派的觸控友好介面
+支援掃描、連線、儲存設定
+"""
+
+import subprocess
+import re
+import json
+import os
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                             QPushButton, QListWidget, QListWidgetItem, 
+                             QLineEdit, QDialog, QMessageBox, QProgressBar,
+                             QCheckBox, QGridLayout)
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread
+from PyQt6.QtGui import QFont
+
+
+class VirtualKeyboard(QWidget):
+    """內建虛擬鍵盤"""
+    
+    key_pressed = pyqtSignal(str)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.caps_lock = False
+        self.key_buttons = []  # 保存所有按鍵的引用
+        self.caps_button = None  # Caps Lock 按鈕
+        self.setup_ui()
+    
+    def setup_ui(self):
+        """設置鍵盤 UI"""
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: #2a2a35;
+                color: white;
+                border: 1px solid #4a4a55;
+                border-radius: 6px;
+                font-size: 16px;
+                font-weight: bold;
+                min-height: 45px;
+            }
+            QPushButton:hover {
+                background-color: #3a3a45;
+            }
+            QPushButton:pressed {
+                background-color: #1a1a25;
+            }
+            QPushButton#specialKey {
+                background-color: #4a4a55;
+                font-size: 14px;
+            }
+            QPushButton#specialKey:hover {
+                background-color: #5a5a65;
+            }
+            QPushButton#capsActive {
+                background-color: #6af;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton#capsActive:hover {
+                background-color: #5ae;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(3)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # 鍵盤佈局 - 每個按鍵包含 [小寫/普通, 大寫/符號]
+        self.keyboard_layout = [
+            [('1', '!'), ('2', '@'), ('3', '#'), ('4', '$'), ('5', '%'), 
+             ('6', '^'), ('7', '&'), ('8', '*'), ('9', '('), ('0', ')'), 
+             ('-', '_'), ('=', '+')],
+            [('q', 'Q'), ('w', 'W'), ('e', 'E'), ('r', 'R'), ('t', 'T'), 
+             ('y', 'Y'), ('u', 'U'), ('i', 'I'), ('o', 'O'), ('p', 'P'), 
+             ('[', '{'), (']', '}')],
+            [('a', 'A'), ('s', 'S'), ('d', 'D'), ('f', 'F'), ('g', 'G'), 
+             ('h', 'H'), ('j', 'J'), ('k', 'K'), ('l', 'L'), (';', ':'), 
+             ("'", '"')],
+            [('z', 'Z'), ('x', 'X'), ('c', 'C'), ('v', 'V'), ('b', 'B'), 
+             ('n', 'N'), ('m', 'M'), (',', '<'), ('.', '>'), ('/', '?')],
+        ]
+        
+        # 創建按鍵
+        for row in self.keyboard_layout:
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(3)
+            
+            for key_pair in row:
+                normal_key, shift_key = key_pair
+                btn = QPushButton(normal_key)
+                btn.setProperty('key_pair', key_pair)  # 保存按鍵對 (普通, Caps/Shift)
+                btn.clicked.connect(lambda checked, kp=key_pair: self.on_key_click(kp))
+                row_layout.addWidget(btn)
+                self.key_buttons.append(btn)  # 保存按鈕引用
+            
+            layout.addLayout(row_layout)
+        
+        # 最後一行：特殊按鍵
+        bottom_layout = QHBoxLayout()
+        bottom_layout.setSpacing(3)
+        
+        # Caps Lock
+        self.caps_button = QPushButton("⇪ Caps Lock")
+        self.caps_button.setObjectName("specialKey")
+        self.caps_button.clicked.connect(self.toggle_caps)
+        bottom_layout.addWidget(self.caps_button)
+        
+        # 空格鍵
+        space_btn = QPushButton("Space")
+        space_btn.setObjectName("specialKey")
+        space_btn.clicked.connect(lambda: self.key_pressed.emit(' '))
+        bottom_layout.addWidget(space_btn, 3)  # 空格鍵較寬
+        
+        # 退格鍵
+        backspace_btn = QPushButton("⌫ Back")
+        backspace_btn.setObjectName("specialKey")
+        backspace_btn.clicked.connect(lambda: self.key_pressed.emit('BACKSPACE'))
+        bottom_layout.addWidget(backspace_btn)
+        
+        # 清除鍵
+        clear_btn = QPushButton("✖ Clear")
+        clear_btn.setObjectName("specialKey")
+        clear_btn.clicked.connect(lambda: self.key_pressed.emit('CLEAR'))
+        bottom_layout.addWidget(clear_btn)
+        
+        layout.addLayout(bottom_layout)
+    
+    def on_key_click(self, key_pair):
+        """按鍵點擊"""
+        normal_key, shift_key = key_pair
+        # 根據 Caps Lock 狀態選擇對應的字符
+        key_to_emit = shift_key if self.caps_lock else normal_key
+        self.key_pressed.emit(key_to_emit)
+    
+    def toggle_caps(self):
+        """切換大小寫/符號模式"""
+        self.caps_lock = not self.caps_lock
+        
+        # 更新所有按鍵的顯示文字
+        for btn in self.key_buttons:
+            key_pair = btn.property('key_pair')
+            if key_pair:
+                normal_key, shift_key = key_pair
+                if self.caps_lock:
+                    btn.setText(shift_key)
+                else:
+                    btn.setText(normal_key)
+        
+        # 更新 Caps Lock 按鈕樣式和文字
+        if self.caps_lock:
+            self.caps_button.setObjectName("capsActive")
+            self.caps_button.setText("⇪ SHIFT ON")
+        else:
+            self.caps_button.setObjectName("specialKey")
+            self.caps_button.setText("⇪ Shift")
+        
+        # 刷新樣式
+        self.caps_button.style().unpolish(self.caps_button)
+        self.caps_button.style().polish(self.caps_button)
+
+
+class WiFiScanner(QThread):
+    """WiFi 掃描執行緒"""
+    scan_completed = pyqtSignal(list)
+    
+    def run(self):
+        """掃描可用的 WiFi 網路"""
+        try:
+            # 使用 nmcli 掃描 WiFi
+            result = subprocess.run(
+                ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            networks = []
+            for line in result.stdout.strip().split('\n'):
+                if line:
+                    parts = line.split(':')
+                    if len(parts) >= 3:
+                        ssid = parts[0]
+                        signal = parts[1]
+                        security = parts[2]
+                        
+                        if ssid:  # 忽略隱藏的 SSID
+                            networks.append({
+                                'ssid': ssid,
+                                'signal': int(signal) if signal.isdigit() else 0,
+                                'security': security,
+                                'secured': 'WPA' in security or 'WEP' in security
+                            })
+            
+            # 按信號強度排序
+            networks.sort(key=lambda x: x['signal'], reverse=True)
+            self.scan_completed.emit(networks)
+            
+        except Exception as e:
+            print(f"WiFi 掃描錯誤: {e}")
+            self.scan_completed.emit([])
+
+
+class WiFiPasswordDialog(QDialog):
+    """WiFi 密碼輸入對話框"""
+    
+    def __init__(self, ssid, parent=None):
+        super().__init__(parent)
+        self.ssid = ssid
+        self.password = None
+        self.remember = False
+        
+        self.setWindowTitle(f"連線到 {ssid}")
+        self.setModal(True)
+        self.setFixedSize(1920, 480)  # 橫向佈局
+        
+        # 設置樣式
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #1a1a25;
+            }
+            QLabel {
+                color: white;
+                font-size: 16px;
+            }
+            QLineEdit {
+                background-color: #2a2a35;
+                color: white;
+                border: 2px solid #4a4a55;
+                border-radius: 10px;
+                padding: 15px;
+                font-size: 18px;
+            }
+            QLineEdit:focus {
+                border: 2px solid #6af;
+            }
+            QPushButton {
+                background-color: #6af;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 15px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5ae;
+            }
+            QPushButton:pressed {
+                background-color: #49d;
+            }
+            QPushButton#cancelButton {
+                background-color: #666;
+            }
+            QPushButton#cancelButton:hover {
+                background-color: #777;
+            }
+            QCheckBox {
+                color: white;
+                font-size: 14px;
+            }
+            QCheckBox::indicator {
+                width: 25px;
+                height: 25px;
+            }
+        """)
+        
+        # 主佈局：橫向分為左右兩區
+        main_layout = QHBoxLayout(self)
+        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(30, 20, 30, 20)
+        
+        # === 左側區域：資訊和輸入框 ===
+        left_layout = QVBoxLayout()
+        left_layout.setSpacing(20)
+        
+        # 標題
+        title_label = QLabel(f"WiFi 密碼輸入")
+        title_label.setStyleSheet("font-size: 32px; font-weight: bold; color: #6af;")
+        left_layout.addWidget(title_label)
+        
+        # SSID 顯示
+        ssid_container = QVBoxLayout()
+        ssid_title = QLabel("網路名稱")
+        ssid_title.setStyleSheet("color: #aaa; font-size: 14px;")
+        ssid_container.addWidget(ssid_title)
+        
+        ssid_label = QLabel(ssid)
+        ssid_label.setStyleSheet("color: white; font-size: 24px; font-weight: bold;")
+        ssid_container.addWidget(ssid_label)
+        left_layout.addLayout(ssid_container)
+        
+        left_layout.addSpacing(20)
+        
+        # 密碼輸入框
+        pwd_title = QLabel("密碼")
+        pwd_title.setStyleSheet("color: #aaa; font-size: 14px;")
+        left_layout.addWidget(pwd_title)
+        
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("使用右側鍵盤輸入密碼")
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setReadOnly(True)  # 防止實體鍵盤輸入
+        self.password_input.setFixedHeight(60)
+        self.password_input.setStyleSheet("font-size: 22px; padding: 15px;")
+        left_layout.addWidget(self.password_input)
+        
+        left_layout.addSpacing(20)
+        
+        # 選項
+        self.show_password_checkbox = QCheckBox("顯示密碼")
+        self.show_password_checkbox.setStyleSheet("font-size: 16px;")
+        self.show_password_checkbox.stateChanged.connect(self.toggle_password_visibility)
+        left_layout.addWidget(self.show_password_checkbox)
+        
+        self.remember_checkbox = QCheckBox("記住此網路")
+        self.remember_checkbox.setStyleSheet("font-size: 16px;")
+        self.remember_checkbox.setChecked(True)
+        left_layout.addWidget(self.remember_checkbox)
+        
+        left_layout.addStretch()
+        
+        # 按鈕
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(15)
+        
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setObjectName("cancelButton")
+        cancel_btn.setFixedSize(200, 60)
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        connect_btn = QPushButton("連線")
+        connect_btn.setFixedSize(200, 60)
+        connect_btn.clicked.connect(self.accept_password)
+        button_layout.addWidget(connect_btn)
+        
+        left_layout.addLayout(button_layout)
+        
+        main_layout.addLayout(left_layout, 2)  # 左側佔 2/5
+        
+        # === 右側區域：虛擬鍵盤 ===
+        self.keyboard = VirtualKeyboard()
+        self.keyboard.key_pressed.connect(self.on_virtual_key)
+        main_layout.addWidget(self.keyboard, 3)  # 右側佔 3/5
+    
+    def on_virtual_key(self, key):
+        """處理虛擬鍵盤輸入"""
+        current_text = self.password_input.text()
+        
+        if key == 'BACKSPACE':
+            self.password_input.setText(current_text[:-1])
+        elif key == 'CLEAR':
+            self.password_input.clear()
+        else:
+            self.password_input.setText(current_text + key)
+    
+    def toggle_password_visibility(self, state):
+        """切換密碼顯示/隱藏"""
+        if state == Qt.CheckState.Checked.value:
+            self.password_input.setEchoMode(QLineEdit.EchoMode.Normal)
+        else:
+            self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+    
+    def accept_password(self):
+        """確認密碼"""
+        self.password = self.password_input.text()
+        self.remember = self.remember_checkbox.isChecked()
+        if self.password:
+            self.accept()
+        else:
+            QMessageBox.warning(self, "錯誤", "請輸入密碼")
+
+
+class WiFiManagerWidget(QWidget):
+    """WiFi 管理器主界面"""
+    
+    connection_changed = pyqtSignal(bool, str)  # (已連線, SSID)
+    
+    def __init__(self, parent=None, test_mode=False):
+        super().__init__()
+        self.networks = []
+        self.current_ssid = None
+        self.scanner = None
+        self.test_mode = test_mode  # Mac 測試模式
+        
+        # 1920x480 儀表板尺寸
+        self.setFixedSize(1920, 480)
+        self.setup_ui()
+        
+        # 自動掃描
+        QTimer.singleShot(500, self.scan_networks)
+        
+        # 定期檢查連線狀態
+        self.status_timer = QTimer()
+        self.status_timer.timeout.connect(self.update_connection_status)
+        self.status_timer.start(5000)  # 每5秒檢查一次
+    
+    def setup_ui(self):
+        """設置 UI - 橫向佈局適配 1920x480"""
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(40, 20, 40, 20)
+        main_layout.setSpacing(30)
+        
+        # 設置樣式
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #1a1a25;
+            }
+            QLabel {
+                color: white;
+            }
+            QPushButton {
+                background-color: #6af;
+                color: white;
+                border: none;
+                border-radius: 15px;
+                padding: 20px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5ae;
+            }
+            QPushButton:pressed {
+                background-color: #49d;
+            }
+            QPushButton:disabled {
+                background-color: #444;
+                color: #888;
+            }
+            QListWidget {
+                background-color: #0a0a0f;
+                border: 2px solid #2a2a35;
+                border-radius: 15px;
+                color: white;
+                font-size: 16px;
+            }
+            QListWidget::item {
+                padding: 20px;
+                border-bottom: 1px solid #2a2a35;
+            }
+            QListWidget::item:hover {
+                background-color: #2a2a35;
+            }
+            QListWidget::item:selected {
+                background-color: #3a3a45;
+            }
+        """)
+        
+        # === 左側區域：網路列表 ===
+        left_layout = QVBoxLayout()
+        left_layout.setSpacing(15)
+        
+        # 標題和狀態
+        header_layout = QVBoxLayout()
+        title_label = QLabel("WiFi 設定")
+        title_label.setStyleSheet("font-size: 32px; font-weight: bold; color: #6af;")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        
+        self.status_label = QLabel("檢查連線狀態...")
+        self.status_label.setStyleSheet("font-size: 16px; color: #aaa;")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        
+        header_layout.addWidget(title_label)
+        header_layout.addWidget(self.status_label)
+        left_layout.addLayout(header_layout)
+        
+        # 網路列表
+        self.network_list = QListWidget()
+        self.network_list.itemClicked.connect(self.on_network_selected)
+        left_layout.addWidget(self.network_list)
+        
+        # 進度條
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setFixedHeight(30)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #2a2a35;
+                border-radius: 5px;
+                text-align: center;
+                color: white;
+                font-size: 14px;
+            }
+            QProgressBar::chunk {
+                background-color: #6af;
+            }
+        """)
+        left_layout.addWidget(self.progress_bar)
+        
+        main_layout.addLayout(left_layout, 3)  # 佔 3/4 寬度
+        
+        # === 右側區域：控制按鈕 ===
+        right_layout = QVBoxLayout()
+        right_layout.setSpacing(20)
+        
+        # 掃描按鈕
+        scan_btn = QPushButton("🔄\n重新掃描")
+        scan_btn.setFixedSize(280, 120)
+        scan_btn.clicked.connect(self.scan_networks)
+        right_layout.addWidget(scan_btn)
+        
+        # 連線按鈕
+        self.connect_btn = QPushButton("📡\n連線")
+        self.connect_btn.setFixedSize(280, 120)
+        self.connect_btn.setEnabled(False)
+        self.connect_btn.clicked.connect(self.connect_to_network)
+        right_layout.addWidget(self.connect_btn)
+        
+        # 關閉按鈕
+        close_btn = QPushButton("✖\n關閉")
+        close_btn.setFixedSize(280, 120)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #666;
+                color: white;
+                border: none;
+                border-radius: 15px;
+                padding: 20px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #777;
+            }
+            QPushButton:pressed {
+                background-color: #555;
+            }
+        """)
+        close_btn.clicked.connect(self.close)
+        right_layout.addWidget(close_btn)
+        
+        right_layout.addStretch()
+        
+        main_layout.addLayout(right_layout, 1)  # 佔 1/4 寬度
+    
+    def scan_networks(self):
+        """掃描 WiFi 網路"""
+        self.network_list.clear()
+        self.network_list.addItem("正在掃描...")
+        self.connect_btn.setEnabled(False)
+        
+        if self.test_mode:
+            # Mac 測試模式：使用模擬數據
+            print("測試模式：使用模擬 WiFi 數據")
+            QTimer.singleShot(1000, self._load_test_networks)
+        else:
+            # 啟動掃描執行緒
+            self.scanner = WiFiScanner()
+            self.scanner.scan_completed.connect(self.on_scan_completed)
+            self.scanner.start()
+    
+    def _load_test_networks(self):
+        """載入測試用的模擬網路"""
+        test_networks = [
+            {'ssid': 'Home WiFi', 'signal': 95, 'security': 'WPA2', 'secured': True},
+            {'ssid': 'Office Network', 'signal': 80, 'security': 'WPA2', 'secured': True},
+            {'ssid': 'Guest WiFi', 'signal': 65, 'security': '', 'secured': False},
+            {'ssid': 'Neighbor_5G', 'signal': 45, 'security': 'WPA2', 'secured': True},
+            {'ssid': 'Public WiFi', 'signal': 30, 'security': '', 'secured': False},
+            {'ssid': 'Mobile Hotspot', 'signal': 25, 'security': 'WPA2', 'secured': True},
+        ]
+        self.on_scan_completed(test_networks)
+    
+    def on_scan_completed(self, networks):
+        """掃描完成"""
+        self.networks = networks
+        self.network_list.clear()
+        
+        if not networks:
+            self.network_list.addItem("未找到可用網路")
+            return
+        
+        for network in networks:
+            # 顯示格式：🔒 SSID (信號強度)
+            icon = "🔒" if network['secured'] else "📶"
+            signal_bars = "▂▄▆█"[:int(network['signal'] / 25)]
+            
+            item_text = f"{icon} {network['ssid']}  {signal_bars} {network['signal']}%"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.ItemDataRole.UserRole, network)
+            self.network_list.addItem(item)
+        
+        self.update_connection_status()
+    
+    def on_network_selected(self, item):
+        """選擇網路"""
+        self.connect_btn.setEnabled(True)
+    
+    def connect_to_network(self):
+        """連線到選擇的網路"""
+        current_item = self.network_list.currentItem()
+        if not current_item:
+            return
+        
+        network = current_item.data(Qt.ItemDataRole.UserRole)
+        ssid = network['ssid']
+        secured = network['secured']
+        
+        # 如果有密碼保護，顯示密碼輸入對話框
+        password = None
+        if secured:
+            dialog = WiFiPasswordDialog(ssid, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                password = dialog.password
+            else:
+                return
+        
+        # 開始連線
+        self.show_connecting_progress(ssid)
+        QTimer.singleShot(500, lambda: self.do_connect(ssid, password))
+    
+    def show_connecting_progress(self, ssid):
+        """顯示連線進度"""
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setRange(0, 0)  # 不確定進度
+        self.status_label.setText(f"正在連線到 {ssid}...")
+        self.connect_btn.setEnabled(False)
+    
+    def hide_connecting_progress(self):
+        """隱藏連線進度"""
+        self.progress_bar.setVisible(False)
+        self.connect_btn.setEnabled(True)
+    
+    def do_connect(self, ssid, password=None):
+        """執行連線"""
+        try:
+            if self.test_mode:
+                # 測試模式：模擬連線
+                print(f"測試模式：模擬連線到 {ssid}" + (f" (密碼: {password})" if password else ""))
+                import time
+                time.sleep(2)  # 模擬連線延遲
+                result = type('obj', (object,), {'returncode': 0, 'stderr': ''})()
+            else:
+                if password:
+                    # 使用 nmcli 連線到 WPA 網路
+                    cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password]
+                else:
+                    # 連線到開放網路
+                    cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid]
+                
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            self.hide_connecting_progress()
+            
+            if result.returncode == 0:
+                self.status_label.setText(f"✅ 已連線到 {ssid}")
+                self.status_label.setStyleSheet("font-size: 14px; color: #6f6;")
+                self.current_ssid = ssid
+                self.connection_changed.emit(True, ssid)
+                
+                QMessageBox.information(self, "成功", f"已成功連線到 {ssid}")
+            else:
+                error_msg = result.stderr or "連線失敗"
+                self.status_label.setText(f"❌ 連線失敗")
+                self.status_label.setStyleSheet("font-size: 14px; color: #f66;")
+                
+                QMessageBox.warning(self, "連線失敗", f"無法連線到 {ssid}\n\n{error_msg}")
+        
+        except subprocess.TimeoutExpired:
+            self.hide_connecting_progress()
+            self.status_label.setText("❌ 連線逾時")
+            QMessageBox.warning(self, "連線失敗", "連線逾時，請重試")
+        
+        except Exception as e:
+            self.hide_connecting_progress()
+            self.status_label.setText("❌ 發生錯誤")
+            QMessageBox.critical(self, "錯誤", f"發生錯誤: {str(e)}")
+    
+    def update_connection_status(self):
+        """更新連線狀態"""
+        try:
+            if self.test_mode:
+                # 測試模式：顯示模擬狀態
+                self.status_label.setText("📱 測試模式 - 未連線")
+                self.status_label.setStyleSheet("font-size: 16px; color: #fa0;")
+                return
+            
+            result = subprocess.run(
+                ['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            for line in result.stdout.strip().split('\n'):
+                if line.startswith('yes:'):
+                    ssid = line.split(':', 1)[1]
+                    self.current_ssid = ssid
+                    self.status_label.setText(f"✅ 已連線到 {ssid}")
+                    self.status_label.setStyleSheet("font-size: 16px; color: #6f6;")
+                    return
+            
+            # 未連線
+            self.current_ssid = None
+            self.status_label.setText("❌ 未連線")
+            self.status_label.setStyleSheet("font-size: 16px; color: #f66;")
+            
+        except Exception as e:
+            if not self.test_mode:
+                print(f"檢查連線狀態錯誤: {e}")
+
+
+def main():
+    """測試用主程式"""
+    import sys
+    import platform
+    from PyQt6.QtWidgets import QApplication
+    
+    app = QApplication(sys.argv)
+    
+    # 在 Mac 上自動啟用測試模式
+    test_mode = platform.system() == 'Darwin'
+    if test_mode:
+        print("偵測到 Mac 系統，啟用測試模式")
+    
+    widget = WiFiManagerWidget(test_mode=test_mode)
+    widget.setWindowTitle("WiFi 管理器" + (" (測試模式)" if test_mode else ""))
+    widget.show()
+    
+    sys.exit(app.exec())
+
+
+if __name__ == '__main__':
+    main()

@@ -1709,6 +1709,29 @@ class Dashboard(QWidget):
         if hasattr(self, 'auth_dialog'):
             self.auth_dialog.close()
             del self.auth_dialog
+    
+    def show_wifi_manager(self):
+        """顯示 WiFi 管理器"""
+        try:
+            from wifi_manager import WiFiManagerWidget
+            
+            # 創建 WiFi 管理器對話框
+            self.wifi_dialog = WiFiManagerWidget(self)
+            self.wifi_dialog.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+            self.wifi_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+            
+            # 置中顯示
+            self.wifi_dialog.move(
+                self.geometry().center() - self.wifi_dialog.rect().center()
+            )
+            
+            self.wifi_dialog.show()
+            print("WiFi 管理器已開啟")
+            
+        except ImportError:
+            print("WiFi 管理器模組未找到")
+        except Exception as e:
+            print(f"開啟 WiFi 管理器錯誤: {e}")
 
     # === 執行緒安全的公開方法 (從背景執行緒呼叫) ===
     def set_speed(self, speed):
@@ -2002,6 +2025,12 @@ class Dashboard(QWidget):
     def keyPressEvent(self, event):
         """鍵盤模擬控制"""
         key = event.key()
+        
+        # F12 或 W 鍵：開啟 WiFi 管理器
+        if key == Qt.Key.Key_F12 or (event.key() == Qt.Key.Key_W and 
+                                      event.modifiers() == Qt.KeyboardModifier.ControlModifier):
+            self.show_wifi_manager()
+            return
         
         # 左右方向鍵切換卡片
         if key == Qt.Key.Key_Left:
