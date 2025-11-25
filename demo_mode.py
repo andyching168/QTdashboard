@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 演示模式 - 不需要 CAN Bus 硬體
-直接運行前端並使用模擬數據更新
-支援 Spotify Connect 整合
+使用 main.py 的統一啟動流程，確保與主程式保持同步
 """
 
 import sys
@@ -11,9 +10,10 @@ import random
 import math
 import argparse
 import logging
-from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer, pyqtSignal, QObject
-from main import Dashboard, SplashScreen, is_production_environment
+
+# 使用 main.py 的統一啟動流程
+from main import run_dashboard
 
 # Spotify 整合（可選）
 try:
@@ -168,7 +168,7 @@ def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # 降低第三方套件的日誌級別，避免網路錯誤訊息刷屏
+    # 降低第三方套件的日誌級別
     logging.getLogger('urllib3').setLevel(logging.ERROR)
     logging.getLogger('requests').setLevel(logging.ERROR)
     logging.getLogger('spotify_listener').setLevel(logging.INFO)
@@ -195,14 +195,12 @@ def main():
             try:
                 auth = SpotifyAuthManager()
                 
-                # 檢查是否已有快取的 token
                 if not auth.is_authenticated():
                     print("\n需要授權 Spotify...")
                     print("選擇授權方式：")
                     print("  [1] 瀏覽器授權（自動開啟瀏覽器）")
                     print("  [2] QR Code 授權（使用手機掃描）")
                     
-                    # 在觸控螢幕環境下預設使用 QR Code
                     use_qr = input("請選擇 (預設 2): ").strip() or "2"
                     
                     if use_qr == "2":
@@ -220,7 +218,6 @@ def main():
                             print("\n❌ 瀏覽器授權失敗")
                             auth = None
                 
-                # 確保認證完全成功才初始化 Spotify Listener
                 if auth and auth.is_authenticated() and auth.get_client():
                     spotify_listener = SpotifyListener(auth, update_interval=1.0)
                     spotify_enabled = True
@@ -251,142 +248,110 @@ def main():
     print("    在右側區域左右滑動: 切換當前列的卡片")
     print("    滾動滑輪: 切換卡片 (Shift+滾輪切換列)")
     print()
-    print("  指示器:")
-    print("    左側垂直圓點: 顯示當前列（共2列）")
-    print("    中間水平圓點: 顯示當前列內的卡片位置")
-    print()
     print("按 Ctrl+C 或關閉視窗退出")
     print("=" * 50)
     
-    app = QApplication(sys.argv)
-    
-    # 建立主儀表板（先不顯示）
-    dashboard = Dashboard()
-    
-    if spotify_enabled:
-        dashboard.setWindowTitle("Luxgen M7 儀表板 - 演示模式 [Spotify Connected]")
-    else:
-        dashboard.setWindowTitle("Luxgen M7 儀表板 - 演示模式")
-    
-    # 建立車輛資料訊號橋接器
+    # 建立模擬器和信號
+    simulator = VehicleSimulator()
     vehicle_signals = VehicleSignals()
     
-    # 連接車輛資料 Signals 到 Dashboard Slots
-    vehicle_signals.update_rpm.connect(dashboard.set_rpm)
-    vehicle_signals.update_speed.connect(dashboard.set_speed)
-    vehicle_signals.update_temp.connect(dashboard.set_temperature)
-    vehicle_signals.update_fuel.connect(dashboard.set_fuel)
-    vehicle_signals.update_gear.connect(dashboard.set_gear)
-    
-    # 檢測環境
-    is_production = is_production_environment()
-    
-    # 建立並顯示啟動畫面
-    splash = SplashScreen("Splash.mp4")
-    
-    def show_dashboard():
-        """啟動畫面結束後顯示主畫面"""
-        splash.close()
-        if is_production:
-            dashboard.showFullScreen()
-        else:
-            dashboard.show()
-    
-    # 連接信號
-    splash.finished.connect(show_dashboard)
-    
-    # 顯示啟動畫面
-    if is_production:
-        splash.showFullScreen()
-    else:
-        splash.resize(800, 600)
-        splash.show()
-    
-    # 建立模擬器
-    simulator = VehicleSimulator()
-    
-    # 設定 Spotify 回調
-    if spotify_enabled:
-        # 建立訊號橋接器
-        spotify_signals = SpotifySignals()
+    def setup_demo_data_source(dashboard):
+        """設定 Demo 模式的資料來源 - 在 dashboard 準備好後呼叫"""
         
-        def update_track_info(track_info):
-            """在主執行緒更新歌曲資訊"""
-            dashboard.music_card.set_song(
-                track_info['name'], 
-                track_info['artists'],
-                track_info.get('album', '')
-            )
-            if track_info.get('album_art'):
-                dashboard.music_card.set_album_art_from_pil(track_info['album_art'])
+        # 連接車輛資料 Signals 到 Dashboard Slots
+        vehicle_signals.update_rpm.connect(dashboard.set_rpm)
+        vehicle_signals.update_speed.connect(dashboard.set_speed)
+        vehicle_signals.update_temp.connect(dashboard.set_temperature)
+        vehicle_signals.update_fuel.connect(dashboard.set_fuel)
+        vehicle_signals.update_gear.connect(dashboard.set_gear)
+        
+        # 設定 Spotify 回調（如果啟用）
+        if spotify_enabled and spotify_listener:
+            spotify_signals = SpotifySignals()
+            
+            def update_track_info(track_info):
+                dashboard.music_card.set_song(
+                    track_info['name'], 
+                    track_info['artists'],
+                    track_info.get('album', '')
+                )
+                if track_info.get('album_art'):
+                    dashboard.music_card.set_album_art_from_pil(track_info['album_art'])
+                    
+            def update_album_art(album_art):
+                dashboard.music_card.set_album_art_from_pil(album_art)
                 
-        def update_album_art(album_art):
-            """在主執行緒更新專輯封面"""
-            dashboard.music_card.set_album_art_from_pil(album_art)
+            def update_progress(progress_data):
+                progress_ms = progress_data['progress_ms']
+                duration_ms = progress_data['duration_ms']
+                is_playing = progress_data.get('is_playing', True)
+                dashboard.music_card.set_progress(progress_ms / 1000, duration_ms / 1000, is_playing)
             
-        def update_progress(progress_data):
-            """在主執行緒更新進度"""
-            progress_ms = progress_data['progress_ms']
-            duration_ms = progress_data['duration_ms']
-            dashboard.music_card.set_progress(progress_ms / 1000, duration_ms / 1000)
+            spotify_signals.track_changed.connect(update_track_info)
+            spotify_signals.album_art_loaded.connect(update_album_art)
+            spotify_signals.progress_updated.connect(update_progress)
             
-        # 連接訊號到 UI 更新函數
-        spotify_signals.track_changed.connect(update_track_info)
-        spotify_signals.album_art_loaded.connect(update_album_art)
-        spotify_signals.progress_updated.connect(update_progress)
+            def on_track_change(track_info):
+                logging.info(f"新歌曲: {track_info['name']} - {track_info['artists']}")
+                spotify_signals.track_changed.emit(track_info)
+            
+            def on_album_art_loaded(album_art):
+                logging.info("專輯封面已載入")
+                spotify_signals.album_art_loaded.emit(album_art)
+            
+            def on_progress_update(progress_data):
+                spotify_signals.progress_updated.emit(progress_data)
+            
+            spotify_listener.set_callback('on_track_change', on_track_change)
+            spotify_listener.set_callback('on_album_art_loaded', on_album_art_loaded)
+            spotify_listener.set_callback('on_progress_update', on_progress_update)
+            spotify_listener.start()
+            
+            logging.info("Spotify 監聽器已啟動（非同步圖片載入）")
         
-        # 回調函數只負責發送訊號
-        def on_track_change(track_info):
-            logging.info(f"新歌曲: {track_info['name']} - {track_info['artists']}")
-            spotify_signals.track_changed.emit(track_info)
+        # 建立定時器更新數據
+        last_song_index = [None]  # 用 list 來允許閉包內修改
         
-        def on_album_art_loaded(album_art):
-            logging.info("專輯封面已載入")
-            spotify_signals.album_art_loaded.emit(album_art)
+        def update_data():
+            simulator.update(0.1)
+            
+            # 使用 Signal 發送資料更新
+            vehicle_signals.update_speed.emit(simulator.speed)
+            vehicle_signals.update_rpm.emit(simulator.rpm)
+            vehicle_signals.update_fuel.emit(simulator.fuel)
+            vehicle_signals.update_temp.emit(simulator.temp)
+            vehicle_signals.update_gear.emit(simulator.gear)
+            
+            # 如果沒有啟用 Spotify，使用模擬音樂
+            if not spotify_enabled:
+                song_title, artist, _ = simulator.playlist[simulator.current_song_index]
+                if last_song_index[0] != simulator.current_song_index:
+                    dashboard.music_card.set_song(song_title, artist, "")
+                    last_song_index[0] = simulator.current_song_index
+                dashboard.music_card.set_progress(simulator.music_time, simulator.song_duration, True)
         
-        def on_progress_update(progress_data):
-            spotify_signals.progress_updated.emit(progress_data)
+        timer = QTimer()
+        timer.timeout.connect(update_data)
+        timer.start(100)
         
-        spotify_listener.set_callback('on_track_change', on_track_change)
-        spotify_listener.set_callback('on_album_art_loaded', on_album_art_loaded)
-        spotify_listener.set_callback('on_progress_update', on_progress_update)
-        spotify_listener.start()
+        # 返回清理函數
+        def cleanup():
+            print("\n正在清理資源...")
+            timer.stop()
+            if spotify_listener:
+                spotify_listener.stop()
         
-        logging.info("Spotify 監聽器已啟動（非同步圖片載入）")
+        return cleanup
     
-    # 建立定時器更新數據
-    def update_data():
-        """定時器回調 - 使用 Signal/Slot 機制確保架構一致性"""
-        simulator.update(0.1)
-        
-        # ✅ 使用 Signal 發送資料更新（保持與 datagrab.py 一致的架構）
-        vehicle_signals.update_speed.emit(simulator.speed)
-        vehicle_signals.update_rpm.emit(simulator.rpm)
-        vehicle_signals.update_fuel.emit(simulator.fuel)
-        vehicle_signals.update_temp.emit(simulator.temp)
-        vehicle_signals.update_gear.emit(simulator.gear)
-        
-        # 如果沒有啟用 Spotify，使用模擬音樂
-        # 注意：這裡直接呼叫 music_card 方法是安全的，因為在主執行緒
-        if not spotify_enabled:
-            song_title, artist, _ = simulator.playlist[simulator.current_song_index]
-            # 只在歌曲改變時更新（避免重複調用 setText 導致跑馬燈重置）
-            if not hasattr(update_data, 'last_song_index') or update_data.last_song_index != simulator.current_song_index:
-                dashboard.music_card.set_song(song_title, artist, "")
-                update_data.last_song_index = simulator.current_song_index
-            dashboard.music_card.set_progress(simulator.music_time, simulator.song_duration)
+    # 使用 main.py 的統一啟動流程
+    window_title = "Luxgen M7 儀表板 - 演示模式"
+    if spotify_enabled:
+        window_title += " [Spotify Connected]"
     
-    timer = QTimer()
-    timer.timeout.connect(update_data)
-    timer.start(100)  # 每 100ms 更新一次 (10 Hz)
-    
-    try:
-        sys.exit(app.exec())
-    except KeyboardInterrupt:
-        print("\n程式結束")
-        timer.stop()
-        if spotify_listener:
-            spotify_listener.stop()
+    run_dashboard(
+        window_title=window_title,
+        setup_data_source=setup_demo_data_source
+    )
 
 
 if __name__ == '__main__':

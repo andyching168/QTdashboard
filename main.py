@@ -3,9 +3,13 @@ import os
 import math
 import platform
 import time
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton, QDialog
+
+# 抑制 Qt 多媒體 FFmpeg 音訊格式解析警告
+os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=false')
+
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton, QDialog, QGraphicsView, QGraphicsScene, QGraphicsProxyWidget, QMainWindow
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot, QUrl
-from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QPixmap, QMouseEvent
+from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QPixmap, QMouseEvent, QTransform
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 
@@ -134,7 +138,7 @@ class SplashScreen(QWidget):
         
         return True
         
-    def showEvent(self, event):
+    def showEvent(self, event): # type: ignore
         """視窗顯示時自動播放"""
         super().showEvent(event)
         # 延遲一下確保視窗完全顯示
@@ -176,14 +180,14 @@ class SplashScreen(QWidget):
             print("無效的媒體檔案")
             self.finished.emit()
     
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, a0):  # type: ignore
         """按任意鍵跳過啟動畫面"""
-        if event.key() in (Qt.Key.Key_Escape, Qt.Key.Key_Space, Qt.Key.Key_Return):
+        if a0 and a0.key() in (Qt.Key.Key_Escape, Qt.Key.Key_Space, Qt.Key.Key_Return):
             print("使用者跳過啟動畫面")
             self.player.stop()
             self.finished.emit()
     
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event): # pyright: ignore[reportIncompatibleMethodOverride]
         """點擊滑鼠跳過啟動畫面"""
         print("使用者跳過啟動畫面")
         self.player.stop()
@@ -448,7 +452,7 @@ class NumericKeypad(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
         self.setModal(True)
-        self.result = None
+        self._result_value: float | None = None
         self.current_input = str(int(current_value)) if current_value > 0 else ""
         
         # 設置固定大小
@@ -643,19 +647,19 @@ class NumericKeypad(QDialog):
     def confirm(self):
         """確認輸入"""
         try:
-            self.result = float(self.current_input) if self.current_input else 0.0
+            self._result_value = float(self.current_input) if self.current_input else 0.0
         except ValueError:
-            self.result = 0.0
+            self._result_value = 0.0
         self.close()
     
     def cancel(self):
         """取消輸入"""
-        self.result = None
+        self._result_value = None
         self.close()
     
     def get_value(self):
         """獲取輸入值"""
-        return self.result
+        return self._result_value
 
 
 class OdometerCard(QWidget):
@@ -1290,26 +1294,66 @@ class MarqueeLabel(QLabel):
         self._timer.setInterval(30)
         self._is_scrollable = False
         self._at_home = True  # 是否在起始位置
+        self._is_active = False  # 是否處於活躍狀態（可見且應該運作）
         
         # 註冊實例
         MarqueeLabel._instances.append(self)
 
-    def setText(self, text):
+    def setText(self, text): # type: ignore
         if text == self.text():
             return
-        print(f"[MarqueeLabel] setText called: '{text[:30]}...'")  # Debug
         super().setText(text)
         self._scroll_pos = 0
         self._at_home = True
-        MarqueeLabel._waiting_for_sync = False
-        MarqueeLabel._global_pause_counter = MarqueeLabel._global_pause_threshold  # 新文字設定時先暫停
         self._check_scrollable()
         
-        # 確保計時器啟動
-        if not self._timer.isActive():
-            self._timer.start()
+        # 只有在活躍狀態時才啟動計時器和設置暫停
+        if self._is_active:
+            MarqueeLabel._waiting_for_sync = False
+            MarqueeLabel._global_pause_counter = MarqueeLabel._global_pause_threshold
+            if not self._timer.isActive():
+                self._timer.start()
         
         self.update()
+    
+    def showEvent(self, event):  # type: ignore
+        """當標籤變為可見時"""
+        super().showEvent(event)
+        self._activate()
+    
+    def hideEvent(self, event):  # type: ignore
+        """當標籤被隱藏時"""
+        super().hideEvent(event)
+        self._deactivate()
+    
+    def _activate(self):
+        """啟動跑馬燈"""
+        if self._is_active:
+            return
+        self._is_active = True
+        # 重置到起始位置
+        self._scroll_pos = 0
+        self._at_home = True
+        self._check_scrollable()
+        # 重置全域暫停計數器，讓文字先暫停一下再開始捲動
+        MarqueeLabel._global_pause_counter = MarqueeLabel._global_pause_threshold
+        MarqueeLabel._waiting_for_sync = False
+        # 啟動計時器
+        if self._is_scrollable and not self._timer.isActive():
+            self._timer.start()
+        self.update()
+    
+    def _deactivate(self):
+        """停止跑馬燈"""
+        if not self._is_active:
+            return
+        self._is_active = False
+        # 停止計時器
+        if self._timer.isActive():
+            self._timer.stop()
+        # 重置位置
+        self._scroll_pos = 0
+        self._at_home = True
 
     def _check_scrollable(self):
         """檢查文字是否需要捲動"""
@@ -1317,7 +1361,7 @@ class MarqueeLabel(QLabel):
         text_width = fm.horizontalAdvance(self.text())
         self._is_scrollable = text_width > self.width()
         
-    def paintEvent(self, event):
+    def paintEvent(self, a0):
         painter = QPainter(self)
         
         # 獲取樣式表設定的顏色
@@ -1338,7 +1382,8 @@ class MarqueeLabel(QLabel):
         # 標記為需要捲動
         self._is_scrollable = True
         
-        if not self._timer.isActive():
+        # 只有在活躍狀態時才啟動計時器
+        if self._is_active and not self._timer.isActive():
             self._timer.start()
 
         painter.save()
@@ -1357,13 +1402,16 @@ class MarqueeLabel(QLabel):
         painter.restore()
 
     def _on_timeout(self):
+        # 如果不在活躍狀態，停止計時器
+        if not self._is_active:
+            if self._timer.isActive():
+                self._timer.stop()
+            return
+        
         # 檢查是否在全域暫停中
         if MarqueeLabel._global_pause_counter > 0:
             MarqueeLabel._global_pause_counter -= 1
-            if MarqueeLabel._global_pause_counter == 165:  # 只在開始暫停時 print 一次
-                print(f"[MarqueeLabel] 開始暫停 5 秒...")  # Debug
             if MarqueeLabel._global_pause_counter == 0:
-                print(f"[MarqueeLabel] 暫停結束，重新開始捲動")  # Debug
                 MarqueeLabel._waiting_for_sync = False  # 重置等待狀態
             self.update()
             return
@@ -1390,14 +1438,13 @@ class MarqueeLabel(QLabel):
                     self._scroll_pos = 0
                     self._at_home = True
                     
-                    # 檢查是否所有標籤都到起點了(包含不可捲動的標籤)
+                    # 檢查是否所有活躍標籤都到起點了
                     all_at_home = all(
                         inst._at_home for inst in MarqueeLabel._instances
-                        if inst.isVisible()
+                        if inst._is_active
                     )
                     
                     if all_at_home:
-                        print("[MarqueeLabel] 所有標籤已同步到起點，開始暫停")  # Debug
                         MarqueeLabel._global_pause_counter = MarqueeLabel._global_pause_threshold
                         MarqueeLabel._waiting_for_sync = False
                 
@@ -1417,28 +1464,18 @@ class MarqueeLabel(QLabel):
             self._scroll_pos = 0
             self._at_home = True
             
-            # 檢查是否所有標籤都已經在起點(包含不可捲動的標籤)
+            # 檢查是否所有活躍標籤都已經在起點
             all_at_home = all(
                 inst._at_home for inst in MarqueeLabel._instances
-                if inst.isVisible()
+                if inst._is_active
             )
             
             if all_at_home:
                 # 所有標籤都在起點了，直接開始暫停
-                print("[MarqueeLabel] 所有標籤已同步到起點，開始暫停")  # Debug
                 MarqueeLabel._global_pause_counter = MarqueeLabel._global_pause_threshold
                 MarqueeLabel._waiting_for_sync = False
             elif not MarqueeLabel._waiting_for_sync:
                 # 還有其他標籤沒到起點，進入等待同步狀態
-                at_home_count = sum(
-                    1 for inst in MarqueeLabel._instances
-                    if inst.isVisible() and inst._at_home
-                )
-                total_count = sum(
-                    1 for inst in MarqueeLabel._instances
-                    if inst.isVisible()
-                )
-                print(f"[MarqueeLabel] 有標籤回到起點，等待其他標籤同步 ({at_home_count}/{total_count} 個標籤在起點)")  # Debug
                 MarqueeLabel._waiting_for_sync = True
             
         self.update()
@@ -1754,11 +1791,40 @@ class MusicCard(QWidget):
                 if isinstance(child, QLabel):
                     child.show()
     
-    def set_progress(self, current_seconds, total_seconds):
+    def set_progress(self, current_seconds, total_seconds, is_playing=True):
         """設置播放進度"""
         if total_seconds > 0:
             progress = int((current_seconds / total_seconds) * 100)
             self.progress_bar.setValue(progress)
+        
+        # 根據播放狀態改變進度條顏色
+        if is_playing:
+            # 播放中 - 藍色
+            self.progress_bar.setStyleSheet("""
+                QProgressBar {
+                    background-color: #2d3748;
+                    border-radius: 3px;
+                    border: none;
+                }
+                QProgressBar::chunk {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #6af, stop:1 #4a9eff);
+                    border-radius: 3px;
+                }
+            """)
+        else:
+            # 暫停中 - 黃色
+            self.progress_bar.setStyleSheet("""
+                QProgressBar {
+                    background-color: #2d3748;
+                    border-radius: 3px;
+                    border: none;
+                }
+                QProgressBar::chunk {
+                    background-color: #f0ad4e;
+                    border-radius: 3px;
+                }
+            """)
         
         # 格式化時間
         self.current_time.setText(f"{int(current_seconds//60)}:{int(current_seconds%60):02d}")
@@ -1810,13 +1876,13 @@ class MusicCard(QWidget):
 
 
 class AnalogGauge(QWidget):
-    def __init__(self, min_val=0, max_val=100, style=None, labels=None, title="", 
+    def __init__(self, min_val=0, max_val=100, gauge_style=None, labels=None, title="", 
                  red_zone_start=None, parent=None):
         super().__init__(parent)
         self.min_val = min_val
         self.max_val = max_val
         self.value = min_val
-        self.style = style if style else GaugeStyle()
+        self.gauge_style = gauge_style if gauge_style else GaugeStyle()
         self.labels = labels # Dictionary {value: "Label"} or None for auto numbers
         self.title = title
         self.red_zone_start = red_zone_start
@@ -1830,7 +1896,7 @@ class AnalogGauge(QWidget):
         self.value = max(self.min_val, min(self.max_val, val))
         self.update()
 
-    def paintEvent(self, event):
+    def paintEvent(self, a0):  # type: ignore
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -1861,16 +1927,16 @@ class AnalogGauge(QWidget):
 
     def draw_ticks(self, painter):
         radius = 75
-        pen = QPen(self.style.tick_color)
+        pen = QPen(self.gauge_style.tick_color)
         painter.setPen(pen)
 
-        total_ticks = self.style.major_ticks * (self.style.minor_ticks + 1)
+        total_ticks = self.gauge_style.major_ticks * (self.gauge_style.minor_ticks + 1)
         
         for i in range(total_ticks + 1):
             ratio = i / total_ticks
-            angle = self.style.start_angle - (ratio * self.style.span_angle)
+            angle = self.gauge_style.start_angle - (ratio * self.gauge_style.span_angle)
             
-            is_major = (i % (self.style.minor_ticks + 1) == 0)
+            is_major = (i % (self.gauge_style.minor_ticks + 1) == 0)
             
             tick_len = 12 if is_major else 6
             pen.setWidth(3 if is_major else 1)
@@ -1880,7 +1946,7 @@ class AnalogGauge(QWidget):
             if self.red_zone_start and current_val >= self.red_zone_start:
                 pen.setColor(QColor(255, 50, 50))
             else:
-                pen.setColor(self.style.tick_color)
+                pen.setColor(self.gauge_style.tick_color)
             
             painter.setPen(pen)
 
@@ -1891,8 +1957,8 @@ class AnalogGauge(QWidget):
 
     def draw_labels(self, painter):
         radius = 55
-        painter.setPen(self.style.label_color)
-        font = QFont("Arial", int(11 * self.style.text_scale))
+        painter.setPen(self.gauge_style.label_color)
+        font = QFont("Arial", int(11 * self.gauge_style.text_scale))
         font.setBold(True)
         painter.setFont(font)
 
@@ -1900,7 +1966,7 @@ class AnalogGauge(QWidget):
             # Custom labels (C, H, E, F)
             for val, text in self.labels.items():
                 ratio = (val - self.min_val) / (self.max_val - self.min_val)
-                angle = self.style.start_angle - (ratio * self.style.span_angle)
+                angle = self.gauge_style.start_angle - (ratio * self.gauge_style.span_angle)
                 rad_angle = math.radians(angle)
                 
                 x = math.cos(rad_angle) * radius
@@ -1910,11 +1976,11 @@ class AnalogGauge(QWidget):
                 painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
         else:
             # Numeric labels
-            step = (self.max_val - self.min_val) / self.style.major_ticks
-            for i in range(self.style.major_ticks + 1):
+            step = (self.max_val - self.min_val) / self.gauge_style.major_ticks
+            for i in range(self.gauge_style.major_ticks + 1):
                 val = self.min_val + i * step
-                ratio = i / self.style.major_ticks
-                angle = self.style.start_angle - (ratio * self.style.span_angle)
+                ratio = i / self.gauge_style.major_ticks
+                angle = self.gauge_style.start_angle - (ratio * self.gauge_style.span_angle)
                 rad_angle = math.radians(angle)
                 
                 x = math.cos(rad_angle) * radius
@@ -1924,32 +1990,32 @@ class AnalogGauge(QWidget):
                 if self.red_zone_start and val >= self.red_zone_start:
                     painter.setPen(QColor(255, 100, 100))
                 else:
-                    painter.setPen(self.style.label_color)
+                    painter.setPen(self.gauge_style.label_color)
                 
                 rect = QRectF(x - 20, y - 10, 40, 20)
                 painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, str(int(val)))
 
     def draw_needle(self, painter):
         ratio = (self.value - self.min_val) / (self.max_val - self.min_val)
-        angle = self.style.start_angle - (ratio * self.style.span_angle)
+        angle = self.gauge_style.start_angle - (ratio * self.gauge_style.span_angle)
         
         painter.save()
         painter.rotate(-angle)
         
         # Draw needle with glow effect
         # Outer glow
-        glow_color = QColor(self.style.needle_color)
+        glow_color = QColor(self.gauge_style.needle_color)
         glow_color.setAlpha(100)
         painter.setPen(QPen(glow_color, 6))
         painter.drawLine(QPointF(0, 0), QPointF(65, 0))
         
         # Main needle
         needle_gradient = QLinearGradient(0, 0, 65, 0)
-        needle_gradient.setColorAt(0, self.style.needle_color)
-        needle_gradient.setColorAt(1, QColor(self.style.needle_color).lighter(150))
+        needle_gradient.setColorAt(0, self.gauge_style.needle_color)
+        needle_gradient.setColorAt(1, QColor(self.gauge_style.needle_color).lighter(150))
         
         painter.setBrush(QBrush(needle_gradient))
-        painter.setPen(QPen(self.style.needle_color.lighter(120), 1))
+        painter.setPen(QPen(self.gauge_style.needle_color.lighter(120), 1))
         
         needle = QPolygonF([
             QPointF(-5, 0),
@@ -1964,7 +2030,7 @@ class AnalogGauge(QWidget):
         painter.restore()
 
     def draw_center_circle(self, painter):
-        if not self.style.show_center_circle:
+        if not self.gauge_style.show_center_circle:
             return
         
         # Center circle with gradient
@@ -1979,8 +2045,8 @@ class AnalogGauge(QWidget):
     def draw_title(self, painter):
         if not self.title:
             return
-        painter.setPen(self.style.label_color)
-        font = QFont("Arial", int(7 * self.style.text_scale))
+        painter.setPen(self.gauge_style.label_color)
+        font = QFont("Arial", int(7 * self.gauge_style.text_scale))
         painter.setFont(font)
         rect = QRectF(-50, 35, 100, 20)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.title)
@@ -1994,6 +2060,10 @@ class ControlPanel(QWidget):
         
         # 設置半透明背景 - 使用 AutoFillBackground
         self.setAutoFillBackground(True)
+        
+        # WiFi 狀態
+        self.wifi_ssid = None
+        self.wifi_signal = 0
         
         # 主佈局
         layout = QVBoxLayout(self)
@@ -2036,11 +2106,14 @@ class ControlPanel(QWidget):
         
         layout.addLayout(title_layout)
         
-        # 按鈕網格
+        # === 內容區域：左側快捷按鈕 + 右側系統狀態 ===
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(30)
+        
+        # === 左側：快捷按鈕 ===
         button_layout = QHBoxLayout()
         button_layout.setSpacing(20)
         
-        # 創建三個示例按鈕
         self.buttons = []
         button_configs = [
             ("WiFi", "📶", "#1DB954"),
@@ -2053,8 +2126,120 @@ class ControlPanel(QWidget):
             self.buttons.append(btn)
             button_layout.addWidget(btn)
         
-        button_layout.addStretch()
-        layout.addLayout(button_layout)
+        content_layout.addLayout(button_layout)
+        content_layout.addStretch()
+        
+        # === 右側：系統狀態資訊（水平排列兩個卡片）===
+        status_layout = QHBoxLayout()
+        status_layout.setSpacing(20)
+        
+        # WiFi 狀態卡片
+        wifi_card = QWidget()
+        wifi_card.setFixedSize(280, 80)
+        wifi_card.setStyleSheet("""
+            QWidget {
+                background: rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+            }
+        """)
+        wifi_card_layout = QHBoxLayout(wifi_card)
+        wifi_card_layout.setContentsMargins(15, 10, 15, 10)
+        wifi_card_layout.setSpacing(12)
+        
+        # WiFi 圖示
+        wifi_icon = QLabel("📶")
+        wifi_icon.setFixedSize(40, 40)
+        wifi_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        wifi_icon.setStyleSheet("font-size: 28px; background: transparent;")
+        wifi_card_layout.addWidget(wifi_icon)
+        
+        # WiFi 資訊
+        wifi_info_layout = QVBoxLayout()
+        wifi_info_layout.setSpacing(2)
+        wifi_info_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.wifi_status_label = QLabel("檢查中...")
+        self.wifi_status_label.setStyleSheet("""
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        
+        self.wifi_detail_label = QLabel("取得連線資訊")
+        self.wifi_detail_label.setStyleSheet("""
+            color: #aaa;
+            font-size: 12px;
+            background: transparent;
+        """)
+        
+        wifi_info_layout.addWidget(self.wifi_status_label)
+        wifi_info_layout.addWidget(self.wifi_detail_label)
+        wifi_card_layout.addLayout(wifi_info_layout)
+        wifi_card_layout.addStretch()
+        
+        # WiFi 信號強度指示
+        self.wifi_signal_label = QLabel("")
+        self.wifi_signal_label.setStyleSheet("""
+            color: #6f6;
+            font-size: 18px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        wifi_card_layout.addWidget(self.wifi_signal_label)
+        
+        status_layout.addWidget(wifi_card)
+        
+        # 日期時間卡片
+        datetime_card = QWidget()
+        datetime_card.setFixedSize(220, 80)
+        datetime_card.setStyleSheet("""
+            QWidget {
+                background: rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+            }
+        """)
+        datetime_card_layout = QHBoxLayout(datetime_card)
+        datetime_card_layout.setContentsMargins(15, 10, 15, 10)
+        datetime_card_layout.setSpacing(12)
+        
+        # 日曆圖示
+        calendar_icon = QLabel("📅")
+        calendar_icon.setFixedSize(40, 40)
+        calendar_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        calendar_icon.setStyleSheet("font-size: 28px; background: transparent;")
+        datetime_card_layout.addWidget(calendar_icon)
+        
+        # 日期時間資訊
+        datetime_info_layout = QVBoxLayout()
+        datetime_info_layout.setSpacing(2)
+        datetime_info_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.date_label = QLabel("")
+        self.date_label.setStyleSheet("""
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        
+        self.weekday_label = QLabel("")
+        self.weekday_label.setStyleSheet("""
+            color: #aaa;
+            font-size: 12px;
+            background: transparent;
+        """)
+        
+        datetime_info_layout.addWidget(self.date_label)
+        datetime_info_layout.addWidget(self.weekday_label)
+        datetime_card_layout.addLayout(datetime_info_layout)
+        datetime_card_layout.addStretch()
+        
+        status_layout.addWidget(datetime_card)
+        
+        content_layout.addLayout(status_layout)
+        
+        layout.addLayout(content_layout)
         layout.addStretch()
         
         # 隱藏指示
@@ -2067,7 +2252,133 @@ class ControlPanel(QWidget):
         """)
         layout.addWidget(hint_label)
         
-    def paintEvent(self, event):
+        # 啟動狀態更新定時器
+        self.status_timer = QTimer(self)
+        self.status_timer.timeout.connect(self.update_status_info)
+        self.status_timer.start(5000)  # 每5秒更新
+        
+        # 立即更新一次
+        QTimer.singleShot(100, self.update_status_info)
+        
+    def update_status_info(self):
+        """更新狀態資訊"""
+        from datetime import datetime
+        
+        # 更新日期時間
+        now = datetime.now()
+        self.date_label.setText(now.strftime("%Y年%m月%d日"))
+        
+        weekday_names = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+        self.weekday_label.setText(weekday_names[now.weekday()])
+        
+        # 更新 WiFi 狀態
+        self.update_wifi_status()
+    
+    def update_wifi_status(self):
+        """更新 WiFi 狀態"""
+        import subprocess
+        import os
+        import random
+        
+        try:
+            # 檢查是否在 Linux 環境
+            if platform.system() != 'Linux':
+                # macOS/Windows: 顯示模擬資料
+                dummy_networks = ["Home-WiFi", "Office-5G", "Starbucks_Free", "iPhone 熱點"]
+                ssid = random.choice(dummy_networks)
+                signal = random.randint(60, 95)
+                
+                self.wifi_ssid = ssid
+                self.wifi_signal = signal
+                self.wifi_status_label.setText(ssid)
+                
+                if signal >= 80:
+                    signal_text = "信號極佳"
+                    signal_color = "#6f6"
+                elif signal >= 60:
+                    signal_text = "信號良好"
+                    signal_color = "#6f6"
+                else:
+                    signal_text = "信號普通"
+                    signal_color = "#fa0"
+                
+                self.wifi_detail_label.setText(signal_text)
+                self.wifi_signal_label.setText(f"{signal}%")
+                self.wifi_signal_label.setStyleSheet(f"""
+                    color: {signal_color};
+                    font-size: 18px;
+                    font-weight: bold;
+                    background: transparent;
+                """)
+                return
+            
+            # 使用 nmcli 取得 WiFi 狀態
+            env = os.environ.copy()
+            env['LANG'] = 'C'
+            env['LC_ALL'] = 'C'
+            
+            result = subprocess.run(
+                ['nmcli', '-t', '-f', 'ACTIVE,SSID,SIGNAL', 'dev', 'wifi'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env=env
+            )
+            
+            for line in result.stdout.strip().split('\n'):
+                if line.startswith('yes:'):
+                    parts = line.split(':')
+                    if len(parts) >= 3:
+                        ssid = parts[1]
+                        signal = int(parts[2]) if parts[2].isdigit() else 0
+                        
+                        self.wifi_ssid = ssid
+                        self.wifi_signal = signal
+                        
+                        self.wifi_status_label.setText(ssid if ssid else "已連線")
+                        
+                        # 信號強度描述
+                        if signal >= 80:
+                            signal_text = "信號極佳"
+                            signal_color = "#6f6"
+                        elif signal >= 60:
+                            signal_text = "信號良好"
+                            signal_color = "#6f6"
+                        elif signal >= 40:
+                            signal_text = "信號普通"
+                            signal_color = "#fa0"
+                        else:
+                            signal_text = "信號較弱"
+                            signal_color = "#f66"
+                        
+                        self.wifi_detail_label.setText(signal_text)
+                        self.wifi_signal_label.setText(f"{signal}%")
+                        self.wifi_signal_label.setStyleSheet(f"""
+                            color: {signal_color};
+                            font-size: 16px;
+                            font-weight: bold;
+                            background: transparent;
+                        """)
+                        return
+            
+            # 未連線
+            self.wifi_ssid = None
+            self.wifi_signal = 0
+            self.wifi_status_label.setText("未連線")
+            self.wifi_detail_label.setText("點擊 WiFi 按鈕進行連線")
+            self.wifi_signal_label.setText("")
+            self.wifi_detail_label.setStyleSheet("""
+                color: #f66;
+                font-size: 14px;
+                background: transparent;
+            """)
+            
+        except Exception as e:
+            self.wifi_status_label.setText("無法取得狀態")
+            self.wifi_detail_label.setText(str(e)[:30])
+            self.wifi_signal_label.setText("")
+        
+    def paintEvent(self, a0):  # type: ignore
         """自定義繪製半透明背景"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -2158,8 +2469,9 @@ class ControlPanel(QWidget):
         # 這裡可以添加具體功能
         if title == "WiFi":
             # 可以觸發 WiFi 管理器
-            if self.parent():
-                self.parent().show_wifi_manager()
+            parent = self.parent()
+            if parent and hasattr(parent, 'show_wifi_manager'):
+                parent.show_wifi_manager()  # type: ignore
         elif title == "藍牙":
             print("藍牙功能待實現")
         elif title == "亮度":
@@ -2167,8 +2479,9 @@ class ControlPanel(QWidget):
     
     def hide_panel(self):
         """隱藏面板"""
-        if self.parent():
-            self.parent().hide_control_panel()
+        parent = self.parent()
+        if parent and hasattr(parent, 'hide_control_panel'):
+            parent.hide_control_panel()  # type: ignore
 
 
 class Dashboard(QWidget):
@@ -2182,7 +2495,7 @@ class Dashboard(QWidget):
     
     # Spotify 相關 Signals
     signal_update_spotify_track = pyqtSignal(str, str, str)
-    signal_update_spotify_progress = pyqtSignal(float, float)
+    signal_update_spotify_progress = pyqtSignal(float, float, bool)  # current, total, is_playing
     signal_update_spotify_art = pyqtSignal(object)  # 傳遞 PIL Image 物件
 
     def __init__(self):
@@ -2290,7 +2603,8 @@ class Dashboard(QWidget):
         # 更新時間
         self.time_timer = QTimer()
         self.time_timer.timeout.connect(self.update_time_display)
-        self.time_timer.start(1000)
+        # Timer 啟動延遲到 start_dashboard() 調用時
+        # self.time_timer.start(1000)
         self.update_time_display()
         
         # === 右側區域：漸層條（從1/4到最右）+ 圖標疊在上面 ===
@@ -2335,7 +2649,8 @@ class Dashboard(QWidget):
         # 動畫計時器 - 用於平滑的漸層效果
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self.update_gradient_animation)
-        self.animation_timer.start(16)  # 約 60 FPS
+        # Timer 啟動延遲到 start_dashboard() 調用時
+        # self.animation_timer.start(16)  # 約 60 FPS
         
         return status_bar
     
@@ -2736,18 +3051,39 @@ class Dashboard(QWidget):
         self.door_auto_switch_timer = QTimer()
         self.door_auto_switch_timer.setSingleShot(True)
         self.door_auto_switch_timer.timeout.connect(self._auto_switch_back_from_door)
+        self.previous_row_index = 0   # 記錄切換前的列索引
         self.previous_card_index = 0  # 記錄切換前的卡片索引
         
         # 物理心跳 Timer（每 100ms 觸發一次，持續累積里程）
         self.physics_timer = QTimer()
         self.physics_timer.timeout.connect(self._physics_tick)
-        self.physics_timer.start(100)  # 100ms = 0.1 秒
+        # Timer 啟動延遲到 start_dashboard() 調用時
+        # self.physics_timer.start(100)  # 100ms = 0.1 秒
         self.last_physics_time = time.time()
         
         self.update_display()
         
-        # 嘗試初始化 Spotify
+        # Spotify 初始化延遲到 start_dashboard() 調用時
+        # self.check_spotify_config()
+
+    def start_dashboard(self):
+        """開機動畫完成後啟動儀表板的所有邏輯"""
+        print("啟動儀表板邏輯...")
+        
+        # 啟動時間更新 Timer
+        self.time_timer.start(1000)
+        
+        # 啟動方向燈動畫 Timer
+        self.animation_timer.start(16)  # 約 60 FPS
+        
+        # 啟動物理心跳 Timer（里程累積）
+        self.last_physics_time = time.time()  # 重設時間基準
+        self.physics_timer.start(100)  # 100ms = 0.1 秒
+        
+        # 初始化 Spotify
         self.check_spotify_config()
+        
+        print("儀表板邏輯已啟動")
 
     def check_spotify_config(self):
         """檢查 Spotify 設定並初始化"""
@@ -2788,11 +3124,13 @@ class Dashboard(QWidget):
         self.auth_dialog.show()
         
         # 確保對話框置於螢幕中央
-        screen_geometry = QApplication.primaryScreen().geometry()
-        dialog_geometry = self.auth_dialog.geometry()
-        x = (screen_geometry.width() - dialog_geometry.width()) // 2
-        y = (screen_geometry.height() - dialog_geometry.height()) // 2
-        self.auth_dialog.move(x, y)
+        primary_screen = QApplication.primaryScreen()
+        if primary_screen:
+            screen_geometry = primary_screen.geometry()
+            dialog_geometry = self.auth_dialog.geometry()
+            x = (screen_geometry.width() - dialog_geometry.width()) // 2
+            y = (screen_geometry.height() - dialog_geometry.height()) // 2
+            self.auth_dialog.move(x, y)
 
     def on_auth_completed(self, success):
         """授權完成回調"""
@@ -2811,7 +3149,7 @@ class Dashboard(QWidget):
     
     def show_control_panel(self):
         """顯示下拉控制面板"""
-        if self.panel_visible:
+        if self.panel_visible or not self.control_panel:
             return
         
         self.panel_visible = True
@@ -2829,7 +3167,7 @@ class Dashboard(QWidget):
     
     def hide_control_panel(self):
         """隱藏下拉控制面板"""
-        if not self.panel_visible:
+        if not self.panel_visible or not self.control_panel:
             return
         
         self.panel_visible = False
@@ -2932,6 +3270,24 @@ class Dashboard(QWidget):
         if not hasattr(self, 'door_card'):
             return
         
+        # 檢查門狀態是否真的改變
+        door_upper = door.upper()
+        current_state = None
+        if door_upper == "FL":
+            current_state = self.door_card.door_fl_closed
+        elif door_upper == "FR":
+            current_state = self.door_card.door_fr_closed
+        elif door_upper == "RL":
+            current_state = self.door_card.door_rl_closed
+        elif door_upper == "RR":
+            current_state = self.door_card.door_rr_closed
+        elif door_upper == "BK":
+            current_state = self.door_card.door_bk_closed
+        
+        # 只在門狀態真正改變時才收起控制面板
+        if current_state is not None and current_state != is_closed and self.panel_visible:
+            self.hide_control_panel()
+        
         # 更新門狀態
         self.door_card.set_door_status(door, is_closed)
         
@@ -2996,9 +3352,9 @@ class Dashboard(QWidget):
         """更新 Spotify 歌曲資訊 (執行緒安全)"""
         self.signal_update_spotify_track.emit(title, artist, album)
 
-    def update_spotify_progress(self, current, total):
+    def update_spotify_progress(self, current, total, is_playing=True):
         """更新 Spotify 播放進度 (執行緒安全)"""
-        self.signal_update_spotify_progress.emit(float(current), float(total))
+        self.signal_update_spotify_progress.emit(float(current), float(total), bool(is_playing))
 
     def update_spotify_art(self, pil_image):
         """更新 Spotify 專輯封面 (執行緒安全)"""
@@ -3064,6 +3420,10 @@ class Dashboard(QWidget):
     @pyqtSlot(str)
     def _slot_set_gear(self, gear):
         """Slot: 在主執行緒中更新檔位顯示"""
+        # 只在檔位真正改變時才收起控制面板
+        if gear != self.gear and self.panel_visible:
+            self.hide_control_panel()
+        
         self.gear = gear
         self.update_display()
     
@@ -3073,6 +3433,17 @@ class Dashboard(QWidget):
         Args:
             state: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off"
         """
+        # 方向燈剛啟動時收起控制面板（狀態從 off 變成 on）
+        prev_left = self.left_turn_on
+        prev_right = self.right_turn_on
+        
+        if state == "left_on" and not prev_left and self.panel_visible:
+            self.hide_control_panel()
+        elif state == "right_on" and not prev_right and self.panel_visible:
+            self.hide_control_panel()
+        elif state == "both_on" and (not prev_left or not prev_right) and self.panel_visible:
+            self.hide_control_panel()
+        
         if state == "left_on":
             self.left_turn_on = True
             self.right_turn_on = False
@@ -3100,10 +3471,10 @@ class Dashboard(QWidget):
         if hasattr(self, 'music_card'):
             self.music_card.set_song(title, artist, album)
 
-    @pyqtSlot(float, float)
-    def _slot_update_spotify_progress(self, current, total):
+    @pyqtSlot(float, float, bool)
+    def _slot_update_spotify_progress(self, current, total, is_playing):
         if hasattr(self, 'music_card'):
-            self.music_card.set_progress(current, total)
+            self.music_card.set_progress(current, total, is_playing)
 
     @pyqtSlot(object)
     def _slot_update_spotify_art(self, pil_image):
@@ -3131,22 +3502,28 @@ class Dashboard(QWidget):
             else:
                 indicator.hide()  # 隱藏多餘的指示器
     
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, a0):  # type: ignore
         """觸控/滑鼠按下事件"""
-        pos = event.position().toPoint()
+        if a0 is None:
+            return
+        pos = a0.position().toPoint()
         
         # 如果滑動被禁用，只處理控制面板
         if not self.swipe_enabled:
-            # 檢查是否在控制面板區域
-            if self.panel_visible and self.control_panel.geometry().contains(pos):
+            # 面板展開時，任何位置都可以開始拖拽收回
+            if self.panel_visible:
                 self.panel_touch_start = pos
                 self.panel_drag_active = True
+                import time
+                self.panel_touch_time = time.time()
             return
         
-        # 檢查是否在控制面板區域（如果面板已展開）
-        if self.panel_visible and self.control_panel.geometry().contains(pos):
+        # 面板展開時，整個畫面任何位置都可以操作收回
+        if self.panel_visible:
             self.panel_touch_start = pos
             self.panel_drag_active = True
+            import time
+            self.panel_touch_time = time.time()
             return
         
         # 檢查是否在頂部觸發區域（狀態欄高度 + 額外的觸控緩衝區）
@@ -3154,6 +3531,8 @@ class Dashboard(QWidget):
         if pos.y() <= 80 and not self.panel_visible:
             self.panel_touch_start = pos
             self.panel_drag_active = True
+            import time
+            self.panel_touch_time = time.time()
             return
         
         # 檢查是否在右側區域（卡片切換）
@@ -3161,29 +3540,31 @@ class Dashboard(QWidget):
         row_stack_rect = self.row_stack.geometry()
         row_stack_rect.moveTopLeft(row_stack_global)
         
-        if row_stack_rect.contains(event.globalPosition().toPoint()):
-            self.touch_start_pos = event.position().toPoint()
+        if row_stack_rect.contains(a0.globalPosition().toPoint()):
+            self.touch_start_pos = a0.position().toPoint()
             self.is_swiping = True
             self.swipe_direction = None
             import time
             self.touch_start_time = time.time()
     
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, a0):  # type: ignore
         """觸控/滑鼠移動事件"""
+        if a0 is None:
+            return
         # 處理控制面板拖拽
-        if self.panel_drag_active and self.panel_touch_start:
-            pos = event.position().toPoint()
+        if self.panel_drag_active and self.panel_touch_start is not None:
+            pos = a0.position().toPoint()
             delta_y = pos.y() - self.panel_touch_start.y()
             
             if self.panel_visible:
                 # 面板已展開，處理向上拖拽關閉
-                if delta_y < 0:
+                if delta_y < 0 and self.control_panel:
                     # 限制拖拽範圍
                     new_y = max(-300, 50 + delta_y)
                     self.control_panel.setGeometry(0, int(new_y), 1920, 300)
             else:
                 # 面板未展開，處理向下拖拽開啟
-                if delta_y > 0:
+                if delta_y > 0 and self.control_panel:
                     # 限制拖拽範圍
                     new_y = min(50, -300 + delta_y)
                     self.control_panel.setGeometry(0, int(new_y), 1920, 300)
@@ -3193,9 +3574,9 @@ class Dashboard(QWidget):
             return
         
         # 處理卡片切換滑動
-        if self.is_swiping and self.touch_start_pos:
+        if self.is_swiping and self.touch_start_pos is not None:
             # 計算滑動距離
-            delta = event.position().toPoint() - self.touch_start_pos
+            delta = a0.position().toPoint() - self.touch_start_pos
             
             # 判斷滑動方向（只在第一次超過閾值時決定）
             if self.swipe_direction is None:
@@ -3213,35 +3594,58 @@ class Dashboard(QWidget):
             self.touch_start_pos = None
             self.is_swiping = False
     
-    def mouseReleaseEvent(self, event):
+    def mouseReleaseEvent(self, a0):  # type: ignore
         """觸控/滑鼠釋放事件"""
+        if a0 is None:
+            return
         # 如果滑動被禁用，忽略事件
         if not self.swipe_enabled:
             return
         
         # 處理控制面板拖拽結束
-        if self.panel_drag_active and self.panel_touch_start:
-            pos = event.position().toPoint()
+        if self.panel_drag_active and self.panel_touch_start is not None:
+            pos = a0.position().toPoint()
             delta_y = pos.y() - self.panel_touch_start.y()
+            delta_x = abs(pos.x() - self.panel_touch_start.x())
             
-            # 根據拖拽距離決定顯示或隱藏
-            threshold = 80  # 閾值：超過 80 像素則觸發
+            # 計算滑動速度（像素/秒）
+            import time
+            elapsed = time.time() - getattr(self, 'panel_touch_time', time.time())
+            velocity = abs(delta_y) / max(elapsed, 0.01)  # 避免除以零
+            
+            # 計算總移動距離
+            total_move = abs(delta_y) + delta_x
+            
+            # 寬鬆的判定條件：
+            # 1. 距離閾值降低到 40 像素（原本 80）
+            # 2. 或者速度超過 300 像素/秒（快速滑動）
+            # 3. 點擊面板外區域直接收回（幾乎沒移動 = 點擊）
+            distance_threshold = 40
+            velocity_threshold = 300
+            tap_threshold = 15  # 移動少於 15 像素視為點擊
             
             if self.panel_visible:
                 # 面板已展開
-                if delta_y < -threshold:
-                    # 向上拖拽超過閾值，關閉面板
+                # 檢查是否點擊面板外區域（直接收回）
+                is_tap = total_move < tap_threshold
+                is_outside_panel = not (self.control_panel and self.control_panel.geometry().contains(pos))
+                
+                if is_tap and is_outside_panel:
+                    # 點擊面板外區域，直接收回
+                    self.hide_control_panel()
+                elif (delta_y < -distance_threshold) or (delta_y < -20 and velocity > velocity_threshold):
+                    # 向上滑動收起
                     self.hide_control_panel()
                 else:
-                    # 未超過閾值，回彈到展開位置
+                    # 未達到閾值，回彈到展開位置
                     self.show_control_panel()
             else:
-                # 面板未展開
-                if delta_y > threshold:
-                    # 向下拖拽超過閾值，展開面板
+                # 面板未展開 - 向下拉出
+                should_show = (delta_y > distance_threshold) or (delta_y > 20 and velocity > velocity_threshold)
+                if should_show:
                     self.show_control_panel()
                 else:
-                    # 未超過閾值，回彈到關閉位置
+                    # 未達到閾值，回彈到關閉位置
                     self.hide_control_panel()
             
             # 重置狀態
@@ -3250,9 +3654,9 @@ class Dashboard(QWidget):
             return
         
         # 處理卡片切換滑動
-        if self.is_swiping and self.touch_start_pos:
+        if self.is_swiping and self.touch_start_pos is not None:
             # 計算滑動距離和方向
-            end_pos = event.position().toPoint()
+            end_pos = a0.position().toPoint()
             delta = end_pos - self.touch_start_pos
             
             # 根據滑動方向處理
@@ -3329,12 +3733,14 @@ class Dashboard(QWidget):
         card_name = all_card_names[self.current_row_index][self.current_card_index]
         print(f"切換到: {card_name}")
     
-    def wheelEvent(self, event):
+    def wheelEvent(self, a0):  # type: ignore
         """滑鼠滾輪切換右側卡片（桌面使用）"""
+        if a0 is None:
+            return
         # 檢查滑鼠是否在右側區域
-        if self.row_stack.geometry().contains(event.position().toPoint()):
-            delta = event.angleDelta().y()
-            modifiers = event.modifiers()
+        if self.row_stack.geometry().contains(a0.position().toPoint()):
+            delta = a0.angleDelta().y()
+            modifiers = a0.modifiers()
             
             if modifiers & Qt.KeyboardModifier.ShiftModifier:
                 # Shift + 滾輪：切換列
@@ -3349,9 +3755,11 @@ class Dashboard(QWidget):
                 else:  # 向下滾動
                     self.switch_card(1)
     
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, a0):  # type: ignore
         """鍵盤模擬控制"""
-        key = event.key()
+        if a0 is None:
+            return
+        key = a0.key()
         
         # ESC 或 P 鍵：切換控制面板
         if key == Qt.Key.Key_Escape or key == Qt.Key.Key_P:
@@ -3362,8 +3770,8 @@ class Dashboard(QWidget):
             return
         
         # F12 或 Ctrl+W：開啟 WiFi 管理器
-        if key == Qt.Key.Key_F12 or (event.key() == Qt.Key.Key_W and 
-                                      event.modifiers() == Qt.KeyboardModifier.ControlModifier):
+        if key == Qt.Key.Key_F12 or (a0.key() == Qt.Key.Key_W and 
+                                      a0.modifiers() == Qt.KeyboardModifier.ControlModifier):
             self.show_wifi_manager()
             return
         
@@ -3500,8 +3908,166 @@ class Dashboard(QWidget):
         self.gear_label.setText(self.gear)
 
 
-def main():
-    """主程式進入點"""
+class ScalableWindow(QMainWindow):
+    """
+    可縮放的視窗包裝器 - 用於開發環境按比例縮放儀表板
+    保持 1920x480 (4:1) 的比例，方便在電腦上預覽 8.8 吋螢幕效果
+    視窗本身也鎖定 4:1 比例
+    """
+    
+    ASPECT_RATIO = 1920 / 480  # 4:1
+    
+    def __init__(self, dashboard):
+        super().__init__()
+        self.dashboard = dashboard
+        self._resizing = False  # 防止遞迴
+        
+        # 設定視窗屬性
+        self.setWindowTitle("儀表板 - 可縮放預覽（拖曳邊框調整大小）")
+        self.setMinimumSize(480, 120)  # 最小 1/4 大小
+        
+        # 使用 QGraphicsView 來實現縮放
+        self.scene = QGraphicsScene()
+        self.view = QGraphicsView(self.scene)
+        self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.view.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.view.setFrameShape(QGraphicsView.Shape.NoFrame)
+        self.view.setStyleSheet("background: #0a0a0f;")
+        
+        # 將 Dashboard 加入場景
+        self.proxy = QGraphicsProxyWidget()
+        self.proxy.setWidget(dashboard)
+        self.scene.addItem(self.proxy)
+        
+        self.setCentralWidget(self.view)
+        
+        # 預設大小（約 8.8 吋螢幕的實際像素密度在一般電腦上的顯示大小）
+        # 8.8 吋 1920x480 約等於 218 PPI
+        # 一般電腦螢幕約 96-110 PPI，所以約縮放到 45-50%
+        initial_width = 960  # 約 50% 大小
+        initial_height = int(initial_width / self.ASPECT_RATIO)
+        self.resize(initial_width, initial_height)
+        
+        # 顯示比例資訊
+        self._update_scale_info()
+    
+    def resizeEvent(self, event):
+        """視窗大小改變時，強制保持 4:1 比例"""
+        if self._resizing:
+            return
+        
+        self._resizing = True
+        
+        # 取得新的視窗大小
+        new_width = event.size().width()
+        new_height = event.size().height()
+        old_width = event.oldSize().width() if event.oldSize().width() > 0 else new_width
+        old_height = event.oldSize().height() if event.oldSize().height() > 0 else new_height
+        
+        # 判斷是寬度還是高度改變較多，以此決定調整方向
+        width_changed = abs(new_width - old_width)
+        height_changed = abs(new_height - old_height)
+        
+        if width_changed >= height_changed:
+            # 寬度改變較多，根據寬度調整高度
+            corrected_height = int(new_width / self.ASPECT_RATIO)
+            corrected_width = new_width
+        else:
+            # 高度改變較多，根據高度調整寬度
+            corrected_width = int(new_height * self.ASPECT_RATIO)
+            corrected_height = new_height
+        
+        # 確保不小於最小尺寸
+        if corrected_width < 480:
+            corrected_width = 480
+            corrected_height = 120
+        
+        # 如果需要調整，重新設定大小
+        if corrected_width != new_width or corrected_height != new_height:
+            self.resize(corrected_width, corrected_height)
+        
+        self._resizing = False
+        
+        # 更新內容縮放
+        super().resizeEvent(event)
+        
+        # 取得可用區域
+        view_width = self.view.viewport().width()
+        view_height = self.view.viewport().height()
+        
+        # 計算縮放比例
+        scale = view_width / 1920
+        
+        # 應用縮放
+        transform = QTransform()
+        transform.scale(scale, scale)
+        self.view.setTransform(transform)
+        
+        # 置中顯示
+        self.view.centerOn(self.proxy)
+        
+        # 更新比例資訊
+        self._update_scale_info()
+    
+    def _update_scale_info(self):
+        """更新視窗標題顯示當前縮放比例"""
+        view_width = self.view.viewport().width()
+        scale = view_width / 1920 * 100
+        
+        # 計算等效螢幕尺寸（假設 96 PPI 的電腦螢幕）
+        # 8.8 吋螢幕實際寬度約 195mm，1920 像素
+        actual_width_mm = view_width / 96 * 25.4  # 轉換為 mm
+        equivalent_inches = actual_width_mm / 25.4
+        
+        title = f"儀表板預覽 - {scale:.0f}% ({view_width}x{self.view.viewport().height()}) ≈ {equivalent_inches:.1f}吋寬"
+        self.setWindowTitle(title)
+
+
+def run_dashboard(
+    on_dashboard_ready=None,
+    window_title=None,
+    setup_data_source=None
+):
+    """
+    統一的儀表板啟動函數 - 所有入口點都應使用此函數
+    
+    這個函數處理：
+    1. QApplication 初始化
+    2. Dashboard 建立
+    3. SplashScreen 播放（如果有）
+    4. 正確的啟動順序（splash 結束後才啟動 dashboard 邏輯）
+    5. 資料來源設定
+    
+    Args:
+        on_dashboard_ready: 可選的回調函數，在 dashboard 完全準備好後呼叫
+                           簽名: callback(dashboard) -> cleanup_func 或 None
+                           返回的 cleanup_func 會在程式結束時被呼叫
+        window_title: 可選的視窗標題
+        setup_data_source: 可選的資料來源設定函數
+                          簽名: setup_func(dashboard) -> cleanup_func 或 None
+                          這個會在 splash 結束後、start_dashboard 之前呼叫
+    
+    Returns:
+        不返回（進入 Qt 事件循環）
+    
+    使用範例:
+        # 最簡單的使用方式（等同於直接執行 main.py）
+        run_dashboard()
+        
+        # Demo 模式
+        def setup_demo(dashboard):
+            timer = QTimer()
+            timer.timeout.connect(lambda: update_data(dashboard))
+            timer.start(100)
+            return lambda: timer.stop()  # 返回清理函數
+        
+        run_dashboard(
+            window_title="Demo Mode",
+            setup_data_source=setup_demo
+        )
+    """
     app = QApplication(sys.argv)
     
     # 檢測環境
@@ -3510,46 +4076,94 @@ def main():
     print(f"檢測到 {env_name}")
     print(f"系統: {platform.system()}, 全螢幕模式: {'是' if is_production else '否'}")
     
-    # 建立主儀表板（先不顯示）
+    # 建立主儀表板
     dashboard = Dashboard()
+    
+    # 開發環境：建立可縮放的視窗包裝器
+    scalable_window = None
+    if not is_production:
+        scalable_window = ScalableWindow(dashboard)
+        if window_title:
+            scalable_window.setWindowTitle(window_title)
+    elif window_title:
+        dashboard.setWindowTitle(window_title)
+    
+    # 用於儲存清理函數
+    cleanup_funcs = []
+    
+    def on_splash_finished():
+        """Splash 結束後的統一處理流程"""
+        # 1. 關閉 splash（如果有）
+        if hasattr(on_splash_finished, 'splash'):
+            on_splash_finished.splash.close()
+        
+        # 2. 顯示主視窗
+        if is_production:
+            dashboard.showFullScreen()
+        else:
+            # 開發環境：顯示可縮放視窗
+            if scalable_window:
+                scalable_window.show()
+                print("提示: 開發環境使用可縮放視窗，拖曳邊框可按比例縮放")
+                print("      8.8吋螢幕 (1920x480) 約等於視窗寬度 800 像素")
+            else:
+                dashboard.show()
+                print("提示: 開發環境使用視窗模式，可設定環境變數 QTDASHBOARD_FULLSCREEN=1 強制全螢幕")
+        
+        # 3. 設定資料來源（在 start_dashboard 之前）
+        if setup_data_source:
+            cleanup = setup_data_source(dashboard)
+            if cleanup:
+                cleanup_funcs.append(cleanup)
+        
+        # 4. 啟動儀表板邏輯（這會啟動所有內部 Timer）
+        dashboard.start_dashboard()
+        
+        # 5. 呼叫 ready 回調
+        if on_dashboard_ready:
+            cleanup = on_dashboard_ready(dashboard)
+            if cleanup:
+                cleanup_funcs.append(cleanup)
     
     # 檢查是否有啟動影片
     has_splash = os.path.exists("Splash.mp4")
     
     if has_splash:
-        # 建立並顯示啟動畫面
         splash = SplashScreen("Splash.mp4")
+        on_splash_finished.splash = splash
         
-        def show_dashboard():
-            """啟動畫面結束後顯示主畫面"""
-            splash.close()
-            if is_production:
-                dashboard.showFullScreen()
-            else:
-                # 開發環境使用視窗模式
-                dashboard.show()
-                print("提示: 開發環境使用視窗模式，可設定環境變數 QTDASHBOARD_FULLSCREEN=1 強制全螢幕")
+        splash.finished.connect(on_splash_finished)
         
-        # 連接信號
-        splash.finished.connect(show_dashboard)
-        
-        # 顯示啟動畫面
         if is_production:
             splash.showFullScreen()
         else:
-            # 開發環境啟動畫面也用視窗模式
             splash.resize(800, 600)
             splash.show()
     else:
-        # 沒有啟動影片，直接顯示儀表板
         print("未找到 Splash.mp4，跳過啟動畫面")
-        if is_production:
-            dashboard.showFullScreen()
-        else:
-            dashboard.show()
-            print("提示: 開發環境使用視窗模式，可設定環境變數 QTDASHBOARD_FULLSCREEN=1 強制全螢幕")
+        # 沒有 splash，直接執行啟動流程
+        on_splash_finished()
     
-    sys.exit(app.exec())
+    # 進入事件循環
+    try:
+        exit_code = app.exec()
+    except KeyboardInterrupt:
+        print("\n程式結束")
+        exit_code = 0
+    finally:
+        # 執行所有清理函數
+        for cleanup in cleanup_funcs:
+            try:
+                cleanup()
+            except Exception as e:
+                print(f"清理時發生錯誤: {e}")
+    
+    sys.exit(exit_code)
+
+
+def main():
+    """主程式進入點"""
+    run_dashboard()
 
 
 if __name__ == "__main__":

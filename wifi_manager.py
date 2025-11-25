@@ -11,7 +11,8 @@ import os
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QListWidget, QListWidgetItem, 
                              QLineEdit, QDialog, QMessageBox, QProgressBar,
-                             QCheckBox, QGridLayout)
+                             QCheckBox, QGridLayout, QScroller, QScrollerProperties,
+                             QAbstractItemView)
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread
 from PyQt6.QtGui import QFont
 
@@ -24,8 +25,8 @@ class VirtualKeyboard(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.caps_lock = False
-        self.key_buttons = []  # 保存所有按鍵的引用
-        self.caps_button = None  # Caps Lock 按鈕
+        self.key_buttons: list[QPushButton] = []  # 保存所有按鍵的引用
+        self.caps_button: QPushButton | None = None  # Caps Lock 按鈕
         self.setup_ui()
     
     def setup_ui(self):
@@ -150,6 +151,9 @@ class VirtualKeyboard(QWidget):
                     btn.setText(normal_key)
         
         # 更新 Caps Lock 按鈕樣式和文字
+        if self.caps_button is None:
+            return
+            
         if self.caps_lock:
             self.caps_button.setObjectName("capsActive")
             self.caps_button.setText("⇪ SHIFT ON")
@@ -158,8 +162,10 @@ class VirtualKeyboard(QWidget):
             self.caps_button.setText("⇪ Shift")
         
         # 刷新樣式
-        self.caps_button.style().unpolish(self.caps_button)
-        self.caps_button.style().polish(self.caps_button)
+        style = self.caps_button.style()
+        if style:
+            style.unpolish(self.caps_button)
+            style.polish(self.caps_button)
 
 
 class WiFiScanner(QThread):
@@ -471,6 +477,23 @@ class WiFiManagerWidget(QWidget):
         # 網路列表
         self.network_list = QListWidget()
         self.network_list.itemClicked.connect(self.on_network_selected)
+        
+        # 啟用觸控滾動
+        self.network_list.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.network_list.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        
+        # 使用 QScroller 啟用觸控拖動滾動
+        scroller = QScroller.scroller(self.network_list.viewport())
+        scroller.grabGesture(self.network_list.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
+        
+        # 設置滾動參數，讓觸控滾動更流暢
+        props = scroller.scrollerProperties()
+        props.setScrollMetric(QScrollerProperties.ScrollMetric.DragStartDistance, 0.002)
+        props.setScrollMetric(QScrollerProperties.ScrollMetric.OvershootDragResistanceFactor, 0.5)
+        props.setScrollMetric(QScrollerProperties.ScrollMetric.OvershootScrollDistanceFactor, 0.2)
+        props.setScrollMetric(QScrollerProperties.ScrollMetric.DecelerationFactor, 0.8)
+        scroller.setScrollerProperties(props)
+        
         left_layout.addWidget(self.network_list)
         
         # 進度條
@@ -633,7 +656,11 @@ class WiFiManagerWidget(QWidget):
                 print(f"測試模式：模擬連線到 {ssid}" + (f" (密碼: {password})" if password else ""))
                 import time
                 time.sleep(2)  # 模擬連線延遲
-                result = type('obj', (object,), {'returncode': 0, 'stderr': ''})()
+                
+                class MockResult:
+                    returncode = 0
+                    stderr = ''
+                result = MockResult()
             else:
                 # 先檢查是否已有此網路的連線設定
                 check_result = subprocess.run(

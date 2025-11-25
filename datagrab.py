@@ -9,12 +9,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.align import Align
 
-# PyQt6 Imports
-from PyQt6.QtWidgets import QApplication
+# PyQt6 Imports (只需要 Signal 相關)
 from PyQt6.QtCore import QObject, pyqtSignal
 
-# 引入你的儀表板類別
-from main import Dashboard, SplashScreen, is_production_environment 
+# 引入儀表板的統一啟動流程
+from main import run_dashboard
 
 # 配置日誌
 logging.basicConfig(
@@ -447,21 +446,13 @@ def main():
     
     bus = None
     db = None
-    t_receiver = None
-    t_query = None
     
     try:
         logger.info("=" * 50)
         logger.info("Luxgen M7 儀表板系統啟動 (Safe Mode)")
         logger.info("=" * 50)
         
-        # 1. 優先建立 Qt Application (這是使用 QObject/Signals 的前提)
-        app = QApplication(sys.argv)
-        
-        # 2. 建立信號物件
-        signals = WorkerSignals()
-        
-        # 3. 選擇並連接硬體
+        # 1. 選擇並連接硬體（必須在 run_dashboard 之前完成）
         port = select_serial_port()
         if not port:
             logger.error("未選擇 Serial 裝置，程式退出")
@@ -471,8 +462,6 @@ def main():
 
         try:
             logger.info("正在初始化 CAN Bus...")
-            # 設定 SLCAN 介面
-            # 注意: 這裡使用 slcan interface，需要 python-can 的 serial 支持
             bus = can.interface.Bus(
                 interface='slcan', 
                 channel=port, 
@@ -487,7 +476,6 @@ def main():
             return
         
         try:
-            # 載入 DBC
             logger.info("正在載入 DBC 檔案...")
             db = cantools.database.load_file('luxgen_m7_2009.dbc')
             logger.info(f"DBC 檔案已載入，共 {len(db.messages)} 個訊息定義")
@@ -495,66 +483,61 @@ def main():
             console.print("[red]DBC 檔案遺失！將無法解碼 CAN 訊號[/red]")
             return
 
-        # 4. 初始化介面並連接信號
+        # 2. 建立信號物件
+        signals = WorkerSignals()
+        
+        def setup_can_data_source(dashboard):
+            """設定 CAN Bus 資料來源 - 在 dashboard 準備好後呼叫"""
+            
+            # 連接信號到 Dashboard
+            signals.update_rpm.connect(dashboard.set_rpm)
+            signals.update_speed.connect(dashboard.set_speed)
+            signals.update_temp.connect(dashboard.set_temperature)
+            signals.update_fuel.connect(dashboard.set_fuel)
+            signals.update_gear.connect(dashboard.set_gear)
+            signals.update_turn_signal.connect(dashboard.set_turn_signal)
+            signals.update_door_status.connect(dashboard.set_door_status)
+            
+            # 啟動背景執行緒
+            logger.info("正在啟動背景執行緒...")
+            t_receiver = threading.Thread(
+                target=unified_receiver, 
+                args=(bus, db, signals), 
+                daemon=True, 
+                name="CAN-Receiver"
+            )
+            t_query = threading.Thread(
+                target=obd_query, 
+                args=(bus, signals), 
+                daemon=True, 
+                name="OBD-Query"
+            )
+            
+            t_receiver.start()
+            t_query.start()
+            
+            logger.info("儀表板運行中...")
+            
+            # 返回清理函數
+            def cleanup():
+                global stop_threads
+                logger.info("正在關閉系統...")
+                stop_threads = True
+                if bus:
+                    try:
+                        bus.shutdown()
+                    except:
+                        pass
+                console.print("[green]程式已安全結束[/green]")
+            
+            return cleanup
+        
+        # 3. 使用統一啟動流程
         console.print("[green]啟動儀表板前端...[/green]")
-        dashboard = Dashboard()
-        
-        # ★★★ 關鍵連接步驟 ★★★
-        signals.update_rpm.connect(dashboard.set_rpm)
-        signals.update_speed.connect(dashboard.set_speed)
-        signals.update_temp.connect(dashboard.set_temperature)
-        signals.update_fuel.connect(dashboard.set_fuel)
-        signals.update_gear.connect(dashboard.set_gear)
-        signals.update_turn_signal.connect(dashboard.set_turn_signal)
-        signals.update_door_status.connect(dashboard.set_door_status)
-        
-        # 檢測環境
-        is_production = is_production_environment()
-        
-        # 建立並顯示啟動畫面
-        splash = SplashScreen("Splash.mp4")
-        
-        def show_dashboard():
-            """啟動畫面結束後顯示主畫面"""
-            splash.close()
-            if is_production:
-                dashboard.showFullScreen()
-            else:
-                dashboard.show()
-        
-        # 連接信號
-        splash.finished.connect(show_dashboard)
-        
-        # 顯示啟動畫面
-        if is_production:
-            splash.showFullScreen()
-        else:
-            splash.resize(800, 600)
-            splash.show()
-
-        # 5. 啟動背景執行緒 (傳入 signals)
-        logger.info("正在啟動背景執行緒...")
-        t_receiver = threading.Thread(
-            target=unified_receiver, 
-            args=(bus, db, signals), 
-            daemon=True, 
-            name="CAN-Receiver"
+        run_dashboard(
+            window_title="Luxgen M7 儀表板 - CAN Bus",
+            setup_data_source=setup_can_data_source
         )
-        t_query = threading.Thread(
-            target=obd_query, 
-            args=(bus, signals), 
-            daemon=True, 
-            name="OBD-Query"
-        )
-        
-        t_receiver.start()
-        t_query.start()
-
-        # 6. 進入 Qt 事件循環 (這行會卡住主執行緒直到視窗關閉)
-        logger.info("儀表板運行中...")
-        exit_code = app.exec()
-        
-        sys.exit(exit_code)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]收到中斷信號[/yellow]")
@@ -562,19 +545,7 @@ def main():
     except Exception as e:
         console.print(f"[red]嚴重錯誤: {e}[/red]")
         logger.critical(f"主程式崩潰: {e}", exc_info=True)
-        
-    finally:
-        # 清理資源
-        logger.info("正在關閉系統...")
-        stop_threads = True
-        
-        if bus:
-            try:
-                bus.shutdown()
-            except:
-                pass
-        
-        console.print("[green]程式已安全結束[/green]")
+
 
 if __name__ == "__main__":
     main()

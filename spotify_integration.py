@@ -96,10 +96,12 @@ class SpotifyIntegration:
             if self.dashboard:
                 progress_ms = progress_data['progress_ms']
                 duration_ms = progress_data['duration_ms']
+                is_playing = progress_data.get('is_playing', True)
                 # 使用執行緒安全的方法更新
                 self.dashboard.update_spotify_progress(
                     progress_ms / 1000, 
-                    duration_ms / 1000
+                    duration_ms / 1000,
+                    is_playing
                 )
         except Exception as e:
             logger.error(f"更新播放進度失敗: {e}")
