@@ -2,7 +2,8 @@ import sys
 import os
 import math
 import platform
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton
+import time
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton, QDialog
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot, QUrl
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QPixmap, QMouseEvent
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -438,6 +439,839 @@ class DoorStatusCard(QWidget):
                 font-weight: bold;
                 background: transparent;
             """)
+
+
+class NumericKeypad(QDialog):
+    """虛擬數字鍵盤對話框"""
+    
+    def __init__(self, parent=None, current_value=0.0):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setModal(True)
+        self.result = None
+        self.current_input = str(int(current_value)) if current_value > 0 else ""
+        
+        # 設置固定大小
+        self.setFixedSize(400, 500)
+        
+        # 主容器
+        container = QWidget(self)
+        container.setGeometry(0, 0, 400, 500)
+        container.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2a2a35, stop:1 #1a1a25);
+                border-radius: 20px;
+                border: 3px solid #6af;
+            }
+        """)
+        
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # 標題
+        title = QLabel("輸入總里程")
+        title.setStyleSheet("""
+            color: #6af;
+            font-size: 20px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 顯示器
+        self.display = QLabel(self.current_input if self.current_input else "0")
+        self.display.setFixedHeight(60)
+        self.display.setStyleSheet("""
+            QLabel {
+                background: #1a1a25;
+                color: white;
+                font-size: 36px;
+                font-weight: bold;
+                border: 2px solid #4a4a55;
+                border-radius: 10px;
+                padding: 10px;
+            }
+        """)
+        self.display.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        
+        # 單位標籤
+        unit_label = QLabel("km")
+        unit_label.setStyleSheet("""
+            color: #888;
+            font-size: 14px;
+            background: transparent;
+        """)
+        unit_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        
+        # 按鈕網格
+        button_grid = QGridLayout()
+        button_grid.setSpacing(10)
+        
+        # 數字按鈕 1-9
+        for i in range(9):
+            btn = self.create_number_button(str(i + 1))
+            row = i // 3
+            col = i % 3
+            button_grid.addWidget(btn, row, col)
+        
+        # 第四行：0, BS
+        btn_0 = self.create_number_button("0")
+        button_grid.addWidget(btn_0, 3, 0, 1, 2)  # 占兩格
+        
+        btn_bs = self.create_function_button("⌫", self.backspace)
+        button_grid.addWidget(btn_bs, 3, 2)
+        
+        # 操作按鈕行
+        action_layout = QHBoxLayout()
+        action_layout.setSpacing(10)
+        
+        btn_cancel = QPushButton("取消")
+        btn_cancel.setFixedHeight(50)
+        btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cancel.setStyleSheet("""
+            QPushButton {
+                background-color: #555;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #666;
+            }
+            QPushButton:pressed {
+                background-color: #444;
+            }
+        """)
+        btn_cancel.clicked.connect(self.cancel)
+        
+        btn_ok = QPushButton("確定")
+        btn_ok.setFixedHeight(50)
+        btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_ok.setStyleSheet("""
+            QPushButton {
+                background-color: #6af;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5ad;
+            }
+            QPushButton:pressed {
+                background-color: #49c;
+            }
+        """)
+        btn_ok.clicked.connect(self.confirm)
+        
+        action_layout.addWidget(btn_cancel)
+        action_layout.addWidget(btn_ok)
+        
+        # 組合佈局
+        layout.addWidget(title)
+        layout.addWidget(self.display)
+        layout.addWidget(unit_label)
+        layout.addSpacing(10)
+        layout.addLayout(button_grid)
+        layout.addLayout(action_layout)
+    
+    def create_number_button(self, text):
+        """創建數字按鈕"""
+        btn = QPushButton(text)
+        btn.setFixedSize(110, 60)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3a3a45;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 24px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #4a4a55;
+            }
+            QPushButton:pressed {
+                background-color: #2a2a35;
+            }
+        """)
+        btn.clicked.connect(lambda: self.append_digit(text))
+        return btn
+    
+    def create_function_button(self, text, callback):
+        """創建功能按鈕"""
+        btn = QPushButton(text)
+        btn.setFixedSize(110, 60)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6a5acd;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 20px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #7a6add;
+            }
+            QPushButton:pressed {
+                background-color: #5a4abd;
+            }
+        """)
+        btn.clicked.connect(callback)
+        return btn
+    
+    def append_digit(self, digit):
+        """追加數字"""
+        if len(self.current_input) < 7:  # 限制最大7位數（9999999 km）
+            self.current_input += digit
+            self.display.setText(self.current_input if self.current_input else "0")
+    
+    def backspace(self):
+        """刪除最後一位"""
+        if self.current_input:
+            self.current_input = self.current_input[:-1]
+            self.display.setText(self.current_input if self.current_input else "0")
+    
+    def confirm(self):
+        """確認輸入"""
+        try:
+            self.result = float(self.current_input) if self.current_input else 0.0
+        except ValueError:
+            self.result = 0.0
+        self.close()
+    
+    def cancel(self):
+        """取消輸入"""
+        self.result = None
+        self.close()
+    
+    def get_value(self):
+        """獲取輸入值"""
+        return self.result
+
+
+class OdometerCard(QWidget):
+    """總里程表卡片 (Odometer) - 內嵌虛擬鍵盤"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(380, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # 總里程數據
+        self.total_distance = 0.0  # km
+        self.last_sync_time = None
+        
+        # 當前速度（由 Dashboard 物理心跳驅動里程計算）
+        self.current_speed = 0.0
+        
+        # 輸入狀態
+        self.current_input = ""
+        self.is_editing = False
+        
+        # 主佈局使用 StackedWidget 切換顯示/輸入模式
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        self.stack = QStackedWidget()
+        main_layout.addWidget(self.stack)
+        
+        # === 頁面 1: 顯示模式 ===
+        self.display_page = self.create_display_page()
+        self.stack.addWidget(self.display_page)
+        
+        # === 頁面 2: 輸入模式（虛擬鍵盤）===
+        self.input_page = self.create_input_page()
+        self.stack.addWidget(self.input_page)
+        
+        # 預設顯示模式
+        self.stack.setCurrentWidget(self.display_page)
+    
+    def create_display_page(self):
+        """創建顯示頁面"""
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(20)
+        
+        # 標題
+        title_label = QLabel("Odometer")
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 20px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # ODO 圖標
+        icon_label = QLabel("🚗")
+        icon_label.setStyleSheet("font-size: 60px; background: transparent;")
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 總里程顯示區域
+        odo_container = QWidget()
+        odo_container.setStyleSheet("""
+            QWidget {
+                background: rgba(30, 30, 40, 0.5);
+                border-radius: 15px;
+                border: 2px solid #2a2a35;
+            }
+        """)
+        odo_layout = QVBoxLayout(odo_container)
+        odo_layout.setContentsMargins(15, 15, 15, 15)
+        odo_layout.setSpacing(10)
+        
+        # 里程顯示
+        distance_layout = QHBoxLayout()
+        distance_layout.setSpacing(10)
+        
+        self.odo_distance_label = QLabel("0")
+        self.odo_distance_label.setStyleSheet("""
+            color: white;
+            font-size: 56px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        self.odo_distance_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        
+        unit_label = QLabel("km")
+        unit_label.setStyleSheet("""
+            color: #888;
+            font-size: 24px;
+            background: transparent;
+        """)
+        unit_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
+        
+        distance_layout.addStretch()
+        distance_layout.addWidget(self.odo_distance_label)
+        distance_layout.addWidget(unit_label)
+        distance_layout.addSpacing(10)
+        
+        # 同步時間顯示
+        self.sync_time_label = QLabel("未同步")
+        self.sync_time_label.setStyleSheet("""
+            color: #666;
+            font-size: 12px;
+            background: transparent;
+        """)
+        self.sync_time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        odo_layout.addLayout(distance_layout)
+        odo_layout.addWidget(self.sync_time_label)
+        
+        # 同步按鈕
+        sync_btn = QPushButton("同步里程")
+        sync_btn.setFixedSize(200, 45)
+        sync_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        sync_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(100, 150, 255, 0.3);
+                color: #6af;
+                border: 2px solid #6af;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(100, 150, 255, 0.5);
+            }
+            QPushButton:pressed {
+                background-color: rgba(100, 150, 255, 0.7);
+            }
+        """)
+        sync_btn.clicked.connect(self.show_keypad)
+        
+        # 組合佈局
+        layout.addWidget(title_label)
+        layout.addWidget(icon_label)
+        layout.addWidget(odo_container)
+        layout.addSpacing(10)
+        layout.addWidget(sync_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addStretch()
+        
+        return page
+    
+    def create_input_page(self):
+        """創建輸入頁面（虛擬鍵盤）"""
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
+        
+        # 標題
+        title = QLabel("輸入總里程")
+        title.setStyleSheet("""
+            color: #6af;
+            font-size: 18px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 顯示器
+        self.input_display = QLabel("0")
+        self.input_display.setFixedHeight(50)
+        self.input_display.setStyleSheet("""
+            QLabel {
+                background: #1a1a25;
+                color: white;
+                font-size: 32px;
+                font-weight: bold;
+                border: 2px solid #4a4a55;
+                border-radius: 8px;
+                padding: 5px 10px;
+            }
+        """)
+        self.input_display.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        
+        # 單位標籤
+        unit_label = QLabel("km")
+        unit_label.setStyleSheet("""
+            color: #888;
+            font-size: 12px;
+            background: transparent;
+        """)
+        unit_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        
+        # 按鈕網格
+        button_grid = QGridLayout()
+        button_grid.setSpacing(8)
+        
+        # 數字按鈕 1-9
+        for i in range(9):
+            btn = self.create_number_button(str(i + 1))
+            row = i // 3
+            col = i % 3
+            button_grid.addWidget(btn, row, col)
+        
+        # 第四行：0, BS
+        btn_0 = self.create_number_button("0")
+        button_grid.addWidget(btn_0, 3, 0, 1, 2)  # 占兩格
+        
+        btn_bs = self.create_function_button("⌫", self.backspace)
+        button_grid.addWidget(btn_bs, 3, 2)
+        
+        # 操作按鈕行
+        action_layout = QHBoxLayout()
+        action_layout.setSpacing(8)
+        
+        btn_cancel = QPushButton("取消")
+        btn_cancel.setFixedHeight(40)
+        btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cancel.setStyleSheet("""
+            QPushButton {
+                background-color: #555;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #666;
+            }
+            QPushButton:pressed {
+                background-color: #444;
+            }
+        """)
+        btn_cancel.clicked.connect(self.cancel_input)
+        
+        btn_ok = QPushButton("確定")
+        btn_ok.setFixedHeight(40)
+        btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_ok.setStyleSheet("""
+            QPushButton {
+                background-color: #6af;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5ad;
+            }
+            QPushButton:pressed {
+                background-color: #49c;
+            }
+        """)
+        btn_ok.clicked.connect(self.confirm_input)
+        
+        action_layout.addWidget(btn_cancel)
+        action_layout.addWidget(btn_ok)
+        
+        # 組合佈局
+        layout.addWidget(title)
+        layout.addWidget(self.input_display)
+        layout.addWidget(unit_label)
+        layout.addSpacing(5)
+        layout.addLayout(button_grid)
+        layout.addLayout(action_layout)
+        
+        return page
+    
+    def create_number_button(self, text):
+        """創建數字按鈕"""
+        btn = QPushButton(text)
+        btn.setFixedSize(108, 50)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3a3a45;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 20px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #4a4a55;
+            }
+            QPushButton:pressed {
+                background-color: #2a2a35;
+            }
+        """)
+        btn.clicked.connect(lambda: self.append_digit(text))
+        return btn
+    
+    def create_function_button(self, text, callback):
+        """創建功能按鈕"""
+        btn = QPushButton(text)
+        btn.setFixedSize(108, 50)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6a5acd;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #7a6add;
+            }
+            QPushButton:pressed {
+                background-color: #5a4abd;
+            }
+        """)
+        btn.clicked.connect(callback)
+        return btn
+    
+    def show_keypad(self):
+        """顯示虛擬鍵盤並禁用滑動"""
+        self.current_input = str(int(self.total_distance)) if self.total_distance > 0 else ""
+        self.input_display.setText(self.current_input if self.current_input else "0")
+        self.is_editing = True
+        self.stack.setCurrentWidget(self.input_page)
+        
+        # 通知 Dashboard 禁用滑動
+        dashboard = self.get_dashboard()
+        if dashboard:
+            dashboard.set_swipe_enabled(False)
+    
+    def append_digit(self, digit):
+        """追加數字"""
+        if len(self.current_input) < 7:  # 限制最大7位數
+            self.current_input += digit
+            self.input_display.setText(self.current_input if self.current_input else "0")
+    
+    def backspace(self):
+        """刪除最後一位"""
+        if self.current_input:
+            self.current_input = self.current_input[:-1]
+            self.input_display.setText(self.current_input if self.current_input else "0")
+    
+    def confirm_input(self):
+        """確認輸入"""
+        try:
+            self.total_distance = float(self.current_input) if self.current_input else 0.0
+        except ValueError:
+            self.total_distance = 0.0
+        
+        self.odo_distance_label.setText(f"{int(self.total_distance)}")
+        self.last_sync_time = time.time()
+        self.update_sync_time_display()
+        print(f"里程表已同步: {int(self.total_distance)} km")
+        
+        self.hide_keypad()
+    
+    def cancel_input(self):
+        """取消輸入"""
+        self.hide_keypad()
+    
+    def hide_keypad(self):
+        """隱藏虛擬鍵盤並恢復滑動"""
+        self.is_editing = False
+        self.stack.setCurrentWidget(self.display_page)
+        
+        # 通知 Dashboard 恢復滑動
+        dashboard = self.get_dashboard()
+        if dashboard:
+            dashboard.set_swipe_enabled(True)
+    
+    def get_dashboard(self):
+        """獲取 Dashboard 實例"""
+        parent = self.parent()
+        while parent:
+            if isinstance(parent, Dashboard):
+                return parent
+            parent = parent.parent()
+        return None
+    
+    def add_distance(self, distance_km):
+        """由 Dashboard 物理心跳呼叫，累加里程"""
+        self.total_distance += distance_km
+        # 更新顯示（不帶小數點，模擬真實里程表）
+        self.odo_distance_label.setText(f"{int(self.total_distance)}")
+    
+    def update_sync_time_display(self):
+        """更新同步時間顯示"""
+        from datetime import datetime
+        
+        if self.last_sync_time:
+            sync_dt = datetime.fromtimestamp(self.last_sync_time)
+            time_str = sync_dt.strftime("%Y-%m-%d %H:%M")
+            self.sync_time_label.setText(f"上次同步: {time_str}")
+        else:
+            self.sync_time_label.setText("未同步")
+
+
+class TripCard(QWidget):
+    """Trip 里程卡片 - 顯示 Trip 1 和 Trip 2 的里程數、reset按鈕和reset時間"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(380, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # Trip 數據
+        self.trip1_distance = 0.0  # km
+        self.trip2_distance = 0.0  # km
+        self.trip1_reset_time = None
+        self.trip2_reset_time = None
+        
+        # 當前速度（由 Dashboard 物理心跳驅動里程計算）
+        self.current_speed = 0.0
+        
+        # Main layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # 標題
+        title_label = QLabel("Trip Computer")
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 18px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # === Trip 1 區域 ===
+        trip1_container = self.create_trip_widget(
+            "Trip 1", 
+            is_trip1=True
+        )
+        
+        # === Trip 2 區域 ===
+        trip2_container = self.create_trip_widget(
+            "Trip 2", 
+            is_trip1=False
+        )
+        
+        # 組合佈局
+        layout.addWidget(title_label)
+        layout.addSpacing(10)
+        layout.addWidget(trip1_container)
+        layout.addSpacing(5)
+        layout.addWidget(trip2_container)
+        layout.addStretch()
+    
+    def create_trip_widget(self, title, is_trip1=True):
+        """創建單個Trip顯示區域"""
+        container = QWidget()
+        container.setFixedHeight(140)
+        container.setStyleSheet("""
+            QWidget {
+                background: rgba(30, 30, 40, 0.5);
+                border-radius: 15px;
+                border: 2px solid #2a2a35;
+            }
+        """)
+        
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(15, 10, 15, 10)
+        layout.setSpacing(5)
+        
+        # 標題和Reset按鈕行
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)
+        
+        trip_title = QLabel(title)
+        trip_title.setStyleSheet("""
+            color: #6af;
+            font-size: 16px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        
+        reset_btn = QPushButton("Reset")
+        reset_btn.setFixedSize(70, 28)
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(100, 150, 255, 0.3);
+                color: #6af;
+                border: 1px solid #6af;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(100, 150, 255, 0.5);
+            }
+            QPushButton:pressed {
+                background-color: rgba(100, 150, 255, 0.7);
+            }
+        """)
+        
+        if is_trip1:
+            reset_btn.clicked.connect(self.reset_trip1)
+        else:
+            reset_btn.clicked.connect(self.reset_trip2)
+        
+        header_layout.addWidget(trip_title)
+        header_layout.addStretch()
+        header_layout.addWidget(reset_btn)
+        
+        # 里程顯示
+        distance_layout = QHBoxLayout()
+        distance_layout.setSpacing(5)
+        
+        if is_trip1:
+            self.trip1_distance_label = QLabel("0.0")
+            distance_label = self.trip1_distance_label
+        else:
+            self.trip2_distance_label = QLabel("0.0")
+            distance_label = self.trip2_distance_label
+            
+        distance_label.setStyleSheet("""
+            color: white;
+            font-size: 48px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        distance_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        
+        unit_label = QLabel("km")
+        unit_label.setStyleSheet("""
+            color: #888;
+            font-size: 20px;
+            background: transparent;
+        """)
+        unit_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
+        
+        distance_layout.addStretch()
+        distance_layout.addWidget(distance_label)
+        distance_layout.addWidget(unit_label)
+        distance_layout.addSpacing(10)
+        
+        # Reset時間顯示
+        if is_trip1:
+            self.trip1_reset_label = QLabel("Never reset")
+            reset_time_label = self.trip1_reset_label
+        else:
+            self.trip2_reset_label = QLabel("Never reset")
+            reset_time_label = self.trip2_reset_label
+            
+        reset_time_label.setStyleSheet("""
+            color: #666;
+            font-size: 11px;
+            background: transparent;
+        """)
+        reset_time_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        
+        # 組合佈局
+        layout.addLayout(header_layout)
+        layout.addSpacing(5)
+        layout.addLayout(distance_layout)
+        layout.addWidget(reset_time_label)
+        
+        return container
+    
+    def add_distance(self, distance_km):
+        """由 Dashboard 物理心跳呼叫，累加里程"""
+        self.trip1_distance += distance_km
+        self.trip2_distance += distance_km
+        
+        # 更新顯示
+        self.trip1_distance_label.setText(f"{self.trip1_distance:.1f}")
+        self.trip2_distance_label.setText(f"{self.trip2_distance:.1f}")
+    
+    def reset_trip1(self):
+        """重置 Trip 1"""
+        self.trip1_distance = 0.0
+        self.trip1_distance_label.setText("0.0")
+        self.trip1_reset_time = time.time()
+        self.update_reset_time_display(True)
+        print("Trip 1 已重置")
+    
+    def reset_trip2(self):
+        """重置 Trip 2"""
+        self.trip2_distance = 0.0
+        self.trip2_distance_label.setText("0.0")
+        self.trip2_reset_time = time.time()
+        self.update_reset_time_display(False)
+        print("Trip 2 已重置")
+    
+    def update_reset_time_display(self, is_trip1=True):
+        """更新reset時間顯示"""
+        from datetime import datetime
+        
+        if is_trip1:
+            if self.trip1_reset_time:
+                reset_dt = datetime.fromtimestamp(self.trip1_reset_time)
+                time_str = reset_dt.strftime("%Y-%m-%d %H:%M")
+                self.trip1_reset_label.setText(f"Reset: {time_str}")
+            else:
+                self.trip1_reset_label.setText("Never reset")
+        else:
+            if self.trip2_reset_time:
+                reset_dt = datetime.fromtimestamp(self.trip2_reset_time)
+                time_str = reset_dt.strftime("%Y-%m-%d %H:%M")
+                self.trip2_reset_label.setText(f"Reset: {time_str}")
+            else:
+                self.trip2_reset_label.setText("Never reset")
 
 
 class MarqueeLabel(QLabel):
@@ -1686,20 +2520,62 @@ class Dashboard(QWidget):
             start_angle=225, span_angle=270,
             tick_color=QColor(100, 150, 255),
             needle_color=QColor(255, 100, 100),  # 紅色指針
-            text_scale=1.4
+            text_scale=1.2
         )
         self.rpm_gauge = AnalogGauge(0, 8, rpm_style, title="RPM x1000", red_zone_start=6.0)
-        self.rpm_gauge.setFixedSize(450, 450)
+        self.rpm_gauge.setFixedSize(420, 420)
         
-        # 右側：油量表 / 音樂卡片 / 門狀態卡片 (可切換) - 帶容器
+        # 右側：雙層架構 - 列 (rows) 包含多個卡片 (cards)
         right_container = QWidget()
-        right_container.setFixedSize(380, 420)  # 稍微增加高度以容納指示器
-        right_layout = QVBoxLayout(right_container)
+        right_container.setFixedSize(420, 420)  # 增加寬度以容納左側指示器
+        right_layout = QHBoxLayout(right_container)  # 改為水平布局
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(5)
         
-        self.right_stack = QStackedWidget()
-        self.right_stack.setFixedSize(380, 380)
+        # === 左側：列指示器（垂直居中）===
+        row_indicator_container = QWidget()
+        row_indicator_container.setFixedWidth(30)
+        row_indicator_container.setStyleSheet("background: transparent;")
+        row_indicator_wrapper = QVBoxLayout(row_indicator_container)
+        row_indicator_wrapper.setContentsMargins(0, 0, 0, 0)
+        row_indicator_wrapper.setSpacing(0)
+        
+        # 上方彈性空間
+        row_indicator_wrapper.addStretch()
+        
+        # 列指示器（垂直排列）
+        row_dots_layout = QVBoxLayout()
+        row_dots_layout.setSpacing(10)
+        row_dots_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.row_indicators = []
+        for i in range(2):  # 2 列
+            dot = QLabel("●")
+            dot.setFixedSize(12, 12)
+            dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            dot.setStyleSheet("color: #444; font-size: 18px;")
+            self.row_indicators.append(dot)
+            row_dots_layout.addWidget(dot)
+        
+        row_indicator_wrapper.addLayout(row_dots_layout)
+        
+        # 下方彈性空間
+        row_indicator_wrapper.addStretch()
+        
+        # === 中間：卡片區域 ===
+        cards_container = QWidget()
+        cards_container.setFixedSize(380, 420)
+        cards_layout = QVBoxLayout(cards_container)
+        cards_layout.setContentsMargins(0, 0, 0, 0)
+        cards_layout.setSpacing(5)
+        
+        # === 第一層：列堆疊 (上下切換) ===
+        self.row_stack = QStackedWidget()
+        self.row_stack.setFixedSize(380, 380)
+        
+        # === 第一列：油量表 / 音樂卡片 / 門狀態卡片 ===
+        row1_cards = QStackedWidget()
+        row1_cards.setFixedSize(380, 380)
         
         # 油量表
         fuel_style = GaugeStyle(
@@ -1709,7 +2585,6 @@ class Dashboard(QWidget):
             needle_color=QColor(255, 200, 100),  # 橙黃色（油料顏色）
             text_scale=1.0
         )
-        # 油量標籤：E(空) - 1/2 - F(滿)
         fuel_labels = {0: "E", 50: "½", 100: "F"}
         self.fuel_gauge = AnalogGauge(0, 100, fuel_style, labels=fuel_labels, title="FUEL")
         self.fuel_gauge.setFixedSize(380, 380)
@@ -1721,49 +2596,69 @@ class Dashboard(QWidget):
         # 門狀態卡片
         self.door_card = DoorStatusCard()
         
-        # 添加到堆疊
-        self.right_stack.addWidget(self.fuel_gauge)  # index 0
-        self.right_stack.addWidget(self.music_card)  # index 1
-        self.right_stack.addWidget(self.door_card)   # index 2
-        self.right_stack.setCurrentIndex(0)  # 預設顯示油量表
+        row1_cards.addWidget(self.fuel_gauge)  # row1_index 0
+        row1_cards.addWidget(self.music_card)  # row1_index 1
+        row1_cards.addWidget(self.door_card)   # row1_index 2
         
-        # 滑動指示器
-        indicator_widget = QWidget()
-        indicator_widget.setFixedHeight(35)
-        indicator_widget.setStyleSheet("background: transparent;")
-        indicator_layout = QHBoxLayout(indicator_widget)
-        indicator_layout.setContentsMargins(0, 10, 0, 0)
-        indicator_layout.setSpacing(8)
+        # === 第二列：Trip 卡片 / ODO 卡片 ===
+        row2_cards = QStackedWidget()
+        row2_cards.setFixedSize(380, 380)
         
-        # 創建圓點指示器
-        self.indicators = []
-        for i in range(3):  # 3 張卡片
+        # Trip 卡片
+        self.trip_card = TripCard()
+        row2_cards.addWidget(self.trip_card)  # row2_index 0
+        
+        # ODO 卡片
+        self.odo_card = OdometerCard()
+        row2_cards.addWidget(self.odo_card)  # row2_index 1
+        
+        # 添加列到列堆疊
+        self.row_stack.addWidget(row1_cards)  # row_index 0
+        self.row_stack.addWidget(row2_cards)  # row_index 1
+        
+        # === 底部：卡片指示器（水平排列）===
+        card_indicator_widget = QWidget()
+        card_indicator_widget.setFixedHeight(35)
+        card_indicator_widget.setStyleSheet("background: transparent;")
+        card_indicator_layout = QHBoxLayout(card_indicator_widget)
+        card_indicator_layout.setContentsMargins(0, 5, 0, 0)
+        card_indicator_layout.setSpacing(8)
+        
+        self.card_indicators = []
+        # 第一列有 3 張卡片
+        for i in range(3):
             dot = QLabel("●")
             dot.setFixedSize(12, 12)
             dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            dot.setStyleSheet("""
-                color: #444;
-                font-size: 20px;
-            """)
-            self.indicators.append(dot)
-            indicator_layout.addWidget(dot)
+            dot.setStyleSheet("color: #444; font-size: 20px;")
+            self.card_indicators.append(dot)
+            card_indicator_layout.addWidget(dot)
+        
+        # 組合卡片區域的垂直布局
+        cards_layout.addWidget(self.row_stack)
+        cards_layout.addWidget(card_indicator_widget, alignment=Qt.AlignmentFlag.AlignCenter)
         
         # 設置初始選中狀態
-        self.indicators[0].setStyleSheet("color: #6af; font-size: 20px;")
+        self.row_indicators[0].setStyleSheet("color: #6af; font-size: 18px;")
+        self.card_indicators[0].setStyleSheet("color: #6af; font-size: 20px;")
         
-        # 組合佈局
-        right_layout.addWidget(self.right_stack)
-        right_layout.addWidget(indicator_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+        # 組合整體佈局：左側列指示器 + 中間卡片區域
+        right_layout.addWidget(row_indicator_container)
+        right_layout.addWidget(cards_container)
         
-        # 當前卡片索引
-        self.current_card_index = 0
-        self.total_cards = 3
+        # === 狀態變數 ===
+        self.current_row_index = 0  # 當前列索引
+        self.current_card_index = 0  # 當前卡片索引
+        self.rows = [row1_cards, row2_cards]  # 列的引用
+        self.row_card_counts = [3, 2]  # 每列的卡片數量
         
         # 觸控滑動相關
         self.touch_start_pos = None
         self.touch_start_time = None
         self.swipe_threshold = 50  # 滑動閾值（像素）
         self.is_swiping = False
+        self.swipe_direction = None  # 'horizontal' or 'vertical'
+        self.swipe_enabled = True  # 滑動是否啟用（輸入時禁用）
 
         # 中央數位速度顯示區
         center_panel = QWidget()
@@ -1842,6 +2737,12 @@ class Dashboard(QWidget):
         self.door_auto_switch_timer.setSingleShot(True)
         self.door_auto_switch_timer.timeout.connect(self._auto_switch_back_from_door)
         self.previous_card_index = 0  # 記錄切換前的卡片索引
+        
+        # 物理心跳 Timer（每 100ms 觸發一次，持續累積里程）
+        self.physics_timer = QTimer()
+        self.physics_timer.timeout.connect(self._physics_tick)
+        self.physics_timer.start(100)  # 100ms = 0.1 秒
+        self.last_physics_time = time.time()
         
         self.update_display()
         
@@ -2034,23 +2935,24 @@ class Dashboard(QWidget):
         # 更新門狀態
         self.door_card.set_door_status(door, is_closed)
         
+        # 門卡片位於第一列的第三張 (row=0, card=2)
+        DOOR_ROW_INDEX = 0
         DOOR_CARD_INDEX = 2
         
         # 當有門狀態變更時，自動切換到門狀態卡片
-        if self.current_card_index != DOOR_CARD_INDEX:
-            # 記錄切換前的卡片索引
+        if not (self.current_row_index == DOOR_ROW_INDEX and self.current_card_index == DOOR_CARD_INDEX):
+            # 記錄切換前的位置
+            self.previous_row_index = self.current_row_index
             self.previous_card_index = self.current_card_index
             
             # 切換到門狀態卡片
+            self.current_row_index = DOOR_ROW_INDEX
             self.current_card_index = DOOR_CARD_INDEX
-            self.right_stack.setCurrentIndex(DOOR_CARD_INDEX)
+            self.row_stack.setCurrentIndex(DOOR_ROW_INDEX)
+            self.rows[DOOR_ROW_INDEX].setCurrentIndex(DOOR_CARD_INDEX)
             
             # 更新指示器
-            for i, indicator in enumerate(self.indicators):
-                if i == DOOR_CARD_INDEX:
-                    indicator.setStyleSheet("color: #6af; font-size: 20px;")
-                else:
-                    indicator.setStyleSheet("color: #444; font-size: 20px;")
+            self.update_indicators()
             
             print(f"檢測到門狀態變更 ({door} = {'關閉' if is_closed else '開啟'})，自動切換到門狀態卡片")
         
@@ -2072,21 +2974,22 @@ class Dashboard(QWidget):
     
     def _auto_switch_back_from_door(self):
         """自動從門狀態卡片切回之前的卡片"""
+        DOOR_ROW_INDEX = 0
         DOOR_CARD_INDEX = 2
-        if self.current_card_index == DOOR_CARD_INDEX:
-            # 切回之前的卡片
+        
+        if self.current_row_index == DOOR_ROW_INDEX and self.current_card_index == DOOR_CARD_INDEX:
+            # 切回之前的位置
+            self.current_row_index = self.previous_row_index
             self.current_card_index = self.previous_card_index
-            self.right_stack.setCurrentIndex(self.previous_card_index)
+            self.row_stack.setCurrentIndex(self.previous_row_index)
+            self.rows[self.previous_row_index].setCurrentIndex(self.previous_card_index)
             
             # 更新指示器
-            for i, indicator in enumerate(self.indicators):
-                if i == self.previous_card_index:
-                    indicator.setStyleSheet("color: #6af; font-size: 20px;")
-                else:
-                    indicator.setStyleSheet("color: #444; font-size: 20px;")
+            self.update_indicators()
             
+            row_names = ["第一列", "第二列"]
             card_names = ["油量表", "音樂播放器", "門狀態"]
-            print(f"所有門已關閉，自動切回 {card_names[self.previous_card_index]}")
+            print(f"所有門已關閉，自動切回 {row_names[self.previous_row_index]} - {card_names[self.previous_card_index]}")
     
     # === Spotify 執行緒安全接口 ===
     def update_spotify_track(self, title, artist, album=""):
@@ -2106,7 +3009,31 @@ class Dashboard(QWidget):
     def _slot_set_speed(self, speed):
         """Slot: 在主執行緒中更新速度顯示"""
         self.speed = max(0, min(200, speed))
+        # 里程計算已改由 _physics_tick() 驅動，這裡只需記錄速度
+        self.trip_card.current_speed = speed
+        self.odo_card.current_speed = speed
         self.update_display()
+    
+    def _physics_tick(self):
+        """物理心跳：每 100ms 根據當前速度累積里程"""
+        current_time = time.time()
+        time_delta = current_time - self.last_physics_time
+        self.last_physics_time = current_time
+        
+        # 安全檢查：忽略異常的時間間隔（例如系統休眠後喚醒）
+        if time_delta <= 0 or time_delta > 1.0:
+            return
+        
+        # 使用當前速度計算里程
+        current_speed = self.speed
+        if current_speed > 0:
+            # 距離 = 速度 * 時間 (km/h * hours = km)
+            distance_increment = (current_speed / 3600.0) * time_delta
+            
+            # 更新 Trip 卡片里程
+            self.trip_card.add_distance(distance_increment)
+            # 更新 ODO 卡片里程
+            self.odo_card.add_distance(distance_increment)
     
     @pyqtSlot(float)
     def _slot_set_rpm(self, rpm):
@@ -2183,9 +3110,38 @@ class Dashboard(QWidget):
         if hasattr(self, 'music_card'):
             self.music_card.set_album_art_from_pil(pil_image)
 
+    def update_indicators(self):
+        """更新所有指示器的狀態"""
+        # 更新列指示器
+        for i, indicator in enumerate(self.row_indicators):
+            if i == self.current_row_index:
+                indicator.setStyleSheet("color: #6af; font-size: 18px;")
+            else:
+                indicator.setStyleSheet("color: #444; font-size: 18px;")
+        
+        # 更新卡片指示器（根據當前列的卡片數量）
+        card_count = self.row_card_counts[self.current_row_index]
+        for i, indicator in enumerate(self.card_indicators):
+            if i < card_count:
+                indicator.show()
+                if i == self.current_card_index:
+                    indicator.setStyleSheet("color: #6af; font-size: 20px;")
+                else:
+                    indicator.setStyleSheet("color: #444; font-size: 20px;")
+            else:
+                indicator.hide()  # 隱藏多餘的指示器
+    
     def mousePressEvent(self, event):
         """觸控/滑鼠按下事件"""
         pos = event.position().toPoint()
+        
+        # 如果滑動被禁用，只處理控制面板
+        if not self.swipe_enabled:
+            # 檢查是否在控制面板區域
+            if self.panel_visible and self.control_panel.geometry().contains(pos):
+                self.panel_touch_start = pos
+                self.panel_drag_active = True
+            return
         
         # 檢查是否在控制面板區域（如果面板已展開）
         if self.panel_visible and self.control_panel.geometry().contains(pos):
@@ -2201,13 +3157,14 @@ class Dashboard(QWidget):
             return
         
         # 檢查是否在右側區域（卡片切換）
-        right_stack_global = self.right_stack.mapToGlobal(QPoint(0, 0))
-        right_stack_rect = self.right_stack.geometry()
-        right_stack_rect.moveTopLeft(right_stack_global)
+        row_stack_global = self.row_stack.mapToGlobal(QPoint(0, 0))
+        row_stack_rect = self.row_stack.geometry()
+        row_stack_rect.moveTopLeft(row_stack_global)
         
-        if right_stack_rect.contains(event.globalPosition().toPoint()):
+        if row_stack_rect.contains(event.globalPosition().toPoint()):
             self.touch_start_pos = event.position().toPoint()
             self.is_swiping = True
+            self.swipe_direction = None
             import time
             self.touch_start_time = time.time()
     
@@ -2240,13 +3197,28 @@ class Dashboard(QWidget):
             # 計算滑動距離
             delta = event.position().toPoint() - self.touch_start_pos
             
-            # 顯示視覺回饋（可選）
-            if abs(delta.x()) > 10:
-                # 這裡可以添加拖曳視覺效果
-                pass
+            # 判斷滑動方向（只在第一次超過閾值時決定）
+            if self.swipe_direction is None:
+                if abs(delta.x()) > 15 or abs(delta.y()) > 15:
+                    if abs(delta.x()) > abs(delta.y()):
+                        self.swipe_direction = 'horizontal'
+                    else:
+                        self.swipe_direction = 'vertical'
+    
+    def set_swipe_enabled(self, enabled):
+        """設置滑動是否啟用"""
+        self.swipe_enabled = enabled
+        if not enabled:
+            # 禁用滑動時重置狀態
+            self.touch_start_pos = None
+            self.is_swiping = False
     
     def mouseReleaseEvent(self, event):
         """觸控/滑鼠釋放事件"""
+        # 如果滑動被禁用，忽略事件
+        if not self.swipe_enabled:
+            return
+        
         # 處理控制面板拖拽結束
         if self.panel_drag_active and self.panel_touch_start:
             pos = event.position().toPoint()
@@ -2283,21 +3255,57 @@ class Dashboard(QWidget):
             end_pos = event.position().toPoint()
             delta = end_pos - self.touch_start_pos
             
-            # 判斷是否為有效滑動
-            if abs(delta.x()) > self.swipe_threshold:
-                if delta.x() > 0:
-                    # 向右滑動 - 切換到上一張
-                    self.switch_card(-1)
-                else:
-                    # 向左滑動 - 切換到下一張
-                    self.switch_card(1)
+            # 根據滑動方向處理
+            if self.swipe_direction == 'horizontal':
+                # 左右滑動 - 切換卡片
+                if abs(delta.x()) > self.swipe_threshold:
+                    if delta.x() > 0:
+                        # 向右滑動 - 切換到上一張卡片
+                        self.switch_card(-1)
+                    else:
+                        # 向左滑動 - 切換到下一張卡片
+                        self.switch_card(1)
+            elif self.swipe_direction == 'vertical':
+                # 上下滑動 - 切換列
+                if abs(delta.y()) > self.swipe_threshold:
+                    if delta.y() > 0:
+                        # 向下滑動 - 切換到上一列
+                        self.switch_row(-1)
+                    else:
+                        # 向上滑動 - 切換到下一列
+                        self.switch_row(1)
             
             # 重置狀態
             self.touch_start_pos = None
             self.is_swiping = False
+            self.swipe_direction = None
+    
+    def switch_row(self, direction):
+        """切換列
+        Args:
+            direction: 1 為下一列，-1 為上一列
+        """
+        # 停止門狀態自動回退計時器（因為使用者手動切換）
+        if hasattr(self, 'door_auto_switch_timer'):
+            self.door_auto_switch_timer.stop()
+        
+        total_rows = len(self.rows)
+        self.current_row_index = (self.current_row_index + direction) % total_rows
+        self.row_stack.setCurrentIndex(self.current_row_index)
+        
+        # 切換列時，重置卡片索引為該列的第一張
+        self.current_card_index = 0
+        self.rows[self.current_row_index].setCurrentIndex(0)
+        
+        # 更新指示器
+        self.update_indicators()
+        
+        # 顯示提示
+        row_names = ["第一列 (油量/音樂/門)", "第二列 (Trip/ODO)"]
+        print(f"切換到: {row_names[self.current_row_index]}")
     
     def switch_card(self, direction):
-        """切換卡片
+        """切換當前列的卡片
         Args:
             direction: 1 為下一張，-1 為上一張
         """
@@ -2305,29 +3313,41 @@ class Dashboard(QWidget):
         if hasattr(self, 'door_auto_switch_timer'):
             self.door_auto_switch_timer.stop()
         
-        self.current_card_index = (self.current_card_index + direction) % self.total_cards
-        self.right_stack.setCurrentIndex(self.current_card_index)
+        # 獲取當前列的卡片總數
+        current_row_cards = self.row_card_counts[self.current_row_index]
+        self.current_card_index = (self.current_card_index + direction) % current_row_cards
+        self.rows[self.current_row_index].setCurrentIndex(self.current_card_index)
         
         # 更新指示器
-        for i, indicator in enumerate(self.indicators):
-            if i == self.current_card_index:
-                indicator.setStyleSheet("color: #6af; font-size: 20px;")  # 選中：藍色
-            else:
-                indicator.setStyleSheet("color: #444; font-size: 20px;")  # 未選中：灰色
+        self.update_indicators()
         
         # 顯示提示
-        card_names = ["油量表", "音樂播放器", "門狀態"]
-        print(f"切換到: {card_names[self.current_card_index]}")
+        row1_card_names = ["油量表", "音樂播放器", "門狀態"]
+        row2_card_names = ["Trip卡片", "ODO卡片"]
+        all_card_names = [row1_card_names, row2_card_names]
+        
+        card_name = all_card_names[self.current_row_index][self.current_card_index]
+        print(f"切換到: {card_name}")
     
     def wheelEvent(self, event):
         """滑鼠滾輪切換右側卡片（桌面使用）"""
         # 檢查滑鼠是否在右側區域
-        if self.right_stack.geometry().contains(event.position().toPoint()):
+        if self.row_stack.geometry().contains(event.position().toPoint()):
             delta = event.angleDelta().y()
-            if delta > 0:  # 向上滾動
-                self.switch_card(-1)
-            else:  # 向下滾動
-                self.switch_card(1)
+            modifiers = event.modifiers()
+            
+            if modifiers & Qt.KeyboardModifier.ShiftModifier:
+                # Shift + 滾輪：切換列
+                if delta > 0:  # 向上滾動
+                    self.switch_row(-1)
+                else:  # 向下滾動
+                    self.switch_row(1)
+            else:
+                # 普通滾輪：切換卡片
+                if delta > 0:  # 向上滾動
+                    self.switch_card(-1)
+                else:  # 向下滾動
+                    self.switch_card(1)
     
     def keyPressEvent(self, event):
         """鍵盤模擬控制"""
@@ -2347,8 +3367,15 @@ class Dashboard(QWidget):
             self.show_wifi_manager()
             return
         
+        # 上下方向鍵切換列
+        if key == Qt.Key.Key_Up:
+            self.switch_row(-1)
+            return
+        elif key == Qt.Key.Key_Down:
+            self.switch_row(1)
+            return
         # 左右方向鍵切換卡片
-        if key == Qt.Key.Key_Left:
+        elif key == Qt.Key.Key_Left:
             self.switch_card(-1)
             return
         elif key == Qt.Key.Key_Right:
