@@ -5,6 +5,8 @@ import platform
 import time
 import json
 from pathlib import Path
+from functools import wraps
+from collections import deque
 
 # 抑制 Qt 多媒體 FFmpeg 音訊格式解析警告
 os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=false')
@@ -21,9 +23,177 @@ from spotify_auth import SpotifyAuthManager
 from spotify_qr_auth import SpotifyQRAuthDialog
 
 
+# === 效能監控 ===
+class PerformanceMonitor:
+    """效能監控器 - 追蹤函數執行時間"""
+    
+    _instance = None
+    SLOW_THRESHOLD_MS = 16  # 超過 16ms (60fps) 視為卡頓
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
+        self.enabled = os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes')
+        self.slow_calls = deque(maxlen=100)  # 最近 100 個慢呼叫
+        self.stats = {}  # 函數統計
+        self._report_timer = None
+        self._frame_start = None  # 幀開始時間
+        self._frame_times = deque(maxlen=60)  # 最近 60 幀的時間
+    
+    def start_frame(self):
+        """開始計時一幀"""
+        if self.enabled:
+            self._frame_start = time.perf_counter()
+    
+    def end_frame(self, context: str = ""):
+        """結束計時一幀"""
+        if not self.enabled or self._frame_start is None:
+            return
+        
+        duration_ms = (time.perf_counter() - self._frame_start) * 1000
+        self._frame_times.append(duration_ms)
+        
+        if duration_ms > self.SLOW_THRESHOLD_MS:
+            print(f"⚠️ [PERF] 幀延遲: {duration_ms:.1f}ms {context}")
+            self.slow_calls.append({
+                'func': f"Frame: {context}" if context else "Frame",
+                'duration_ms': duration_ms,
+                'time': time.time()
+            })
+    
+    def track(self, func_name: str, duration_ms: float):
+        """記錄函數執行時間"""
+        if not self.enabled:
+            return
+        
+        # 更新統計
+        if func_name not in self.stats:
+            self.stats[func_name] = {'count': 0, 'total_ms': 0, 'max_ms': 0, 'slow_count': 0}
+        
+        stat = self.stats[func_name]
+        stat['count'] += 1
+        stat['total_ms'] += duration_ms
+        stat['max_ms'] = max(stat['max_ms'], duration_ms)
+        
+        # 記錄慢呼叫
+        if duration_ms > self.SLOW_THRESHOLD_MS:
+            stat['slow_count'] += 1
+            self.slow_calls.append({
+                'func': func_name,
+                'duration_ms': duration_ms,
+                'time': time.time()
+            })
+            print(f"⚠️ [PERF] 慢呼叫: {func_name} 耗時 {duration_ms:.1f}ms")
+    
+    def report(self):
+        """輸出效能報告"""
+        if not self.stats:
+            print("[PERF] 無統計資料")
+            return
+        
+        print("\n" + "=" * 60)
+        print("📊 效能報告")
+        print("=" * 60)
+        
+        # 按慢呼叫次數排序
+        sorted_stats = sorted(
+            self.stats.items(), 
+            key=lambda x: x[1]['slow_count'], 
+            reverse=True
+        )
+        
+        print(f"{'函數名稱':<40} {'呼叫次數':>8} {'慢呼叫':>6} {'平均ms':>8} {'最大ms':>8}")
+        print("-" * 60)
+        
+        for func_name, stat in sorted_stats[:20]:  # 前 20 個
+            avg_ms = stat['total_ms'] / stat['count'] if stat['count'] > 0 else 0
+            print(f"{func_name:<40} {stat['count']:>8} {stat['slow_count']:>6} {avg_ms:>8.1f} {stat['max_ms']:>8.1f}")
+        
+        print("=" * 60)
+        
+        # 最近的慢呼叫
+        if self.slow_calls:
+            print("\n🐢 最近 10 個慢呼叫:")
+            for call in list(self.slow_calls)[-10:]:
+                print(f"  - {call['func']}: {call['duration_ms']:.1f}ms")
+        print()
+
+
+class JankDetector:
+    """卡頓偵測器 - 使用 QTimer 偵測主執行緒阻塞"""
+    
+    def __init__(self, threshold_ms=50):
+        self.threshold_ms = threshold_ms
+        self.last_tick = None
+        self.enabled = os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes')
+        self.timer = None
+        self.jank_count = 0
+        self.start_time = None
+    
+    def start(self):
+        """開始監控"""
+        if not self.enabled:
+            return
+        
+        from PyQt6.QtCore import QTimer
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._tick)
+        self.timer.start(16)  # 約 60fps
+        self.last_tick = time.perf_counter()
+        self.start_time = time.perf_counter()
+        print("[JankDetector] 卡頓偵測器已啟動（閾值: 50ms）")
+    
+    def _tick(self):
+        """每 16ms 檢查一次"""
+        now = time.perf_counter()
+        if self.last_tick is not None:
+            elapsed_ms = (now - self.last_tick) * 1000
+            if elapsed_ms > self.threshold_ms:
+                self.jank_count += 1
+                time_since_start = now - self.start_time if self.start_time else 0
+                print(f"🔴 [JANK] 主執行緒阻塞 {elapsed_ms:.0f}ms (累計: {self.jank_count}, 啟動後 {time_since_start:.1f}s)")
+        self.last_tick = now
+    
+    def stop(self):
+        """停止監控"""
+        if self.timer:
+            self.timer.stop()
+            if self.jank_count > 0:
+                print(f"[JankDetector] 總共偵測到 {self.jank_count} 次卡頓")
+
+
+def perf_track(func):
+    """裝飾器 - 追蹤函數執行時間"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        monitor = PerformanceMonitor()
+        if not monitor.enabled:
+            return func(*args, **kwargs)
+        
+        start = time.perf_counter()
+        try:
+            return func(*args, **kwargs)
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            # 獲取類名（如果有）
+            if args and hasattr(args[0], '__class__'):
+                func_name = f"{args[0].__class__.__name__}.{func.__name__}"
+            else:
+                func_name = func.__name__
+            monitor.track(func_name, duration_ms)
+    return wrapper
+
+
 # === 持久化存儲管理 ===
 class OdometerStorage:
-    """ODO 和 Trip 資料的持久化存儲"""
+    """ODO 和 Trip 資料的持久化存儲（非同步節流寫入）"""
     
     _instance = None
     
@@ -57,8 +227,22 @@ class OdometerStorage:
             'last_update': None
         }
         
+        # 節流控制
+        self._dirty = False  # 資料是否有變更
+        self._last_save_time = 0  # 上次儲存時間
+        self._save_interval = 10.0  # 最少 10 秒儲存一次
+        self._save_timer = None  # 延遲儲存計時器
+        self._lock = None  # 執行緒鎖（延遲初始化）
+        
         # 載入現有資料
         self.load()
+    
+    def _get_lock(self):
+        """延遲初始化執行緒鎖"""
+        if self._lock is None:
+            import threading
+            self._lock = threading.Lock()
+        return self._lock
     
     def load(self):
         """從檔案載入資料"""
@@ -73,33 +257,72 @@ class OdometerStorage:
         except Exception as e:
             print(f"[Storage] 載入里程資料失敗: {e}")
     
-    def save(self):
-        """儲存資料到檔案"""
+    def _do_save(self):
+        """實際執行儲存（在背景執行緒中）"""
         try:
-            self.data['last_update'] = time.time()
-            with open(self.data_file, 'w', encoding='utf-8') as f:
-                json.dump(self.data, f, indent=2, ensure_ascii=False)
+            with self._get_lock():
+                if not self._dirty:
+                    return
+                self.data['last_update'] = time.time()
+                # 寫入臨時檔案再重命名，避免寫入中斷導致檔案損壞
+                temp_file = self.data_file.with_suffix('.tmp')
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.data, f, indent=2, ensure_ascii=False)
+                temp_file.replace(self.data_file)
+                self._dirty = False
+                self._last_save_time = time.time()
         except Exception as e:
             print(f"[Storage] 儲存里程資料失敗: {e}")
+    
+    def _schedule_save(self):
+        """排程延遲儲存"""
+        import threading
+        
+        now = time.time()
+        time_since_last_save = now - self._last_save_time
+        
+        # 如果距離上次儲存超過間隔，立即在背景儲存
+        if time_since_last_save >= self._save_interval:
+            threading.Thread(target=self._do_save, daemon=True).start()
+        else:
+            # 否則設定計時器延遲儲存
+            if self._save_timer is None or not self._save_timer.is_alive():
+                delay = self._save_interval - time_since_last_save
+                self._save_timer = threading.Timer(delay, self._do_save)
+                self._save_timer.daemon = True
+                self._save_timer.start()
+    
+    def _mark_dirty(self):
+        """標記資料已變更，排程儲存"""
+        self._dirty = True
+        self._schedule_save()
+    
+    def save_now(self):
+        """立即儲存（程式關閉時使用）"""
+        if self._save_timer:
+            self._save_timer.cancel()
+        self._dirty = True
+        self._do_save()
+        print("[Storage] 里程資料已儲存")
     
     def update_odo(self, value: float):
         """更新 ODO 總里程"""
         self.data['odo_total'] = value
-        self.save()
+        self._mark_dirty()
     
     def update_trip1(self, distance: float, reset_time: float = None):
         """更新 Trip 1"""
         self.data['trip1_distance'] = distance
         if reset_time is not None:
             self.data['trip1_reset_time'] = reset_time
-        self.save()
+        self._mark_dirty()
     
     def update_trip2(self, distance: float, reset_time: float = None):
         """更新 Trip 2"""
         self.data['trip2_distance'] = distance
         if reset_time is not None:
             self.data['trip2_reset_time'] = reset_time
-        self.save()
+        self._mark_dirty()
     
     def get_odo(self) -> float:
         return self.data.get('odo_total', 0.0)
@@ -2765,34 +2988,36 @@ class MusicCard(QWidget):
             progress = int((current_seconds / total_seconds) * 100)
             self.progress_bar.setValue(progress)
         
-        # 根據播放狀態改變進度條顏色
-        if is_playing:
-            # 播放中 - 藍色
-            self.progress_bar.setStyleSheet("""
-                QProgressBar {
-                    background-color: #2d3748;
-                    border-radius: 3px;
-                    border: none;
-                }
-                QProgressBar::chunk {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #6af, stop:1 #4a9eff);
-                    border-radius: 3px;
-                }
-            """)
-        else:
-            # 暫停中 - 黃色
-            self.progress_bar.setStyleSheet("""
-                QProgressBar {
-                    background-color: #2d3748;
-                    border-radius: 3px;
-                    border: none;
-                }
-                QProgressBar::chunk {
-                    background-color: #f0ad4e;
-                    border-radius: 3px;
-                }
-            """)
+        # 只在播放狀態改變時才更新 stylesheet（避免頻繁重繪）
+        if not hasattr(self, '_last_is_playing') or self._last_is_playing != is_playing:
+            self._last_is_playing = is_playing
+            if is_playing:
+                # 播放中 - 藍色
+                self.progress_bar.setStyleSheet("""
+                    QProgressBar {
+                        background-color: #2d3748;
+                        border-radius: 3px;
+                        border: none;
+                    }
+                    QProgressBar::chunk {
+                        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                            stop:0 #6af, stop:1 #4a9eff);
+                        border-radius: 3px;
+                    }
+                """)
+            else:
+                # 暫停中 - 黃色
+                self.progress_bar.setStyleSheet("""
+                    QProgressBar {
+                        background-color: #2d3748;
+                        border-radius: 3px;
+                        border: none;
+                    }
+                    QProgressBar::chunk {
+                        background-color: #f0ad4e;
+                        border-radius: 3px;
+                    }
+                """)
         
         # 格式化時間
         self.current_time.setText(f"{int(current_seconds//60)}:{int(current_seconds%60):02d}")
@@ -3149,35 +3374,39 @@ class MusicCardWide(QWidget):
             progress = int((current_seconds / total_seconds) * 100)
             self.progress_bar.setValue(progress)
         
-        if is_playing:
-            self.progress_bar.setStyleSheet("""
-                QProgressBar {
-                    background-color: #2d3748;
-                    border-radius: 5px;
-                    border: none;
-                }
-                QProgressBar::chunk {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #6af, stop:1 #4a9eff);
-                    border-radius: 5px;
-                }
-            """)
-        else:
-            self.progress_bar.setStyleSheet("""
-                QProgressBar {
-                    background-color: #2d3748;
-                    border-radius: 5px;
-                    border: none;
-                }
-                QProgressBar::chunk {
-                    background-color: #f0ad4e;
-                    border-radius: 5px;
-                }
-            """)
+        # 只在播放狀態改變時才更新 stylesheet（避免頻繁重繪）
+        if not hasattr(self, '_last_is_playing') or self._last_is_playing != is_playing:
+            self._last_is_playing = is_playing
+            if is_playing:
+                self.progress_bar.setStyleSheet("""
+                    QProgressBar {
+                        background-color: #2d3748;
+                        border-radius: 5px;
+                        border: none;
+                    }
+                    QProgressBar::chunk {
+                        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                            stop:0 #6af, stop:1 #4a9eff);
+                        border-radius: 5px;
+                    }
+                """)
+            else:
+                self.progress_bar.setStyleSheet("""
+                    QProgressBar {
+                        background-color: #2d3748;
+                        border-radius: 5px;
+                        border: none;
+                    }
+                    QProgressBar::chunk {
+                        background-color: #f0ad4e;
+                        border-radius: 5px;
+                    }
+                """)
         
         self.current_time.setText(f"{int(current_seconds//60)}:{int(current_seconds%60):02d}")
         self.total_time.setText(f"{int(total_seconds//60)}:{int(total_seconds%60):02d}")
     
+    @perf_track
     def set_album_art_from_pil(self, pil_image):
         """從 PIL Image 設置專輯封面"""
         try:
@@ -3590,19 +3819,106 @@ class ControlPanel(QWidget):
         self.update_wifi_status()
     
     def update_wifi_status(self):
-        """更新 WiFi 狀態"""
-        import subprocess
-        import os
+        """更新 WiFi 狀態 - 使用 /proc/net/wireless + iw（輕量快速）"""
         import random
         
+        # 檢查是否在 Linux 環境
+        if platform.system() != 'Linux':
+            # macOS/Windows: 顯示模擬資料
+            dummy_networks = ["Home-WiFi", "Office-5G", "Starbucks_Free", "iPhone 熱點"]
+            ssid = random.choice(dummy_networks)
+            signal = random.randint(60, 95)
+            
+            self.wifi_ssid = ssid
+            self.wifi_signal = signal
+            self.wifi_status_label.setText(ssid)
+            
+            if signal >= 80:
+                signal_text = "信號極佳"
+                signal_color = "#6f6"
+            elif signal >= 60:
+                signal_text = "信號良好"
+                signal_color = "#6f6"
+            else:
+                signal_text = "信號普通"
+                signal_color = "#fa0"
+            
+            self.wifi_detail_label.setText(signal_text)
+            self.wifi_signal_label.setText(f"{signal}%")
+            self.wifi_signal_label.setStyleSheet(f"""
+                color: {signal_color};
+                font-size: 18px;
+                font-weight: bold;
+                background: transparent;
+            """)
+            return
+        
+        # Linux: 使用 /proc/net/wireless 讀取信號強度（超快，<1ms）
         try:
-            # 檢查是否在 Linux 環境
-            if platform.system() != 'Linux':
-                # macOS/Windows: 顯示模擬資料
-                dummy_networks = ["Home-WiFi", "Office-5G", "Starbucks_Free", "iPhone 熱點"]
-                ssid = random.choice(dummy_networks)
-                signal = random.randint(60, 95)
-                
+            ssid = None
+            signal = 0
+            interface = None
+            
+            # 1. 從 /proc/net/wireless 讀取信號強度和介面名稱
+            # 格式：Inter-| sta-|   Quality        |   Discarded packets
+            #        face | tus | link level noise |  nwid  crypt   frag  retry   misc
+            #       wlp6s0: 0000   57.  -53.  -256        0      0      0      0    578
+            if os.path.exists('/proc/net/wireless'):
+                with open('/proc/net/wireless', 'r') as f:
+                    lines = f.readlines()
+                    for line in lines[2:]:  # 跳過標題行
+                        line = line.strip()
+                        if ':' in line:
+                            parts = line.split()
+                            if len(parts) >= 3:
+                                interface = parts[0].rstrip(':')
+                                # link quality 通常是 0-70，轉換為百分比
+                                try:
+                                    link_quality = float(parts[2].rstrip('.'))
+                                    signal = min(100, int(link_quality * 100 / 70))
+                                except (ValueError, IndexError):
+                                    signal = 0
+                                break
+            
+            # 2. 使用 iw 取得 SSID（比 iwgetid 更常見，不會觸發掃描）
+            if interface and signal > 0:
+                import subprocess
+                try:
+                    # iw dev <interface> link 可以取得當前連接的 SSID
+                    result = subprocess.run(
+                        ['iw', 'dev', interface, 'link'],
+                        capture_output=True,
+                        text=True,
+                        timeout=1  # 1秒超時
+                    )
+                    if result.returncode == 0:
+                        for line in result.stdout.split('\n'):
+                            line = line.strip()
+                            if line.startswith('SSID:'):
+                                ssid = line[5:].strip()
+                                break
+                except FileNotFoundError:
+                    # iw 不存在，嘗試使用 nmcli（只查詢當前連接，不掃描）
+                    try:
+                        result = subprocess.run(
+                            ['nmcli', '-t', '-f', 'active,ssid', 'dev', 'wifi'],
+                            capture_output=True,
+                            text=True,
+                            timeout=1
+                        )
+                        if result.returncode == 0:
+                            for line in result.stdout.strip().split('\n'):
+                                # 格式: 是:SSID 或 yes:SSID
+                                if line.startswith('是:') or line.lower().startswith('yes:'):
+                                    ssid = line.split(':', 1)[1]
+                                    break
+                    except Exception:
+                        ssid = None
+                except Exception:
+                    ssid = None
+            
+            # 3. 更新 UI
+            if ssid and signal > 0:
                 self.wifi_ssid = ssid
                 self.wifi_signal = signal
                 self.wifi_status_label.setText(ssid)
@@ -3613,81 +3929,34 @@ class ControlPanel(QWidget):
                 elif signal >= 60:
                     signal_text = "信號良好"
                     signal_color = "#6f6"
-                else:
+                elif signal >= 40:
                     signal_text = "信號普通"
                     signal_color = "#fa0"
+                else:
+                    signal_text = "信號較弱"
+                    signal_color = "#f66"
                 
                 self.wifi_detail_label.setText(signal_text)
                 self.wifi_signal_label.setText(f"{signal}%")
                 self.wifi_signal_label.setStyleSheet(f"""
                     color: {signal_color};
-                    font-size: 18px;
+                    font-size: 16px;
                     font-weight: bold;
                     background: transparent;
                 """)
-                return
-            
-            # 使用 nmcli 取得 WiFi 狀態
-            env = os.environ.copy()
-            env['LANG'] = 'C'
-            env['LC_ALL'] = 'C'
-            
-            result = subprocess.run(
-                ['nmcli', '-t', '-f', 'ACTIVE,SSID,SIGNAL', 'dev', 'wifi'],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                env=env
-            )
-            
-            for line in result.stdout.strip().split('\n'):
-                if line.startswith('yes:'):
-                    parts = line.split(':')
-                    if len(parts) >= 3:
-                        ssid = parts[1]
-                        signal = int(parts[2]) if parts[2].isdigit() else 0
-                        
-                        self.wifi_ssid = ssid
-                        self.wifi_signal = signal
-                        
-                        self.wifi_status_label.setText(ssid if ssid else "已連線")
-                        
-                        # 信號強度描述
-                        if signal >= 80:
-                            signal_text = "信號極佳"
-                            signal_color = "#6f6"
-                        elif signal >= 60:
-                            signal_text = "信號良好"
-                            signal_color = "#6f6"
-                        elif signal >= 40:
-                            signal_text = "信號普通"
-                            signal_color = "#fa0"
-                        else:
-                            signal_text = "信號較弱"
-                            signal_color = "#f66"
-                        
-                        self.wifi_detail_label.setText(signal_text)
-                        self.wifi_signal_label.setText(f"{signal}%")
-                        self.wifi_signal_label.setStyleSheet(f"""
-                            color: {signal_color};
-                            font-size: 16px;
-                            font-weight: bold;
-                            background: transparent;
-                        """)
-                        return
-            
-            # 未連線
-            self.wifi_ssid = None
-            self.wifi_signal = 0
-            self.wifi_status_label.setText("未連線")
-            self.wifi_detail_label.setText("點擊 WiFi 按鈕進行連線")
-            self.wifi_signal_label.setText("")
-            self.wifi_detail_label.setStyleSheet("""
-                color: #f66;
-                font-size: 14px;
-                background: transparent;
-            """)
-            
+            else:
+                # 未連線或無法取得
+                self.wifi_ssid = None
+                self.wifi_signal = 0
+                self.wifi_status_label.setText("未連線")
+                self.wifi_detail_label.setText("點擊 WiFi 按鈕進行連線")
+                self.wifi_signal_label.setText("")
+                self.wifi_detail_label.setStyleSheet("""
+                    color: #f66;
+                    font-size: 14px;
+                    background: transparent;
+                """)
+                
         except Exception as e:
             self.wifi_status_label.setText("無法取得狀態")
             self.wifi_detail_label.setText(str(e)[:30])
@@ -4457,6 +4726,10 @@ class Dashboard(QWidget):
         """開機動畫完成後啟動儀表板的所有邏輯"""
         print("啟動儀表板邏輯...")
         
+        # 啟動卡頓偵測器
+        self.jank_detector = JankDetector(threshold_ms=50)
+        self.jank_detector.start()
+        
         # 啟動時間更新 Timer
         self.time_timer.start(1000)
         
@@ -4482,7 +4755,14 @@ class Dashboard(QWidget):
             print("發現 Spotify 設定檔和快取，正在初始化...")
             self.music_card.show_player_ui()
             # 在背景執行緒初始化，避免卡住 UI
-            QTimer.singleShot(100, lambda: setup_spotify(self))
+            import threading
+            def init_spotify():
+                result = setup_spotify(self)
+                if result:
+                    print("Spotify 初始化成功")
+                else:
+                    print("Spotify 初始化失敗")
+            threading.Thread(target=init_spotify, daemon=True).start()
         else:
             if not os.path.exists(config_path):
                 print("未發現 Spotify 設定檔，顯示綁定介面")
@@ -4524,7 +4804,16 @@ class Dashboard(QWidget):
         if success:
             print("Spotify 授權成功！")
             self.music_card.show_player_ui()
-            setup_spotify(self)
+            # 在背景執行緒初始化 Spotify，避免阻塞 UI
+            def _init_spotify_async():
+                try:
+                    setup_spotify(self)
+                except Exception as e:
+                    print(f"Spotify 初始化失敗: {e}")
+            
+            import threading
+            spotify_thread = threading.Thread(target=_init_spotify_async, daemon=True)
+            spotify_thread.start()
         else:
             print("Spotify 授權失敗")
             self.music_card.show_bind_ui()
@@ -4598,12 +4887,14 @@ class Dashboard(QWidget):
             print(f"開啟 WiFi 管理器錯誤: {e}")
 
     # === 執行緒安全的公開方法 (從背景執行緒呼叫) ===
+    @perf_track
     def set_speed(self, speed):
         """外部數據接口：設置速度 (0-200 km/h)
         執行緒安全：透過 Signal 發送，由主執行緒執行
         """
         self.signal_update_speed.emit(float(speed))
     
+    @perf_track
     def set_rpm(self, rpm):
         """外部數據接口：設置轉速 (0-8 x1000rpm)
         執行緒安全：透過 Signal 發送，由主執行緒執行
@@ -4682,9 +4973,9 @@ class Dashboard(QWidget):
         # 更新門狀態
         self.door_card.set_door_status(door, is_closed)
         
-        # 門卡片位於第一列的第三張 (row=0, card=2)
+        # 門卡片位於第一列的第二張 (row=0, card=1)
         DOOR_ROW_INDEX = 0
-        DOOR_CARD_INDEX = 2
+        DOOR_CARD_INDEX = 1  # 音樂=0, 門=1
         
         # 當有門狀態變更時，自動切換到門狀態卡片
         if not (self.current_row_index == DOOR_ROW_INDEX and self.current_card_index == DOOR_CARD_INDEX):
@@ -4722,7 +5013,7 @@ class Dashboard(QWidget):
     def _auto_switch_back_from_door(self):
         """自動從門狀態卡片切回之前的卡片"""
         DOOR_ROW_INDEX = 0
-        DOOR_CARD_INDEX = 2
+        DOOR_CARD_INDEX = 1  # 音樂=0, 門=1
         
         if self.current_row_index == DOOR_ROW_INDEX and self.current_card_index == DOOR_CARD_INDEX:
             # 切回之前的位置
@@ -4735,8 +5026,13 @@ class Dashboard(QWidget):
             self.update_indicators()
             
             row_names = ["第一列", "第二列"]
-            card_names = ["油量表", "音樂播放器", "門狀態"]
-            print(f"所有門已關閉，自動切回 {row_names[self.previous_row_index]} - {card_names[self.previous_card_index]}")
+            row1_card_names = ["音樂播放器", "門狀態"]
+            row2_card_names = ["Trip", "ODO"]
+            if self.previous_row_index == 0:
+                card_name = row1_card_names[self.previous_card_index] if self.previous_card_index < len(row1_card_names) else "未知"
+            else:
+                card_name = row2_card_names[self.previous_card_index] if self.previous_card_index < len(row2_card_names) else "未知"
+            print(f"所有門已關閉，自動切回 {row_names[self.previous_row_index]} - {card_name}")
     
     # === Spotify 執行緒安全接口 ===
     def update_spotify_track(self, title, artist, album=""):
@@ -4753,6 +5049,7 @@ class Dashboard(QWidget):
 
     # === 實際執行 UI 更新的 Slot 方法 (在主執行緒中執行) ===
     @pyqtSlot(float)
+    @perf_track
     def _slot_set_speed(self, speed):
         """Slot: 在主執行緒中更新速度顯示"""
         self.speed = max(0, min(200, speed))
@@ -4783,6 +5080,7 @@ class Dashboard(QWidget):
             self.odo_card.add_distance(distance_increment)
     
     @pyqtSlot(float)
+    @perf_track
     def _slot_set_rpm(self, rpm):
         """Slot: 在主執行緒中更新轉速顯示 (含 GUI 端平滑)"""
         target = max(0, min(8, rpm))
@@ -4872,6 +5170,7 @@ class Dashboard(QWidget):
         if hasattr(self, 'music_card'):
             self.music_card.set_album_art_from_pil(pil_image)
 
+    @perf_track
     def update_indicators(self):
         """更新所有指示器的狀態"""
         # 更新左側卡片指示器
@@ -4900,6 +5199,7 @@ class Dashboard(QWidget):
             else:
                 indicator.hide()  # 隱藏多餘的指示器
     
+    @perf_track
     def mousePressEvent(self, a0):  # type: ignore
         """觸控/滑鼠按下事件"""
         if a0 is None:
@@ -5007,6 +5307,7 @@ class Dashboard(QWidget):
             self.touch_start_pos = None
             self.is_swiping = False
     
+    @perf_track
     def mouseReleaseEvent(self, a0):  # type: ignore
         """觸控/滑鼠釋放事件"""
         if a0 is None:
@@ -5109,6 +5410,7 @@ class Dashboard(QWidget):
             self.swipe_direction = None
             self.swipe_area = None
     
+    @perf_track
     def switch_row(self, direction):
         """切換列（右側卡片區域）
         Args:
@@ -5133,6 +5435,7 @@ class Dashboard(QWidget):
         row_names = ["第一列 (音樂/門)", "第二列 (Trip/ODO)"]
         print(f"切換到: {row_names[self.current_row_index]}")
     
+    @perf_track
     def switch_card(self, direction):
         """切換當前列的卡片（右側）
         Args:
@@ -5158,6 +5461,7 @@ class Dashboard(QWidget):
         card_name = all_card_names[self.current_row_index][self.current_card_index]
         print(f"切換到: {card_name}")
     
+    @perf_track
     def switch_left_card(self, direction):
         """切換左側卡片（轉速/水溫/油量）
         Args:
@@ -5666,6 +5970,18 @@ def run_dashboard(
         print("\n程式結束")
         exit_code = 0
     finally:
+        # 輸出效能報告
+        monitor = PerformanceMonitor()
+        if monitor.enabled:
+            monitor.report()
+        
+        # 儲存里程資料
+        try:
+            storage = OdometerStorage()
+            storage.save_now()
+        except Exception as e:
+            print(f"儲存里程資料時發生錯誤: {e}")
+        
         # 執行所有清理函數
         for cleanup in cleanup_funcs:
             try:
