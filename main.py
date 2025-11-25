@@ -3284,8 +3284,12 @@ class Dashboard(QWidget):
         elif door_upper == "BK":
             current_state = self.door_card.door_bk_closed
         
-        # 只在門狀態真正改變時才收起控制面板
-        if current_state is not None and current_state != is_closed and self.panel_visible:
+        # 如果門狀態沒有改變，直接返回（避免 CAN 訊息瘋狂觸發）
+        if current_state is not None and current_state == is_closed:
+            return
+        
+        # 門狀態有改變，收起控制面板
+        if self.panel_visible:
             self.hide_control_panel()
         
         # 更新門狀態
@@ -3434,6 +3438,7 @@ class Dashboard(QWidget):
             state: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off"
         """
         # 方向燈剛啟動時收起控制面板（狀態從 off 變成 on）
+        # 注意：雙閃燈 (both_on) 不收起控制面板，因為通常是停車時使用
         prev_left = self.left_turn_on
         prev_right = self.right_turn_on
         
@@ -3441,8 +3446,7 @@ class Dashboard(QWidget):
             self.hide_control_panel()
         elif state == "right_on" and not prev_right and self.panel_visible:
             self.hide_control_panel()
-        elif state == "both_on" and (not prev_left or not prev_right) and self.panel_visible:
-            self.hide_control_panel()
+        # 雙閃燈 (both_on) 不收起控制面板
         
         if state == "left_on":
             self.left_turn_on = True
