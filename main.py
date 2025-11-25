@@ -445,6 +445,180 @@ class DoorStatusCard(QWidget):
             """)
 
 
+class DigitalGaugeCard(QWidget):
+    """數位儀表卡片 - 用於顯示轉速、水溫等數值"""
+    
+    def __init__(self, title="", unit="", min_val=0, max_val=100, 
+                 warning_threshold=None, danger_threshold=None,
+                 decimal_places=0, parent=None):
+        super().__init__(parent)
+        self.title = title
+        self.unit = unit
+        self.min_val = min_val
+        self.max_val = max_val
+        self.warning_threshold = warning_threshold
+        self.danger_threshold = danger_threshold
+        self.decimal_places = decimal_places
+        self.current_value = 0
+        
+        self.setStyleSheet("background: transparent;")
+        self.init_ui()
+    
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 15, 20, 15)
+        layout.setSpacing(8)
+        
+        # 標題
+        self.title_label = QLabel(self.title)
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setStyleSheet("""
+            color: #888;
+            font-size: 18px;
+            font-weight: bold;
+            background: transparent;
+            letter-spacing: 2px;
+        """)
+        
+        # 主數值顯示
+        self.value_label = QLabel("0")
+        self.value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.value_label.setStyleSheet("""
+            color: #6af;
+            font-size: 72px;
+            font-weight: bold;
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            background: transparent;
+        """)
+        
+        # 單位
+        self.unit_label = QLabel(self.unit)
+        self.unit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.unit_label.setStyleSheet("""
+            color: #666;
+            font-size: 16px;
+            background: transparent;
+        """)
+        
+        # 進度條（視覺化）
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(12)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                background: #2a2a35;
+                border-radius: 6px;
+                border: 1px solid #3a3a45;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #4a9eff, stop:1 #6af);
+                border-radius: 5px;
+            }
+        """)
+        
+        layout.addStretch()
+        layout.addWidget(self.title_label)
+        layout.addWidget(self.value_label)
+        layout.addWidget(self.unit_label)
+        layout.addSpacing(10)
+        layout.addWidget(self.progress_bar)
+        layout.addStretch()
+    
+    def set_value(self, value):
+        """設定數值"""
+        self.current_value = value
+        
+        # 格式化顯示
+        if self.decimal_places == 0:
+            display_text = f"{int(value):,}"
+        else:
+            display_text = f"{value:,.{self.decimal_places}f}"
+        
+        self.value_label.setText(display_text)
+        
+        # 更新進度條
+        progress = int((value - self.min_val) / (self.max_val - self.min_val) * 100)
+        progress = max(0, min(100, progress))
+        self.progress_bar.setValue(progress)
+        
+        # 根據閾值更新顏色
+        if self.danger_threshold and value >= self.danger_threshold:
+            color = "#f44"  # 紅色
+            bar_style = """
+                QProgressBar {
+                    background: #2a2a35;
+                    border-radius: 6px;
+                    border: 1px solid #3a3a45;
+                }
+                QProgressBar::chunk {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #f44, stop:1 #f66);
+                    border-radius: 5px;
+                }
+            """
+        elif self.warning_threshold and value >= self.warning_threshold:
+            color = "#fa0"  # 橙色
+            bar_style = """
+                QProgressBar {
+                    background: #2a2a35;
+                    border-radius: 6px;
+                    border: 1px solid #3a3a45;
+                }
+                QProgressBar::chunk {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #fa0, stop:1 #fc6);
+                    border-radius: 5px;
+                }
+            """
+        else:
+            color = "#6af"  # 正常藍色
+            bar_style = """
+                QProgressBar {
+                    background: #2a2a35;
+                    border-radius: 6px;
+                    border: 1px solid #3a3a45;
+                }
+                QProgressBar::chunk {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #4a9eff, stop:1 #6af);
+                    border-radius: 5px;
+                }
+            """
+        
+        self.value_label.setStyleSheet(f"""
+            color: {color};
+            font-size: 72px;
+            font-weight: bold;
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            background: transparent;
+        """)
+        self.progress_bar.setStyleSheet(bar_style)
+    
+    def paintEvent(self, event):
+        """繪製卡片背景"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # 繪製圓角矩形背景
+        rect = self.rect().adjusted(5, 5, -5, -5)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(rect), 20, 20)
+        
+        # 背景漸層
+        gradient = QLinearGradient(0, 0, 0, rect.height())
+        gradient.setColorAt(0, QColor(30, 30, 40, 200))
+        gradient.setColorAt(1, QColor(20, 20, 30, 200))
+        painter.fillPath(path, gradient)
+        
+        # 邊框
+        painter.setPen(QPen(QColor(60, 60, 80), 2))
+        painter.drawPath(path)
+
+
 class NumericKeypad(QDialog):
     """虛擬數字鍵盤對話框"""
     
@@ -1061,6 +1235,478 @@ class OdometerCard(QWidget):
             self.sync_time_label.setText("未同步")
 
 
+class OdometerCardWide(QWidget):
+    """總里程表卡片（寬版 800x380）- 顯示模式 / 輸入模式切換"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(800, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # 總里程數據
+        self.total_distance = 0.0  # km
+        self.last_sync_time = None
+        
+        # 輸入狀態
+        self.current_input = ""
+        self.is_editing = False
+        
+        # 主佈局使用 StackedWidget 切換模式
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.stack = QStackedWidget()
+        main_layout.addWidget(self.stack)
+        
+        # === 頁面 1: 顯示模式 ===
+        self.display_page = self._create_display_page()
+        self.stack.addWidget(self.display_page)
+        
+        # === 頁面 2: 輸入模式（虛擬鍵盤）===
+        self.input_page = self._create_input_page()
+        self.stack.addWidget(self.input_page)
+        
+        # 預設顯示模式
+        self.stack.setCurrentWidget(self.display_page)
+    
+    def _create_display_page(self):
+        """創建顯示頁面 - 水平佈局"""
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        layout = QHBoxLayout(page)
+        layout.setContentsMargins(40, 30, 40, 30)
+        layout.setSpacing(40)
+        
+        # === 左側：圖示 ===
+        icon_container = QWidget()
+        icon_container.setFixedWidth(100)
+        icon_container.setStyleSheet("background: transparent;")
+        icon_layout = QVBoxLayout(icon_container)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        
+        icon_label = QLabel("🚗")
+        icon_label.setStyleSheet("font-size: 48px; background: transparent;")
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        icon_layout.addStretch()
+        icon_layout.addWidget(icon_label)
+        icon_layout.addStretch()
+        
+        # === 中央：里程顯示 ===
+        center_container = QWidget()
+        center_container.setStyleSheet("background: transparent;")
+        center_layout = QVBoxLayout(center_container)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(10)
+        
+        # 標題
+        title_label = QLabel("Odometer")
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 28px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 里程數字 + 單位
+        distance_widget = QWidget()
+        distance_widget.setStyleSheet("""
+            background: rgba(30, 30, 40, 0.5);
+            border-radius: 15px;
+            border: 2px solid #2a2a35;
+        """)
+        distance_layout = QHBoxLayout(distance_widget)
+        distance_layout.setContentsMargins(20, 20, 20, 20)
+        distance_layout.setSpacing(8)
+        
+        self.odo_distance_label = QLabel("0")
+        self.odo_distance_label.setStyleSheet("""
+            color: white;
+            font-size: 56px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        self.odo_distance_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        
+        unit_label = QLabel("km")
+        unit_label.setStyleSheet("""
+            color: #888;
+            font-size: 24px;
+            background: transparent;
+        """)
+        unit_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
+        
+        distance_layout.addStretch()
+        distance_layout.addWidget(self.odo_distance_label)
+        distance_layout.addWidget(unit_label)
+        distance_layout.addStretch()
+        
+        # 同步時間
+        self.sync_time_label = QLabel("未同步")
+        self.sync_time_label.setStyleSheet("""
+            color: #666;
+            font-size: 16px;
+            background: transparent;
+        """)
+        self.sync_time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        center_layout.addStretch()
+        center_layout.addWidget(title_label)
+        center_layout.addSpacing(10)
+        center_layout.addWidget(distance_widget)
+        center_layout.addWidget(self.sync_time_label)
+        center_layout.addStretch()
+        
+        # === 右側：同步按鈕 ===
+        right_container = QWidget()
+        right_container.setFixedWidth(120)
+        right_container.setStyleSheet("background: transparent;")
+        right_layout = QVBoxLayout(right_container)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        
+        sync_btn = QPushButton("同步\n里程")
+        sync_btn.setFixedSize(90, 90)
+        sync_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        sync_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(100, 150, 255, 0.2);
+                color: #6af;
+                border: 3px solid #6af;
+                border-radius: 45px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(100, 150, 255, 0.4);
+            }
+            QPushButton:pressed {
+                background-color: rgba(100, 150, 255, 0.6);
+            }
+        """)
+        sync_btn.clicked.connect(self._show_keypad)
+        
+        right_layout.addStretch()
+        right_layout.addWidget(sync_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        right_layout.addStretch()
+        
+        # 組合佈局
+        layout.addWidget(icon_container)
+        layout.addWidget(center_container, 1)
+        layout.addWidget(right_container)
+        
+        return page
+    
+    def _create_input_page(self):
+        """創建輸入頁面（虛擬鍵盤）- 左右並排"""
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        layout = QHBoxLayout(page)
+        layout.setContentsMargins(30, 25, 30, 25)
+        layout.setSpacing(30)
+        
+        # === 左側：當前里程 + 輸入預覽 ===
+        left_panel = QWidget()
+        left_panel.setStyleSheet("background: transparent;")
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(10, 10, 10, 10)
+        left_layout.setSpacing(15)
+        
+        # 標題
+        title_label = QLabel("同步里程")
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 28px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 當前里程顯示
+        current_container = QWidget()
+        current_container.setStyleSheet("""
+            QWidget {
+                background: rgba(30, 30, 40, 0.5);
+                border-radius: 15px;
+                border: 2px solid #2a2a35;
+            }
+        """)
+        current_layout = QVBoxLayout(current_container)
+        current_layout.setContentsMargins(20, 20, 20, 20)
+        current_layout.setSpacing(10)
+        
+        current_title = QLabel("目前里程")
+        current_title.setStyleSheet("color: #888; font-size: 16px; background: transparent;")
+        current_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.current_odo_label = QLabel("0 km")
+        self.current_odo_label.setStyleSheet("""
+            color: #666;
+            font-size: 36px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        self.current_odo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        current_layout.addWidget(current_title)
+        current_layout.addWidget(self.current_odo_label)
+        
+        # 新里程輸入預覽
+        new_container = QWidget()
+        new_container.setStyleSheet("""
+            QWidget {
+                background: rgba(100, 150, 255, 0.1);
+                border-radius: 15px;
+                border: 2px solid #6af;
+            }
+        """)
+        new_layout = QVBoxLayout(new_container)
+        new_layout.setContentsMargins(20, 20, 20, 20)
+        new_layout.setSpacing(10)
+        
+        new_title = QLabel("新里程")
+        new_title.setStyleSheet("color: #6af; font-size: 16px; background: transparent;")
+        new_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.input_display = QLabel("_ _ _ _ _ _")
+        self.input_display.setStyleSheet("""
+            color: white;
+            font-size: 42px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        self.input_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        new_layout.addWidget(new_title)
+        new_layout.addWidget(self.input_display)
+        
+        left_layout.addWidget(title_label)
+        left_layout.addWidget(current_container, 1)
+        left_layout.addWidget(new_container, 1)
+        
+        # 中央分隔線
+        separator = QWidget()
+        separator.setFixedWidth(2)
+        separator.setStyleSheet("background: #333;")
+        
+        # === 右側：虛擬鍵盤 ===
+        right_panel = QWidget()
+        right_panel.setStyleSheet("background: transparent;")
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(10, 10, 10, 10)
+        right_layout.setSpacing(10)
+        
+        # 按鈕網格
+        button_grid = QGridLayout()
+        button_grid.setSpacing(10)
+        
+        # 數字按鈕 1-9
+        for i in range(9):
+            btn = self._create_number_button(str(i + 1))
+            row = i // 3
+            col = i % 3
+            button_grid.addWidget(btn, row, col)
+        
+        # 第四行：清除, 0, 退格
+        btn_clear = self._create_function_button("C", self._clear_input, "#cc5555")
+        button_grid.addWidget(btn_clear, 3, 0)
+        
+        btn_0 = self._create_number_button("0")
+        button_grid.addWidget(btn_0, 3, 1)
+        
+        btn_bs = self._create_function_button("⌫", self._backspace, "#555555")
+        button_grid.addWidget(btn_bs, 3, 2)
+        
+        # 操作按鈕行
+        action_layout = QHBoxLayout()
+        action_layout.setSpacing(10)
+        
+        btn_cancel = QPushButton("取消")
+        btn_cancel.setFixedHeight(50)
+        btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cancel.setStyleSheet("""
+            QPushButton {
+                background-color: #555;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #666; }
+            QPushButton:pressed { background-color: #444; }
+        """)
+        btn_cancel.clicked.connect(self._cancel_input)
+        
+        btn_ok = QPushButton("確定")
+        btn_ok.setFixedHeight(50)
+        btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_ok.setStyleSheet("""
+            QPushButton {
+                background-color: #55aa55;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #66bb66; }
+            QPushButton:pressed { background-color: #449944; }
+        """)
+        btn_ok.clicked.connect(self._confirm_input)
+        
+        action_layout.addWidget(btn_cancel)
+        action_layout.addWidget(btn_ok)
+        
+        right_layout.addLayout(button_grid)
+        right_layout.addLayout(action_layout)
+        
+        layout.addWidget(left_panel, 1)
+        layout.addWidget(separator)
+        layout.addWidget(right_panel, 1)
+        
+        return page
+    
+    def _create_number_button(self, text):
+        """創建數字按鈕"""
+        btn = QPushButton(text)
+        btn.setFixedSize(95, 55)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3a3a45;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 26px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #4a4a55; }
+            QPushButton:pressed { background-color: #2a2a35; }
+        """)
+        btn.clicked.connect(lambda: self._append_digit(text))
+        return btn
+    
+    def _create_function_button(self, text, callback, color="#6a5acd"):
+        """創建功能按鈕"""
+        btn = QPushButton(text)
+        btn.setFixedSize(95, 55)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {color};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 22px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ opacity: 0.8; }}
+            QPushButton:pressed {{ opacity: 0.6; }}
+        """)
+        btn.clicked.connect(callback)
+        return btn
+    
+    def _show_keypad(self):
+        """顯示虛擬鍵盤"""
+        self.current_input = ""
+        self.current_odo_label.setText(f"{int(self.total_distance)} km")
+        self._update_input_display()
+        self.is_editing = True
+        self.stack.setCurrentWidget(self.input_page)
+        
+        # 通知 Dashboard 禁用滑動
+        dashboard = self._get_dashboard()
+        if dashboard:
+            dashboard.set_swipe_enabled(False)
+    
+    def _hide_keypad(self):
+        """隱藏虛擬鍵盤"""
+        self.is_editing = False
+        self.stack.setCurrentWidget(self.display_page)
+        
+        # 通知 Dashboard 恢復滑動
+        dashboard = self._get_dashboard()
+        if dashboard:
+            dashboard.set_swipe_enabled(True)
+    
+    def _append_digit(self, digit):
+        """追加數字"""
+        if len(self.current_input) < 7:
+            self.current_input += digit
+            self._update_input_display()
+    
+    def _backspace(self):
+        """刪除最後一位"""
+        if self.current_input:
+            self.current_input = self.current_input[:-1]
+            self._update_input_display()
+    
+    def _clear_input(self):
+        """清除輸入"""
+        self.current_input = ""
+        self._update_input_display()
+    
+    def _update_input_display(self):
+        """更新輸入顯示"""
+        if self.current_input:
+            self.input_display.setText(f"{self.current_input} km")
+        else:
+            self.input_display.setText("_ _ _ _ _ _")
+    
+    def _confirm_input(self):
+        """確認輸入"""
+        if self.current_input:
+            try:
+                self.total_distance = float(self.current_input)
+            except ValueError:
+                self.total_distance = 0.0
+            
+            self.odo_distance_label.setText(f"{int(self.total_distance)}")
+            self.last_sync_time = time.time()
+            self._update_sync_time_display()
+            print(f"里程表已同步: {int(self.total_distance)} km")
+        
+        self._hide_keypad()
+    
+    def _cancel_input(self):
+        """取消輸入"""
+        self._hide_keypad()
+    
+    def _get_dashboard(self):
+        """獲取 Dashboard 實例"""
+        parent = self.parent()
+        while parent:
+            if isinstance(parent, Dashboard):
+                return parent
+            parent = parent.parent()
+        return None
+    
+    def add_distance(self, distance_km):
+        """由 Dashboard 物理心跳呼叫，累加里程"""
+        self.total_distance += distance_km
+        self.odo_distance_label.setText(f"{int(self.total_distance)}")
+    
+    def _update_sync_time_display(self):
+        """更新同步時間顯示"""
+        from datetime import datetime
+        
+        if self.last_sync_time:
+            sync_dt = datetime.fromtimestamp(self.last_sync_time)
+            time_str = sync_dt.strftime("%Y-%m-%d %H:%M")
+            self.sync_time_label.setText(f"同步: {time_str}")
+        else:
+            self.sync_time_label.setText("未同步")
+
+
 class TripCard(QWidget):
     """Trip 里程卡片 - 顯示 Trip 1 和 Trip 2 的里程數、reset按鈕和reset時間"""
     
@@ -1220,7 +1866,7 @@ class TripCard(QWidget):
             
         reset_time_label.setStyleSheet("""
             color: #666;
-            font-size: 11px;
+            font-size: 24px;
             background: transparent;
         """)
         reset_time_label.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -1260,6 +1906,210 @@ class TripCard(QWidget):
     
     def update_reset_time_display(self, is_trip1=True):
         """更新reset時間顯示"""
+        from datetime import datetime
+        
+        if is_trip1:
+            if self.trip1_reset_time:
+                reset_dt = datetime.fromtimestamp(self.trip1_reset_time)
+                time_str = reset_dt.strftime("%Y-%m-%d %H:%M")
+                self.trip1_reset_label.setText(f"Reset: {time_str}")
+            else:
+                self.trip1_reset_label.setText("Never reset")
+        else:
+            if self.trip2_reset_time:
+                reset_dt = datetime.fromtimestamp(self.trip2_reset_time)
+                time_str = reset_dt.strftime("%Y-%m-%d %H:%M")
+                self.trip2_reset_label.setText(f"Reset: {time_str}")
+            else:
+                self.trip2_reset_label.setText("Never reset")
+
+
+class TripCardWide(QWidget):
+    """Trip 里程卡片（寬版 800x380）- 左右並排顯示 Trip 1 和 Trip 2"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(800, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # Trip 數據
+        self.trip1_distance = 0.0  # km
+        self.trip2_distance = 0.0  # km
+        self.trip1_reset_time = None
+        self.trip2_reset_time = None
+        
+        # Main layout - 水平排列
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(25, 25, 25, 25)
+        main_layout.setSpacing(30)
+        
+        # === 左側 Trip 1 ===
+        trip1_widget = self._create_trip_panel("Trip 1", is_trip1=True)
+        
+        # 中央分隔線
+        separator = QWidget()
+        separator.setFixedWidth(2)
+        separator.setStyleSheet("background: #333;")
+        
+        # === 右側 Trip 2 ===
+        trip2_widget = self._create_trip_panel("Trip 2", is_trip1=False)
+        
+        main_layout.addWidget(trip1_widget, 1)
+        main_layout.addWidget(separator)
+        main_layout.addWidget(trip2_widget, 1)
+    
+    def _create_trip_panel(self, title, is_trip1=True):
+        """創建單個 Trip 面板"""
+        panel = QWidget()
+        panel.setStyleSheet("background: transparent;")
+        
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(15)
+        
+        # 標題行（標題 + Reset 按鈕）
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(10)
+        
+        title_label = QLabel(title)
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 28px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        
+        reset_btn = QPushButton("Reset")
+        reset_btn.setFixedSize(80, 36)
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(100, 150, 255, 0.3);
+                color: #6af;
+                border: 1px solid #6af;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(100, 150, 255, 0.5);
+            }
+            QPushButton:pressed {
+                background-color: rgba(100, 150, 255, 0.7);
+            }
+        """)
+        
+        if is_trip1:
+            reset_btn.clicked.connect(self.reset_trip1)
+        else:
+            reset_btn.clicked.connect(self.reset_trip2)
+        
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        header_layout.addWidget(reset_btn)
+        
+        # 里程顯示區域
+        distance_container = QWidget()
+        distance_container.setStyleSheet("""
+            background: rgba(30, 30, 40, 0.5);
+            border-radius: 15px;
+            border: 2px solid #2a2a35;
+        """)
+        distance_layout = QVBoxLayout(distance_container)
+        distance_layout.setContentsMargins(20, 25, 20, 25)
+        distance_layout.setSpacing(10)
+        
+        # 里程數字 + 單位
+        value_layout = QHBoxLayout()
+        value_layout.setSpacing(8)
+        
+        if is_trip1:
+            self.trip1_distance_label = QLabel("0.0")
+            distance_label = self.trip1_distance_label
+        else:
+            self.trip2_distance_label = QLabel("0.0")
+            distance_label = self.trip2_distance_label
+        
+        distance_label.setStyleSheet("""
+            color: white;
+            font-size: 72px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        distance_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        
+        unit_label = QLabel("km")
+        unit_label.setStyleSheet("""
+            color: #888;
+            font-size: 28px;
+            background: transparent;
+        """)
+        unit_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
+        
+        value_layout.addStretch()
+        value_layout.addWidget(distance_label)
+        value_layout.addWidget(unit_label)
+        value_layout.addSpacing(10)
+        
+        # Reset 時間
+        if is_trip1:
+            self.trip1_reset_label = QLabel("Never reset")
+            reset_time_label = self.trip1_reset_label
+        else:
+            self.trip2_reset_label = QLabel("Never reset")
+            reset_time_label = self.trip2_reset_label
+        
+        reset_time_label.setStyleSheet("""
+            color: #666;
+            font-size: 24px;
+            background: transparent;
+        """)
+        reset_time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        distance_layout.addLayout(value_layout)
+        distance_layout.addWidget(reset_time_label)
+        
+        # 組合佈局
+        layout.addLayout(header_layout)
+        layout.addWidget(distance_container, 1)
+        
+        return panel
+    
+    def add_distance(self, distance_km):
+        """由 Dashboard 物理心跳呼叫，累加里程"""
+        self.trip1_distance += distance_km
+        self.trip2_distance += distance_km
+        
+        # 更新顯示
+        self.trip1_distance_label.setText(f"{self.trip1_distance:.1f}")
+        self.trip2_distance_label.setText(f"{self.trip2_distance:.1f}")
+    
+    def reset_trip1(self):
+        """重置 Trip 1"""
+        self.trip1_distance = 0.0
+        self.trip1_distance_label.setText("0.0")
+        self.trip1_reset_time = time.time()
+        self._update_reset_time_display(True)
+        print("Trip 1 已重置")
+    
+    def reset_trip2(self):
+        """重置 Trip 2"""
+        self.trip2_distance = 0.0
+        self.trip2_distance_label.setText("0.0")
+        self.trip2_reset_time = time.time()
+        self._update_reset_time_display(False)
+        print("Trip 2 已重置")
+    
+    def _update_reset_time_display(self, is_trip1=True):
+        """更新 reset 時間顯示"""
         from datetime import datetime
         
         if is_trip1:
@@ -1371,12 +2221,13 @@ class MarqueeLabel(QLabel):
         fm = self.fontMetrics()
         text_width = fm.horizontalAdvance(self.text())
         
-        # 如果文字寬度小於元件寬度，則置中顯示且不捲動
+        # 如果文字寬度小於元件寬度，使用設定的對齊方式顯示且不捲動
         if text_width <= self.width():
             if self._timer.isActive():
                 self._timer.stop()
             self._is_scrollable = False
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
+            # 使用元件設定的對齊方式
+            painter.drawText(self.rect(), int(self.alignment()), self.text())
             return
 
         # 標記為需要捲動
@@ -1867,6 +2718,353 @@ class MusicCard(QWidget):
         try:
             from PIL.ImageQt import ImageQt
             # 轉換 PIL Image 為 QPixmap
+            qim = ImageQt(pil_image)
+            pixmap = QPixmap.fromImage(qim)
+            self.set_album_art(pixmap)
+        except Exception as e:
+            import logging
+            logging.error(f"設置專輯封面失敗: {e}")
+
+
+class MusicCardWide(QWidget):
+    """寬版音樂播放器卡片 - 左側專輯封面，右側資訊"""
+    
+    request_bind = pyqtSignal()
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(800, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # Main layout with StackedWidget
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.stack = QStackedWidget()
+        self.main_layout.addWidget(self.stack)
+        
+        # Page 1: Not Configured (Bind UI)
+        self.bind_page = QWidget()
+        self.setup_bind_ui()
+        self.stack.addWidget(self.bind_page)
+        
+        # Page 2: Player UI
+        self.player_page = QWidget()
+        self.setup_player_ui()
+        self.stack.addWidget(self.player_page)
+        
+        # Default to Bind page
+        self.stack.setCurrentWidget(self.bind_page)
+
+    def setup_bind_ui(self):
+        layout = QHBoxLayout(self.bind_page)
+        layout.setContentsMargins(40, 30, 40, 30)
+        layout.setSpacing(30)
+        
+        # 左側大圖標
+        icon_label = QLabel("🎵")
+        icon_label.setStyleSheet("font-size: 120px; background: transparent;")
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_label.setFixedSize(200, 200)
+        
+        # 右側文字和按鈕
+        right_widget = QWidget()
+        right_widget.setStyleSheet("background: transparent;")
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setSpacing(15)
+        
+        text_label = QLabel("Spotify 未連結")
+        text_label.setStyleSheet("color: white; font-size: 32px; font-weight: bold; background: transparent;")
+        
+        desc_label = QLabel("請點擊下方按鈕進行綁定，以顯示您的 Spotify 播放資訊")
+        desc_label.setStyleSheet("color: #aaa; font-size: 18px; background: transparent;")
+        desc_label.setWordWrap(True)
+        
+        self.bind_btn = QPushButton("綁定 Spotify")
+        self.bind_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.bind_btn.setFixedSize(250, 60)
+        self.bind_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1DB954;
+                color: white;
+                border-radius: 30px;
+                font-size: 22px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1ed760;
+            }
+            QPushButton:pressed {
+                background-color: #1aa34a;
+            }
+        """)
+        self.bind_btn.clicked.connect(self.request_bind.emit)
+        
+        right_layout.addStretch()
+        right_layout.addWidget(text_label)
+        right_layout.addWidget(desc_label)
+        right_layout.addSpacing(20)
+        right_layout.addWidget(self.bind_btn)
+        right_layout.addStretch()
+        
+        layout.addWidget(icon_label)
+        layout.addWidget(right_widget, 1)
+
+    def setup_player_ui(self):
+        layout = QHBoxLayout(self.player_page)
+        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(30)
+        
+        # === 左側：專輯封面 ===
+        album_container = QWidget()
+        album_container.setFixedSize(320, 320)
+        album_container.setStyleSheet("background: transparent;")
+        album_layout = QVBoxLayout(album_container)
+        album_layout.setContentsMargins(0, 0, 0, 0)
+        album_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.album_art = QLabel()
+        self.album_art.setFixedSize(300, 300)
+        self.album_art.setStyleSheet("""
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #4a5568, stop:0.5 #2d3748, stop:1 #1a202c);
+            border-radius: 20px;
+            border: 3px solid #4a5568;
+        """)
+        self.album_art.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 預設音符圖標
+        self.album_icon = QLabel("♪", self.album_art)
+        self.album_icon.setStyleSheet("""
+            color: #6af;
+            font-size: 120px;
+            background: transparent;
+        """)
+        self.album_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.album_icon.setGeometry(0, 0, 300, 300)
+        
+        album_layout.addWidget(self.album_art)
+        
+        # === 右側：歌曲資訊和進度 ===
+        info_container = QWidget()
+        info_container.setStyleSheet("background: transparent;")
+        info_layout = QVBoxLayout(info_container)
+        info_layout.setContentsMargins(0, 10, 0, 10)
+        info_layout.setSpacing(10)
+        
+        # Now Playing 標題
+        title_label = QLabel("Now Playing")
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 16px;
+            font-weight: bold;
+            background: transparent;
+            letter-spacing: 2px;
+        """)
+        
+        # 歌曲名稱（大字）
+        self.song_title = MarqueeLabel("Waiting for music...")
+        self.song_title.setStyleSheet("""
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        self.song_title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.song_title.setFixedHeight(50)
+        
+        # 演出者
+        self.artist_name = MarqueeLabel("-")
+        self.artist_name.setStyleSheet("""
+            color: #ccc;
+            font-size: 22px;
+            background: transparent;
+        """)
+        self.artist_name.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.artist_name.setFixedHeight(35)
+        
+        # 專輯名稱
+        self.album_name = MarqueeLabel("-")
+        self.album_name.setStyleSheet("""
+            color: #888;
+            font-size: 16px;
+            background: transparent;
+        """)
+        self.album_name.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.album_name.setFixedHeight(25)
+        
+        # 進度條區域
+        progress_widget = QWidget()
+        progress_widget.setStyleSheet("background: transparent;")
+        progress_layout = QVBoxLayout(progress_widget)
+        progress_layout.setContentsMargins(0, 0, 0, 0)
+        progress_layout.setSpacing(8)
+        
+        # 進度條
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(10)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #2d3748;
+                border-radius: 5px;
+                border: none;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #6af, stop:1 #4a9eff);
+                border-radius: 5px;
+            }
+        """)
+        
+        # 時間標籤
+        time_layout = QHBoxLayout()
+        time_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.current_time = QLabel("0:00")
+        self.current_time.setStyleSheet("""
+            color: #aaa;
+            font-size: 16px;
+            background: transparent;
+        """)
+        
+        self.total_time = QLabel("0:00")
+        self.total_time.setStyleSheet("""
+            color: #aaa;
+            font-size: 16px;
+            background: transparent;
+        """)
+        
+        time_layout.addWidget(self.current_time)
+        time_layout.addStretch()
+        time_layout.addWidget(self.total_time)
+        
+        progress_layout.addWidget(self.progress_bar)
+        progress_layout.addLayout(time_layout)
+        
+        # 組合右側佈局
+        info_layout.addWidget(title_label)
+        info_layout.addSpacing(15)
+        info_layout.addWidget(self.song_title)
+        info_layout.addSpacing(5)
+        info_layout.addWidget(self.artist_name)
+        info_layout.addSpacing(3)
+        info_layout.addWidget(self.album_name)
+        info_layout.addStretch()
+        info_layout.addWidget(progress_widget)
+        
+        # 組合主佈局
+        layout.addWidget(album_container)
+        layout.addWidget(info_container, 1)
+    
+    def show_bind_ui(self):
+        self.stack.setCurrentWidget(self.bind_page)
+        
+    def show_player_ui(self):
+        self.stack.setCurrentWidget(self.player_page)
+
+    def set_song(self, title, artist, album=""):
+        """設置歌曲信息"""
+        self.song_title.setText(title)
+        self.artist_name.setText(artist)
+        self.album_name.setText(album if album else "")
+    
+    def set_album_art(self, pixmap):
+        """設置專輯封面圖片"""
+        if pixmap and not pixmap.isNull():
+            # 縮放並裁切圖片
+            scaled_pixmap = pixmap.scaled(
+                300, 300,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            
+            if scaled_pixmap.width() > 300 or scaled_pixmap.height() > 300:
+                x = (scaled_pixmap.width() - 300) // 2
+                y = (scaled_pixmap.height() - 300) // 2
+                scaled_pixmap = scaled_pixmap.copy(x, y, 300, 300)
+            
+            # 創建圓角遮罩
+            rounded_pixmap = QPixmap(300, 300)
+            rounded_pixmap.fill(Qt.GlobalColor.transparent)
+            
+            painter = QPainter(rounded_pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            
+            path = QPainterPath()
+            path.addRoundedRect(0, 0, 300, 300, 20, 20)
+            
+            painter.setClipPath(path)
+            painter.drawPixmap(0, 0, scaled_pixmap)
+            
+            pen = QPen(QColor("#4a5568"))
+            pen.setWidth(6)
+            painter.strokePath(path, pen)
+            
+            painter.end()
+            
+            self.album_art.setPixmap(rounded_pixmap)
+            self.album_art.setStyleSheet("background: transparent; border: none;")
+            self.album_icon.hide()
+        else:
+            self.album_art.clear()
+            self.album_art.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #4a5568, stop:0.5 #2d3748, stop:1 #1a202c);
+                border-radius: 20px;
+                border: 3px solid #4a5568;
+            """)
+            self.album_icon.show()
+    
+    def set_progress(self, current_seconds, total_seconds, is_playing=True):
+        """設置播放進度"""
+        if total_seconds > 0:
+            progress = int((current_seconds / total_seconds) * 100)
+            self.progress_bar.setValue(progress)
+        
+        if is_playing:
+            self.progress_bar.setStyleSheet("""
+                QProgressBar {
+                    background-color: #2d3748;
+                    border-radius: 5px;
+                    border: none;
+                }
+                QProgressBar::chunk {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #6af, stop:1 #4a9eff);
+                    border-radius: 5px;
+                }
+            """)
+        else:
+            self.progress_bar.setStyleSheet("""
+                QProgressBar {
+                    background-color: #2d3748;
+                    border-radius: 5px;
+                    border: none;
+                }
+                QProgressBar::chunk {
+                    background-color: #f0ad4e;
+                    border-radius: 5px;
+                }
+            """)
+        
+        self.current_time.setText(f"{int(current_seconds//60)}:{int(current_seconds%60):02d}")
+        self.total_time.setText(f"{int(total_seconds//60)}:{int(total_seconds%60):02d}")
+    
+    def set_album_art_from_pil(self, pil_image):
+        """從 PIL Image 設置專輯封面"""
+        try:
+            from PIL.ImageQt import ImageQt
             qim = ImageQt(pil_image)
             pixmap = QPixmap.fromImage(qim)
             self.set_album_art(pixmap)
@@ -2810,178 +4008,140 @@ class Dashboard(QWidget):
         self.control_panel.setGeometry(0, -300, 1920, 300)
         self.control_panel.raise_()  # 確保在最上層
         
-        # === 主儀表板區域 ===
+        # === 主儀表板區域（三欄式佈局）===
         dashboard_container = QWidget()
         main_layout = QHBoxLayout()
+        main_layout.setContentsMargins(15, 10, 15, 10)
+        main_layout.setSpacing(15)
         dashboard_container.setLayout(main_layout)
         main_vertical_layout.addWidget(dashboard_container)
         
-        # 左側：水溫表（小型）
-        temp_style = GaugeStyle(
-            major_ticks=4, minor_ticks=1,
-            start_angle=225, span_angle=270,
-            tick_color=QColor(100, 150, 255),
-            needle_color=QColor(100, 200, 255),  # 稍微偏藍綠色
-            text_scale=1.0
+        # ========================================
+        # 左側區域：數位儀表卡片（可左右滑動）
+        # ========================================
+        left_section = QWidget()
+        left_section.setFixedWidth(380)
+        left_layout = QVBoxLayout(left_section)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(5)
+        
+        # 左側卡片堆疊
+        self.left_card_stack = QStackedWidget()
+        self.left_card_stack.setFixedSize(380, 380)
+        
+        # 轉速數位卡片
+        self.rpm_digital_card = DigitalGaugeCard(
+            title="ENGINE",
+            unit="RPM",
+            min_val=0,
+            max_val=8000,
+            warning_threshold=5500,
+            danger_threshold=6500,
+            decimal_places=0
         )
-        # 水溫標籤：C(冷) - 中間正常 - H(熱)
-        temp_labels = {0: "C", 50: "•", 100: "H"}
-        self.temp_gauge = AnalogGauge(0, 100, temp_style, labels=temp_labels, title="TEMP", red_zone_start=85)
-        self.temp_gauge.setFixedSize(380, 380)
+        self.rpm_digital_card.setFixedSize(380, 380)
         
-        # 中間：轉速表（主要儀表 - 較大）
-        rpm_style = GaugeStyle(
-            major_ticks=8, minor_ticks=4,
-            start_angle=225, span_angle=270,
-            tick_color=QColor(100, 150, 255),
-            needle_color=QColor(255, 100, 100),  # 紅色指針
-            text_scale=1.2
+        # 水溫數位卡片
+        self.temp_digital_card = DigitalGaugeCard(
+            title="COOLANT",
+            unit="°C",
+            min_val=0,
+            max_val=120,
+            warning_threshold=95,
+            danger_threshold=105,
+            decimal_places=0
         )
-        self.rpm_gauge = AnalogGauge(0, 8, rpm_style, title="RPM x1000", red_zone_start=6.0)
-        self.rpm_gauge.setFixedSize(420, 420)
+        self.temp_digital_card.setFixedSize(380, 380)
         
-        # 右側：雙層架構 - 列 (rows) 包含多個卡片 (cards)
-        right_container = QWidget()
-        right_container.setFixedSize(420, 420)  # 增加寬度以容納左側指示器
-        right_layout = QHBoxLayout(right_container)  # 改為水平布局
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(5)
-        
-        # === 左側：列指示器（垂直居中）===
-        row_indicator_container = QWidget()
-        row_indicator_container.setFixedWidth(30)
-        row_indicator_container.setStyleSheet("background: transparent;")
-        row_indicator_wrapper = QVBoxLayout(row_indicator_container)
-        row_indicator_wrapper.setContentsMargins(0, 0, 0, 0)
-        row_indicator_wrapper.setSpacing(0)
-        
-        # 上方彈性空間
-        row_indicator_wrapper.addStretch()
-        
-        # 列指示器（垂直排列）
-        row_dots_layout = QVBoxLayout()
-        row_dots_layout.setSpacing(10)
-        row_dots_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.row_indicators = []
-        for i in range(2):  # 2 列
-            dot = QLabel("●")
-            dot.setFixedSize(12, 12)
-            dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            dot.setStyleSheet("color: #444; font-size: 18px;")
-            self.row_indicators.append(dot)
-            row_dots_layout.addWidget(dot)
-        
-        row_indicator_wrapper.addLayout(row_dots_layout)
-        
-        # 下方彈性空間
-        row_indicator_wrapper.addStretch()
-        
-        # === 中間：卡片區域 ===
-        cards_container = QWidget()
-        cards_container.setFixedSize(380, 420)
-        cards_layout = QVBoxLayout(cards_container)
-        cards_layout.setContentsMargins(0, 0, 0, 0)
-        cards_layout.setSpacing(5)
-        
-        # === 第一層：列堆疊 (上下切換) ===
-        self.row_stack = QStackedWidget()
-        self.row_stack.setFixedSize(380, 380)
-        
-        # === 第一列：油量表 / 音樂卡片 / 門狀態卡片 ===
-        row1_cards = QStackedWidget()
-        row1_cards.setFixedSize(380, 380)
-        
-        # 油量表
+        # 油量數位卡片
         fuel_style = GaugeStyle(
             major_ticks=4, minor_ticks=1,
             start_angle=225, span_angle=270,
             tick_color=QColor(100, 150, 255),
-            needle_color=QColor(255, 200, 100),  # 橙黃色（油料顏色）
+            needle_color=QColor(255, 200, 100),
             text_scale=1.0
         )
         fuel_labels = {0: "E", 50: "½", 100: "F"}
         self.fuel_gauge = AnalogGauge(0, 100, fuel_style, labels=fuel_labels, title="FUEL")
         self.fuel_gauge.setFixedSize(380, 380)
         
-        # 音樂卡片
-        self.music_card = MusicCard()
-        self.music_card.request_bind.connect(self.start_spotify_auth)
+        self.left_card_stack.addWidget(self.rpm_digital_card)   # index 0
+        self.left_card_stack.addWidget(self.temp_digital_card)  # index 1
+        self.left_card_stack.addWidget(self.fuel_gauge)         # index 2
         
-        # 門狀態卡片
-        self.door_card = DoorStatusCard()
+        # 左側卡片指示器
+        left_indicator_widget = QWidget()
+        left_indicator_widget.setFixedHeight(30)
+        left_indicator_widget.setStyleSheet("background: transparent;")
+        left_indicator_layout = QHBoxLayout(left_indicator_widget)
+        left_indicator_layout.setContentsMargins(0, 5, 0, 0)
+        left_indicator_layout.setSpacing(8)
+        left_indicator_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        row1_cards.addWidget(self.fuel_gauge)  # row1_index 0
-        row1_cards.addWidget(self.music_card)  # row1_index 1
-        row1_cards.addWidget(self.door_card)   # row1_index 2
-        
-        # === 第二列：Trip 卡片 / ODO 卡片 ===
-        row2_cards = QStackedWidget()
-        row2_cards.setFixedSize(380, 380)
-        
-        # Trip 卡片
-        self.trip_card = TripCard()
-        row2_cards.addWidget(self.trip_card)  # row2_index 0
-        
-        # ODO 卡片
-        self.odo_card = OdometerCard()
-        row2_cards.addWidget(self.odo_card)  # row2_index 1
-        
-        # 添加列到列堆疊
-        self.row_stack.addWidget(row1_cards)  # row_index 0
-        self.row_stack.addWidget(row2_cards)  # row_index 1
-        
-        # === 底部：卡片指示器（水平排列）===
-        card_indicator_widget = QWidget()
-        card_indicator_widget.setFixedHeight(35)
-        card_indicator_widget.setStyleSheet("background: transparent;")
-        card_indicator_layout = QHBoxLayout(card_indicator_widget)
-        card_indicator_layout.setContentsMargins(0, 5, 0, 0)
-        card_indicator_layout.setSpacing(8)
-        
-        self.card_indicators = []
-        # 第一列有 3 張卡片
-        for i in range(3):
+        self.left_indicators = []
+        for i in range(3):  # 3 張左側卡片
             dot = QLabel("●")
             dot.setFixedSize(12, 12)
             dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            dot.setStyleSheet("color: #444; font-size: 20px;")
-            self.card_indicators.append(dot)
-            card_indicator_layout.addWidget(dot)
+            dot.setStyleSheet("color: #444; font-size: 18px;")
+            self.left_indicators.append(dot)
+            left_indicator_layout.addWidget(dot)
+        self.left_indicators[0].setStyleSheet("color: #6af; font-size: 18px;")
         
-        # 組合卡片區域的垂直布局
-        cards_layout.addWidget(self.row_stack)
-        cards_layout.addWidget(card_indicator_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+        left_layout.addWidget(self.left_card_stack)
+        left_layout.addWidget(left_indicator_widget)
         
-        # 設置初始選中狀態
-        self.row_indicators[0].setStyleSheet("color: #6af; font-size: 18px;")
-        self.card_indicators[0].setStyleSheet("color: #6af; font-size: 20px;")
+        # ========================================
+        # 中央區域：時速 + 檔位
+        # ========================================
+        center_section = QWidget()
+        center_section.setFixedWidth(480)  # 增加寬度以容納 3 位數時速
+        center_layout = QVBoxLayout(center_section)
+        center_layout.setSpacing(0)
+        center_layout.setContentsMargins(5, 10, 5, 10)
         
-        # 組合整體佈局：左側列指示器 + 中間卡片區域
-        right_layout.addWidget(row_indicator_container)
-        right_layout.addWidget(cards_container)
+        # === 上方：CRUISE 顯示區（預留空間）===
+        self.cruise_label = QLabel("")
+        self.cruise_label.setFixedHeight(50)
+        self.cruise_label.setStyleSheet("""
+            color: #4ade80;
+            font-size: 28px;
+            font-weight: bold;
+            font-family: Arial;
+            background: transparent;
+            letter-spacing: 3px;
+        """)
+        self.cruise_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # === 狀態變數 ===
-        self.current_row_index = 0  # 當前列索引
-        self.current_card_index = 0  # 當前卡片索引
-        self.rows = [row1_cards, row2_cards]  # 列的引用
-        self.row_card_counts = [3, 2]  # 每列的卡片數量
+        # === 中央：檔位(左) + 時速(右) ===
+        speed_gear_widget = QWidget()
+        speed_gear_widget.setStyleSheet("background: transparent;")
+        speed_gear_layout = QHBoxLayout(speed_gear_widget)
+        speed_gear_layout.setContentsMargins(0, 0, 0, 0)
+        speed_gear_layout.setSpacing(10)
         
-        # 觸控滑動相關
-        self.touch_start_pos = None
-        self.touch_start_time = None
-        self.swipe_threshold = 50  # 滑動閾值（像素）
-        self.is_swiping = False
-        self.swipe_direction = None  # 'horizontal' or 'vertical'
-        self.swipe_enabled = True  # 滑動是否啟用（輸入時禁用）
-
-        # 中央數位速度顯示區
-        center_panel = QWidget()
-        center_layout = QVBoxLayout(center_panel)
-        center_layout.setSpacing(5)
-        center_layout.setContentsMargins(10, 0, 10, 0)
+        # 檔位顯示（左側）
+        self.gear_label = QLabel("P")
+        self.gear_label.setStyleSheet("""
+            color: #4ade80;
+            font-size: 120px;
+            font-weight: bold;
+            font-family: Arial;
+            background: rgba(30, 30, 40, 0.8);
+            border: 4px solid #456;
+            border-radius: 20px;
+        """)
+        self.gear_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.gear_label.setFixedSize(140, 180)
         
-        # 速度顯示
+        # 時速區域（右側）
+        speed_container = QWidget()
+        speed_container.setStyleSheet("background: transparent;")
+        speed_layout = QVBoxLayout(speed_container)
+        speed_layout.setContentsMargins(0, 0, 0, 0)
+        speed_layout.setSpacing(0)
+        
+        # 速度數字
         self.speed_label = QLabel("0")
         self.speed_label.setStyleSheet("""
             color: white;
@@ -2991,49 +4151,155 @@ class Dashboard(QWidget):
             background: transparent;
         """)
         self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.speed_label.setFixedWidth(300)  # 固定寬度確保置中穩定
         
         # 單位標籤
         self.unit_label = QLabel("Km/h")
         self.unit_label.setStyleSheet("""
-            color: #999;
-            font-size: 24px;
+            color: #888;
+            font-size: 28px;
             font-family: Arial;
             background: transparent;
         """)
         self.unit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.unit_label.setFixedWidth(300)  # 與時速同寬確保置中
         
-        # 檔位顯示
-        self.gear_label = QLabel("P")
-        self.gear_label.setStyleSheet("""
-            color: #6af;
-            font-size: 90px;
-            font-weight: bold;
-            font-family: Arial;
-            background: transparent;
-            border: 4px solid #456;
-            border-radius: 20px;
-            padding: 15px 30px;
-        """)
-        self.gear_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.gear_label.setFixedSize(180, 180)
+        speed_layout.addStretch()
+        speed_layout.addWidget(self.speed_label)
+        speed_layout.addWidget(self.unit_label)
+        speed_layout.addStretch()
         
-        center_layout.addStretch()
-        center_layout.addWidget(self.speed_label)
-        center_layout.addWidget(self.unit_label)
-        center_layout.addSpacing(15)
-        center_layout.addWidget(self.gear_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        center_layout.addStretch()
+        speed_gear_layout.addWidget(self.gear_label)
+        speed_gear_layout.addWidget(speed_container, 1)
+        
+        # 組合中央區域佈局
+        center_layout.addWidget(self.cruise_label)
+        center_layout.addWidget(speed_gear_widget, 1)
+        center_layout.addSpacing(20)
+        
+        # ========================================
+        # 右側區域：寬卡片（雙層，可左右滑動）
+        # ========================================
+        right_section = QWidget()
+        right_section.setFixedWidth(840)  # 列指示器 + 卡片
+        right_layout = QHBoxLayout(right_section)  # 改成水平佈局：[列指示器] [卡片區]
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)
+        
+        # 列指示器（垂直排列，放在卡片左側）
+        row_indicator_widget = QWidget()
+        row_indicator_widget.setFixedWidth(30)
+        row_indicator_layout = QVBoxLayout(row_indicator_widget)
+        row_indicator_layout.setContentsMargins(0, 0, 0, 0)
+        row_indicator_layout.setSpacing(12)
+        row_indicator_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.row_indicators = []
+        for i in range(2):  # 2 列
+            dot = QLabel("●")
+            dot.setFixedSize(16, 16)
+            dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            dot.setStyleSheet("color: #444; font-size: 16px;")
+            self.row_indicators.append(dot)
+            row_indicator_layout.addWidget(dot)
+        self.row_indicators[0].setStyleSheet("color: #6af; font-size: 16px;")
+        
+        # 右側卡片區（卡片堆疊 + 底部卡片指示器）
+        right_cards_section = QWidget()
+        right_cards_layout = QVBoxLayout(right_cards_section)
+        right_cards_layout.setContentsMargins(0, 0, 0, 0)
+        right_cards_layout.setSpacing(5)
+        
+        # 右側使用雙層架構 - 列 (rows) 包含多個卡片 (cards)
+        self.row_stack = QStackedWidget()
+        self.row_stack.setFixedSize(800, 380)
+        
+        # === 第一列：音樂卡片 / 門狀態卡片 ===
+        row1_cards = QStackedWidget()
+        row1_cards.setFixedSize(800, 380)
+        
+        # 音樂卡片（寬版）
+        self.music_card = MusicCardWide()
+        self.music_card.request_bind.connect(self.start_spotify_auth)
+        
+        # 門狀態卡片
+        self.door_card = DoorStatusCard()
+        self.door_card.setFixedSize(800, 380)
+        
+        row1_cards.addWidget(self.music_card)  # row1_index 0
+        row1_cards.addWidget(self.door_card)   # row1_index 1
+        
+        # === 第二列：Trip 卡片 / ODO 卡片 ===
+        row2_cards = QStackedWidget()
+        row2_cards.setFixedSize(800, 380)
+        
+        # Trip 卡片（寬版）
+        self.trip_card = TripCardWide()
+        row2_cards.addWidget(self.trip_card)  # row2_index 0
+        
+        # ODO 卡片（寬版）
+        self.odo_card = OdometerCardWide()
+        row2_cards.addWidget(self.odo_card)  # row2_index 1
+        
+        # 添加列到列堆疊
+        self.row_stack.addWidget(row1_cards)  # row_index 0
+        self.row_stack.addWidget(row2_cards)  # row_index 1
+        
+        # 卡片指示器（底部水平排列）
+        card_indicator_container = QWidget()
+        card_indicator_container.setFixedHeight(30)
+        card_indicator_container.setStyleSheet("background: transparent;")
+        card_indicator_layout = QHBoxLayout(card_indicator_container)
+        card_indicator_layout.setContentsMargins(0, 5, 0, 0)
+        card_indicator_layout.setSpacing(8)
+        card_indicator_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.card_indicators = []
+        for i in range(2):  # 第一列有 2 張卡片
+            dot = QLabel("●")
+            dot.setFixedSize(12, 12)
+            dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            dot.setStyleSheet("color: #444; font-size: 18px;")
+            self.card_indicators.append(dot)
+            card_indicator_layout.addWidget(dot)
+        self.card_indicators[0].setStyleSheet("color: #6af; font-size: 18px;")
+        
+        right_cards_layout.addWidget(self.row_stack)
+        right_cards_layout.addWidget(card_indicator_container)
+        
+        # 組合右側區域：列指示器 + 卡片區
+        right_layout.addWidget(row_indicator_widget)
+        right_layout.addWidget(right_cards_section)
+        
+        # === 狀態變數 ===
+        self.current_row_index = 0     # 當前列索引（右側）
+        self.current_card_index = 0    # 當前卡片索引（右側）
+        self.current_left_index = 0    # 當前左側卡片索引
+        self.rows = [row1_cards, row2_cards]  # 列的引用
+        self.row_card_counts = [2, 2]  # 每列的卡片數量
+        self.left_card_count = 3       # 左側卡片數量
+        
+        # 為了相容舊版 API，創建虛擬的儀表物件
+        self.temp_gauge = self.temp_digital_card  # 相容舊 API
+        self.rpm_gauge = self.rpm_digital_card    # 相容舊 API
+        
+        # 觸控滑動相關
+        self.touch_start_pos = None
+        self.touch_start_time = None
+        self.swipe_threshold = 50  # 滑動閾值（像素）
+        self.is_swiping = False
+        self.swipe_direction = None  # 'horizontal' or 'vertical'
+        self.swipe_enabled = True  # 滑動是否啟用（輸入時禁用）
+        
+        # 判斷觸控位置（左側或右側）
+        self.swipe_area = None  # 'left' or 'right'
 
-        # 組合版面 - 針對 1920x480 優化
-        main_layout.addSpacing(20)
-        main_layout.addWidget(self.temp_gauge)
-        main_layout.addSpacing(10)
-        main_layout.addWidget(self.rpm_gauge)
-        main_layout.addSpacing(30)
-        main_layout.addWidget(center_panel)
-        main_layout.addSpacing(30)
-        main_layout.addWidget(right_container)  # 使用包含指示器的容器
-        main_layout.addSpacing(20)
+        # 組合主佈局
+        # 左側 380px | 彈性空間 | 中央 420px | 右側 850px
+        main_layout.addWidget(left_section)
+        main_layout.addStretch(1)  # 所有彈性空間都在左邊
+        main_layout.addWidget(center_section)
+        main_layout.addWidget(right_section)
 
     def init_data(self):
         """初始化儀表數據，可以從外部數據源更新"""
@@ -3487,22 +4753,29 @@ class Dashboard(QWidget):
 
     def update_indicators(self):
         """更新所有指示器的狀態"""
-        # 更新列指示器
-        for i, indicator in enumerate(self.row_indicators):
-            if i == self.current_row_index:
+        # 更新左側卡片指示器
+        for i, indicator in enumerate(self.left_indicators):
+            if i == self.current_left_index:
                 indicator.setStyleSheet("color: #6af; font-size: 18px;")
             else:
                 indicator.setStyleSheet("color: #444; font-size: 18px;")
         
-        # 更新卡片指示器（根據當前列的卡片數量）
+        # 更新右側列指示器
+        for i, indicator in enumerate(self.row_indicators):
+            if i == self.current_row_index:
+                indicator.setStyleSheet("color: #6af; font-size: 16px;")
+            else:
+                indicator.setStyleSheet("color: #444; font-size: 16px;")
+        
+        # 更新右側卡片指示器（根據當前列的卡片數量）
         card_count = self.row_card_counts[self.current_row_index]
         for i, indicator in enumerate(self.card_indicators):
             if i < card_count:
                 indicator.show()
                 if i == self.current_card_index:
-                    indicator.setStyleSheet("color: #6af; font-size: 20px;")
+                    indicator.setStyleSheet("color: #6af; font-size: 18px;")
                 else:
-                    indicator.setStyleSheet("color: #444; font-size: 20px;")
+                    indicator.setStyleSheet("color: #444; font-size: 18px;")
             else:
                 indicator.hide()  # 隱藏多餘的指示器
     
@@ -3539,6 +4812,20 @@ class Dashboard(QWidget):
             self.panel_touch_time = time.time()
             return
         
+        # 檢查是否在左側區域（左側卡片切換）
+        left_stack_global = self.left_card_stack.mapToGlobal(QPoint(0, 0))
+        left_stack_rect = self.left_card_stack.geometry()
+        left_stack_rect.moveTopLeft(left_stack_global)
+        
+        if left_stack_rect.contains(a0.globalPosition().toPoint()):
+            self.touch_start_pos = a0.position().toPoint()
+            self.is_swiping = True
+            self.swipe_direction = None
+            self.swipe_area = 'left'
+            import time
+            self.touch_start_time = time.time()
+            return
+        
         # 檢查是否在右側區域（卡片切換）
         row_stack_global = self.row_stack.mapToGlobal(QPoint(0, 0))
         row_stack_rect = self.row_stack.geometry()
@@ -3548,6 +4835,7 @@ class Dashboard(QWidget):
             self.touch_start_pos = a0.position().toPoint()
             self.is_swiping = True
             self.swipe_direction = None
+            self.swipe_area = 'right'
             import time
             self.touch_start_time = time.time()
     
@@ -3663,33 +4951,45 @@ class Dashboard(QWidget):
             end_pos = a0.position().toPoint()
             delta = end_pos - self.touch_start_pos
             
-            # 根據滑動方向處理
-            if self.swipe_direction == 'horizontal':
-                # 左右滑動 - 切換卡片
-                if abs(delta.x()) > self.swipe_threshold:
+            # 根據滑動方向和區域處理
+            if self.swipe_area == 'left':
+                # 左側區域：只支援左右滑動切換卡片
+                if self.swipe_direction == 'horizontal' and abs(delta.x()) > self.swipe_threshold:
                     if delta.x() > 0:
                         # 向右滑動 - 切換到上一張卡片
-                        self.switch_card(-1)
+                        self.switch_left_card(-1)
                     else:
                         # 向左滑動 - 切換到下一張卡片
-                        self.switch_card(1)
-            elif self.swipe_direction == 'vertical':
-                # 上下滑動 - 切換列
-                if abs(delta.y()) > self.swipe_threshold:
-                    if delta.y() > 0:
-                        # 向下滑動 - 切換到上一列
-                        self.switch_row(-1)
-                    else:
-                        # 向上滑動 - 切換到下一列
-                        self.switch_row(1)
+                        self.switch_left_card(1)
+            elif self.swipe_area == 'right':
+                # 右側區域：支援左右滑動切換卡片，上下滑動切換列
+                if self.swipe_direction == 'horizontal':
+                    # 左右滑動 - 切換卡片
+                    if abs(delta.x()) > self.swipe_threshold:
+                        if delta.x() > 0:
+                            # 向右滑動 - 切換到上一張卡片
+                            self.switch_card(-1)
+                        else:
+                            # 向左滑動 - 切換到下一張卡片
+                            self.switch_card(1)
+                elif self.swipe_direction == 'vertical':
+                    # 上下滑動 - 切換列
+                    if abs(delta.y()) > self.swipe_threshold:
+                        if delta.y() > 0:
+                            # 向下滑動 - 切換到上一列
+                            self.switch_row(-1)
+                        else:
+                            # 向上滑動 - 切換到下一列
+                            self.switch_row(1)
             
             # 重置狀態
             self.touch_start_pos = None
             self.is_swiping = False
             self.swipe_direction = None
+            self.swipe_area = None
     
     def switch_row(self, direction):
-        """切換列
+        """切換列（右側卡片區域）
         Args:
             direction: 1 為下一列，-1 為上一列
         """
@@ -3709,11 +5009,11 @@ class Dashboard(QWidget):
         self.update_indicators()
         
         # 顯示提示
-        row_names = ["第一列 (油量/音樂/門)", "第二列 (Trip/ODO)"]
+        row_names = ["第一列 (音樂/門)", "第二列 (Trip/ODO)"]
         print(f"切換到: {row_names[self.current_row_index]}")
     
     def switch_card(self, direction):
-        """切換當前列的卡片
+        """切換當前列的卡片（右側）
         Args:
             direction: 1 為下一張，-1 為上一張
         """
@@ -3730,22 +5030,51 @@ class Dashboard(QWidget):
         self.update_indicators()
         
         # 顯示提示
-        row1_card_names = ["油量表", "音樂播放器", "門狀態"]
+        row1_card_names = ["音樂播放器", "門狀態"]
         row2_card_names = ["Trip卡片", "ODO卡片"]
         all_card_names = [row1_card_names, row2_card_names]
         
         card_name = all_card_names[self.current_row_index][self.current_card_index]
         print(f"切換到: {card_name}")
     
+    def switch_left_card(self, direction):
+        """切換左側卡片（轉速/水溫/油量）
+        Args:
+            direction: 1 為下一張，-1 為上一張
+        """
+        self.current_left_index = (self.current_left_index + direction) % self.left_card_count
+        self.left_card_stack.setCurrentIndex(self.current_left_index)
+        
+        # 更新左側指示器
+        for i, dot in enumerate(self.left_indicators):
+            if i == self.current_left_index:
+                dot.setStyleSheet("color: #6af; font-size: 18px;")
+            else:
+                dot.setStyleSheet("color: #444; font-size: 18px;")
+        
+        # 顯示提示
+        left_card_names = ["轉速", "水溫", "油量"]
+        print(f"左側切換到: {left_card_names[self.current_left_index]}")
+    
     def wheelEvent(self, a0):  # type: ignore
-        """滑鼠滾輪切換右側卡片（桌面使用）"""
+        """滑鼠滾輪切換卡片（桌面使用）"""
         if a0 is None:
             return
+        pos = a0.position().toPoint()
+        delta = a0.angleDelta().y()
+        modifiers = a0.modifiers()
+        
+        # 檢查滑鼠是否在左側區域
+        if self.left_card_stack.geometry().contains(pos):
+            # 滾輪切換左側卡片
+            if delta > 0:  # 向上滾動
+                self.switch_left_card(-1)
+            else:  # 向下滾動
+                self.switch_left_card(1)
+            return
+        
         # 檢查滑鼠是否在右側區域
-        if self.row_stack.geometry().contains(a0.position().toPoint()):
-            delta = a0.angleDelta().y()
-            modifiers = a0.modifiers()
-            
+        if self.row_stack.geometry().contains(pos):
             if modifiers & Qt.KeyboardModifier.ShiftModifier:
                 # Shift + 滾輪：切換列
                 if delta > 0:  # 向上滾動
@@ -3884,30 +5213,35 @@ class Dashboard(QWidget):
 
     def update_display(self):
         """更新所有儀表顯示"""
-        self.rpm_gauge.set_value(self.rpm)
-        self.temp_gauge.set_value(self.temp)
+        # rpm 是以「千轉」為單位 (0-8)，數位卡片顯示實際轉速
+        self.rpm_digital_card.set_value(self.rpm * 1000)
+        
+        # temp 是百分比 (0-100)，轉換為大約的攝氏溫度
+        # 假設 0% = 40°C, 100% = 120°C
+        temp_celsius = 40 + (self.temp / 100) * 80
+        self.temp_digital_card.set_value(temp_celsius)
+        
         self.fuel_gauge.set_value(self.fuel)
         self.speed_label.setText(str(int(self.speed)))
         
         # 更新檔位顯示顏色
         gear_colors = {
-            "P": "#6af",  # 藍色
-            "R": "#f66",  # 紅色
-            "N": "#fa6",  # 橙色
-            "D": "#6f6",  # 綠色
-            "S": "#f6f",  # 紫色
-            "L": "#ff6",  # 黃色
+            "P": "#6af",   # 藍色
+            "R": "#f66",   # 紅色
+            "N": "#fa6",   # 橙色
+            "D": "#4ade80",  # 綠色
+            "S": "#f6f",   # 紫色
+            "L": "#ff6",   # 黃色
         }
         color = gear_colors.get(self.gear, "#6af")
         self.gear_label.setStyleSheet(f"""
             color: {color};
-            font-size: 90px;
+            font-size: 120px;
             font-weight: bold;
             font-family: Arial;
-            background: transparent;
+            background: rgba(30, 30, 40, 0.8);
             border: 4px solid #456;
             border-radius: 20px;
-            padding: 15px 30px;
         """)
         self.gear_label.setText(self.gear)
 
