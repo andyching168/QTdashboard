@@ -3,6 +3,8 @@ import os
 import math
 import platform
 import time
+import json
+from pathlib import Path
 
 # 抑制 Qt 多媒體 FFmpeg 音訊格式解析警告
 os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=false')
@@ -17,6 +19,98 @@ from PyQt6.QtMultimediaWidgets import QVideoWidget
 from spotify_integration import setup_spotify
 from spotify_auth import SpotifyAuthManager
 from spotify_qr_auth import SpotifyQRAuthDialog
+
+
+# === 持久化存儲管理 ===
+class OdometerStorage:
+    """ODO 和 Trip 資料的持久化存儲"""
+    
+    _instance = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
+        
+        # 決定存儲路徑
+        if platform.system() == 'Windows':
+            config_dir = Path(os.environ.get('APPDATA', '.')) / 'QTDashboard'
+        else:
+            config_dir = Path.home() / '.config' / 'qtdashboard'
+        
+        config_dir.mkdir(parents=True, exist_ok=True)
+        self.data_file = config_dir / 'odometer_data.json'
+        
+        # 預設資料
+        self.data = {
+            'odo_total': 0.0,
+            'trip1_distance': 0.0,
+            'trip2_distance': 0.0,
+            'trip1_reset_time': None,
+            'trip2_reset_time': None,
+            'last_update': None
+        }
+        
+        # 載入現有資料
+        self.load()
+    
+    def load(self):
+        """從檔案載入資料"""
+        try:
+            if self.data_file.exists():
+                with open(self.data_file, 'r', encoding='utf-8') as f:
+                    saved_data = json.load(f)
+                    self.data.update(saved_data)
+                    print(f"[Storage] 已載入里程資料: ODO={self.data['odo_total']:.1f}km, "
+                          f"Trip1={self.data['trip1_distance']:.1f}km, "
+                          f"Trip2={self.data['trip2_distance']:.1f}km")
+        except Exception as e:
+            print(f"[Storage] 載入里程資料失敗: {e}")
+    
+    def save(self):
+        """儲存資料到檔案"""
+        try:
+            self.data['last_update'] = time.time()
+            with open(self.data_file, 'w', encoding='utf-8') as f:
+                json.dump(self.data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"[Storage] 儲存里程資料失敗: {e}")
+    
+    def update_odo(self, value: float):
+        """更新 ODO 總里程"""
+        self.data['odo_total'] = value
+        self.save()
+    
+    def update_trip1(self, distance: float, reset_time: float = None):
+        """更新 Trip 1"""
+        self.data['trip1_distance'] = distance
+        if reset_time is not None:
+            self.data['trip1_reset_time'] = reset_time
+        self.save()
+    
+    def update_trip2(self, distance: float, reset_time: float = None):
+        """更新 Trip 2"""
+        self.data['trip2_distance'] = distance
+        if reset_time is not None:
+            self.data['trip2_reset_time'] = reset_time
+        self.save()
+    
+    def get_odo(self) -> float:
+        return self.data.get('odo_total', 0.0)
+    
+    def get_trip1(self) -> tuple:
+        return (self.data.get('trip1_distance', 0.0), 
+                self.data.get('trip1_reset_time'))
+    
+    def get_trip2(self) -> tuple:
+        return (self.data.get('trip2_distance', 0.0), 
+                self.data.get('trip2_reset_time'))
 
 
 def is_raspberry_pi():
@@ -1251,8 +1345,11 @@ class OdometerCardWide(QWidget):
             }
         """)
         
-        # 總里程數據
-        self.total_distance = 0.0  # km
+        # 持久化存儲
+        self.storage = OdometerStorage()
+        
+        # 總里程數據（從存儲載入）
+        self.total_distance = self.storage.get_odo()
         self.last_sync_time = None
         
         # 輸入狀態
@@ -1276,6 +1373,9 @@ class OdometerCardWide(QWidget):
         
         # 預設顯示模式
         self.stack.setCurrentWidget(self.display_page)
+        
+        # 初始化顯示（載入的值）
+        self.odo_distance_label.setText(f"{int(self.total_distance)}")
     
     def _create_display_page(self):
         """創建顯示頁面 - 水平佈局"""
@@ -1694,6 +1794,8 @@ class OdometerCardWide(QWidget):
         """由 Dashboard 物理心跳呼叫，累加里程"""
         self.total_distance += distance_km
         self.odo_distance_label.setText(f"{int(self.total_distance)}")
+        # 每累加一次就儲存（實際上 Dashboard 每秒呼叫一次）
+        self.storage.update_odo(self.total_distance)
     
     def _update_sync_time_display(self):
         """更新同步時間顯示"""
@@ -1940,11 +2042,12 @@ class TripCardWide(QWidget):
             }
         """)
         
-        # Trip 數據
-        self.trip1_distance = 0.0  # km
-        self.trip2_distance = 0.0  # km
-        self.trip1_reset_time = None
-        self.trip2_reset_time = None
+        # 持久化存儲
+        self.storage = OdometerStorage()
+        
+        # Trip 數據（從存儲載入）
+        self.trip1_distance, self.trip1_reset_time = self.storage.get_trip1()
+        self.trip2_distance, self.trip2_reset_time = self.storage.get_trip2()
         
         # Main layout - 水平排列
         main_layout = QHBoxLayout(self)
@@ -1965,6 +2068,12 @@ class TripCardWide(QWidget):
         main_layout.addWidget(trip1_widget, 1)
         main_layout.addWidget(separator)
         main_layout.addWidget(trip2_widget, 1)
+        
+        # 初始化顯示（載入的值）
+        self.trip1_distance_label.setText(f"{self.trip1_distance:.1f}")
+        self.trip2_distance_label.setText(f"{self.trip2_distance:.1f}")
+        self._update_reset_time_display(True)
+        self._update_reset_time_display(False)
     
     def _create_trip_panel(self, title, is_trip1=True):
         """創建單個 Trip 面板"""
@@ -2091,6 +2200,10 @@ class TripCardWide(QWidget):
         # 更新顯示
         self.trip1_distance_label.setText(f"{self.trip1_distance:.1f}")
         self.trip2_distance_label.setText(f"{self.trip2_distance:.1f}")
+        
+        # 儲存到檔案
+        self.storage.update_trip1(self.trip1_distance)
+        self.storage.update_trip2(self.trip2_distance)
     
     def reset_trip1(self):
         """重置 Trip 1"""
@@ -2098,6 +2211,8 @@ class TripCardWide(QWidget):
         self.trip1_distance_label.setText("0.0")
         self.trip1_reset_time = time.time()
         self._update_reset_time_display(True)
+        # 儲存到檔案（包含 reset 時間）
+        self.storage.update_trip1(self.trip1_distance, self.trip1_reset_time)
         print("Trip 1 已重置")
     
     def reset_trip2(self):
@@ -2106,6 +2221,8 @@ class TripCardWide(QWidget):
         self.trip2_distance_label.setText("0.0")
         self.trip2_reset_time = time.time()
         self._update_reset_time_display(False)
+        # 儲存到檔案（包含 reset 時間）
+        self.storage.update_trip2(self.trip2_distance, self.trip2_reset_time)
         print("Trip 2 已重置")
     
     def _update_reset_time_display(self, is_trip1=True):
@@ -4105,7 +4222,7 @@ class Dashboard(QWidget):
         self.cruise_label.setFixedHeight(50)
         self.cruise_label.setStyleSheet("""
             color: #4ade80;
-            font-size: 28px;
+            font-size: 40px;
             font-weight: bold;
             font-family: Arial;
             background: transparent;
@@ -4308,6 +4425,10 @@ class Dashboard(QWidget):
         self.temp = 45  # 正常水溫約在 45-50% 位置（對應 85-95°C）
         self.fuel = 60  # 稍微偏上的油量
         self.gear = "P"
+        
+        # 定速巡航狀態
+        self.cruise_switch = False   # 開關是否開啟（白色）
+        self.cruise_engaged = False  # 是否作動中（綠色）
         
         # RPM 動畫平滑 (GUI 端二次平滑)
         self.target_rpm = 0.0  # 目標轉速
@@ -5208,8 +5329,64 @@ class Dashboard(QWidget):
             if hasattr(self, 'door_card'):
                 new_state = not self.door_card.door_bk_closed
                 self.set_door_status("BK", new_state)
+        
+        # V: 定速巡航開關切換
+        elif key == Qt.Key.Key_V:
+            self.toggle_cruise_switch()
+        # B: 定速巡航作動切換
+        elif key == Qt.Key.Key_B:
+            self.toggle_cruise_engaged()
 
         self.update_display()
+
+    def toggle_cruise_switch(self):
+        """切換定速巡航開關（V 鍵）"""
+        self.cruise_switch = not self.cruise_switch
+        if not self.cruise_switch:
+            self.cruise_engaged = False
+        self.update_cruise_display()
+        print(f"定速巡航開關: {'開' if self.cruise_switch else '關'}")
+    
+    def toggle_cruise_engaged(self):
+        """切換定速巡航作動（B 鍵）"""
+        if self.cruise_switch:  # 只有開關開啟時才能作動
+            self.cruise_engaged = not self.cruise_engaged
+            self.update_cruise_display()
+            print(f"定速巡航作動: {'是' if self.cruise_engaged else '否'}")
+    
+    def set_cruise(self, cruise_switch: bool, cruise_engaged: bool):
+        """設定巡航狀態（從 CAN 訊號）"""
+        self.cruise_switch = cruise_switch
+        self.cruise_engaged = cruise_engaged
+        self.update_cruise_display()
+    
+    def update_cruise_display(self):
+        """更新巡航顯示 - 三種狀態"""
+        if not self.cruise_switch:
+            # 不顯示
+            self.cruise_label.setText("")
+        elif self.cruise_engaged:
+            # 綠色 - 作動中
+            self.cruise_label.setText("CRUISE")
+            self.cruise_label.setStyleSheet("""
+                color: #4ade80;
+                font-size: 40px;
+                font-weight: bold;
+                font-family: Arial;
+                background: transparent;
+                letter-spacing: 2px;
+            """)
+        else:
+            # 白色 - 待命
+            self.cruise_label.setText("CRUISE")
+            self.cruise_label.setStyleSheet("""
+                color: #ffffff;
+                font-size: 40px;
+                font-weight: bold;
+                font-family: Arial;
+                background: transparent;
+                letter-spacing: 2px;
+            """)
 
     def update_display(self):
         """更新所有儀表顯示"""

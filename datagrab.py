@@ -44,6 +44,7 @@ class WorkerSignals(QObject):
     update_gear = pyqtSignal(str)    # 發送檔位 (str)
     update_turn_signal = pyqtSignal(str)  # 發送方向燈狀態 (str: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off")
     update_door_status = pyqtSignal(str, bool)  # 發送門狀態 (door: str, is_closed: bool)
+    update_cruise = pyqtSignal(bool, bool)  # 發送巡航狀態 (cruise_switch: bool, cruise_engaged: bool)
     # update_nav_icon = pyqtSignal(str) # 預留給導航圖片
 
 # --- 全局變數 ---
@@ -239,10 +240,12 @@ def unified_receiver(bus, db, signals):
                 except Exception as e:
                     logger.error(f"處理轉速訊息錯誤: {e}")
             
-            # 3. 處理 FUEL 油量 (ID 0x335 / 821)
+            # 3. 處理 THROTTLE_STATUS (ID 0x335 / 821) - 油量 + 巡航
             elif msg.arbitration_id == 0x335:
                 try:
                     decoded = db.decode_message(msg.arbitration_id, msg.data)
+                    
+                    # === 油量 ===
                     # FUEL 縮放 (0.3984, 0)，範圍 0-100%
                     fuel_value = decoded['FUEL']
                     if hasattr(fuel_value, 'value'):
@@ -255,11 +258,32 @@ def unified_receiver(bus, db, signals):
                     
                     # 更新前端油量顯示 (0-100%)
                     signals.update_fuel.emit(fuel)  # ✅ 安全發送
+                    
+                    # === 巡航狀態 ===
+                    # CRUSE_ONOFF: bit 2 (開關)
+                    # CRUSE_ENABLED: bit 4 (作動中)
+                    cruise_switch_value = decoded.get('CRUSE_ONOFF', 0)
+                    cruise_enabled_value = decoded.get('CRUSE_ENABLED', 0)
+                    
+                    # 轉換為 bool
+                    if hasattr(cruise_switch_value, 'value'):
+                        cruise_switch = bool(int(cruise_switch_value.value))
+                    else:
+                        cruise_switch = bool(int(cruise_switch_value))
+                    
+                    if hasattr(cruise_enabled_value, 'value'):
+                        cruise_enabled = bool(int(cruise_enabled_value.value))
+                    else:
+                        cruise_enabled = bool(int(cruise_enabled_value))
+                    
+                    # 發送巡航狀態到前端
+                    signals.update_cruise.emit(cruise_switch, cruise_enabled)
+                    logger.debug(f"巡航: 開關={cruise_switch} 作動={cruise_enabled}")
                             
                 except cantools.database.errors.DecodeError as e:
-                    logger.error(f"DBC 解碼錯誤 (FUEL): {e}")
+                    logger.error(f"DBC 解碼錯誤 (THROTTLE_STATUS): {e}")
                 except Exception as e:
-                    logger.error(f"處理油量訊息錯誤: {e}")
+                    logger.error(f"處理油量/巡航訊息錯誤: {e}")
             
             # 4. 處理 SPEED_FL 速度 (ID 0x38A / 906)
             elif msg.arbitration_id == 0x38A:
@@ -497,6 +521,7 @@ def main():
             signals.update_gear.connect(dashboard.set_gear)
             signals.update_turn_signal.connect(dashboard.set_turn_signal)
             signals.update_door_status.connect(dashboard.set_door_status)
+            signals.update_cruise.connect(dashboard.set_cruise)
             
             # 啟動背景執行緒
             logger.info("正在啟動背景執行緒...")
