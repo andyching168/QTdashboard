@@ -1151,6 +1151,192 @@ class AnalogGauge(QWidget):
         rect = QRectF(-50, 35, 100, 20)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.title)
 
+class ControlPanel(QWidget):
+    """下拉控制面板（類似 Android 狀態列）"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(1920, 300)
+        
+        # 設置半透明背景 - 使用 AutoFillBackground
+        self.setAutoFillBackground(True)
+        
+        # 主佈局
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(40, 30, 40, 30)
+        layout.setSpacing(20)
+        
+        # 標題列
+        title_layout = QHBoxLayout()
+        title_label = QLabel("快速設定")
+        title_label.setStyleSheet("""
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_layout.addWidget(title_label)
+        title_layout.addStretch()
+        
+        # 關閉按鈕
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(40, 40)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 255, 255, 0.1);
+                color: white;
+                border-radius: 20px;
+                font-size: 24px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.2);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.3);
+            }
+        """)
+        close_btn.clicked.connect(self.hide_panel)
+        title_layout.addWidget(close_btn)
+        
+        layout.addLayout(title_layout)
+        
+        # 按鈕網格
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(20)
+        
+        # 創建三個示例按鈕
+        self.buttons = []
+        button_configs = [
+            ("WiFi", "📶", "#1DB954"),
+            ("藍牙", "🔵", "#4285F4"),
+            ("亮度", "☀", "#FF9800")
+        ]
+        
+        for title, icon, color in button_configs:
+            btn = self.create_control_button(title, icon, color)
+            self.buttons.append(btn)
+            button_layout.addWidget(btn)
+        
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+        layout.addStretch()
+        
+        # 隱藏指示
+        hint_label = QLabel("向上滑動以關閉")
+        hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hint_label.setStyleSheet("""
+            color: #888;
+            font-size: 14px;
+            background: transparent;
+        """)
+        layout.addWidget(hint_label)
+        
+    def paintEvent(self, event):
+        """自定義繪製半透明背景"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # 繪製圓角矩形背景（底部圓角）
+        rect = self.rect()
+        path = QPainterPath()
+        radius = 20
+        
+        # 從左上開始，順時針繪製
+        path.moveTo(0, 0)  # 左上
+        path.lineTo(rect.width(), 0)  # 右上
+        path.lineTo(rect.width(), rect.height() - radius)  # 右側到圓角
+        path.arcTo(rect.width() - radius * 2, rect.height() - radius * 2, 
+                   radius * 2, radius * 2, 0, -90)  # 右下圓角
+        path.lineTo(radius, rect.height())  # 底部
+        path.arcTo(0, rect.height() - radius * 2, 
+                   radius * 2, radius * 2, -90, -90)  # 左下圓角
+        path.closeSubpath()
+        
+        # 漸層背景
+        gradient = QLinearGradient(0, 0, 0, rect.height())
+        gradient.setColorAt(0, QColor(42, 42, 53, 220))
+        gradient.setColorAt(1, QColor(26, 26, 37, 230))
+        
+        painter.fillPath(path, QBrush(gradient))
+    
+    def create_control_button(self, title, icon, color):
+        """創建控制按鈕"""
+        container = QWidget()
+        container.setFixedSize(150, 150)
+        container.setCursor(Qt.CursorShape.PointingHandCursor)
+        container.setStyleSheet("background: transparent;")
+        
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        
+        # 按鈕主體
+        btn = QPushButton()
+        btn.setFixedSize(120, 120)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {color};
+                border: none;
+                border-radius: 20px;
+                font-size: 48px;
+                color: white;
+            }}
+            QPushButton:hover {{
+                background-color: {self.adjust_color(color, 1.2)};
+            }}
+            QPushButton:pressed {{
+                background-color: {self.adjust_color(color, 0.8)};
+            }}
+        """)
+        btn.setText(icon)
+        btn.clicked.connect(lambda: self.on_button_clicked(title))
+        
+        # 標籤
+        label = QLabel(title)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 16px;
+                background: transparent;
+            }
+        """)
+        
+        layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label)
+        
+        return container
+    
+    def adjust_color(self, hex_color, factor):
+        """調整顏色亮度"""
+        hex_color = hex_color.lstrip('#')
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        r = min(255, int(r * factor))
+        g = min(255, int(g * factor))
+        b = min(255, int(b * factor))
+        return f'#{r:02x}{g:02x}{b:02x}'
+    
+    def on_button_clicked(self, title):
+        """按鈕點擊處理"""
+        print(f"控制面板按鈕被點擊: {title}")
+        # 這裡可以添加具體功能
+        if title == "WiFi":
+            # 可以觸發 WiFi 管理器
+            if self.parent():
+                self.parent().show_wifi_manager()
+        elif title == "藍牙":
+            print("藍牙功能待實現")
+        elif title == "亮度":
+            print("亮度調整待實現")
+    
+    def hide_panel(self):
+        """隱藏面板"""
+        if self.parent():
+            self.parent().hide_control_panel()
+
+
 class Dashboard(QWidget):
     # 定義 Qt Signals，用於從背景執行緒安全地更新 UI
     signal_update_rpm = pyqtSignal(float)
@@ -1194,6 +1380,13 @@ class Dashboard(QWidget):
                     stop:0 #0a0a0f, stop:0.5 #15151a, stop:1 #0a0a0f);
             }
         """)
+        
+        # 下拉面板相關
+        self.control_panel = None
+        self.panel_animation = None
+        self.panel_visible = False
+        self.panel_touch_start = None
+        self.panel_drag_active = False
 
         self.init_ui()
         self.init_data()
@@ -1463,6 +1656,11 @@ class Dashboard(QWidget):
         self.status_bar = self.create_status_bar()
         main_vertical_layout.addWidget(self.status_bar)
         
+        # === 創建下拉控制面板（初始隱藏在螢幕上方）===
+        self.control_panel = ControlPanel(self)
+        self.control_panel.setGeometry(0, -300, 1920, 300)
+        self.control_panel.raise_()  # 確保在最上層
+        
         # === 主儀表板區域 ===
         dashboard_container = QWidget()
         main_layout = QHBoxLayout()
@@ -1710,13 +1908,50 @@ class Dashboard(QWidget):
             self.auth_dialog.close()
             del self.auth_dialog
     
+    def show_control_panel(self):
+        """顯示下拉控制面板"""
+        if self.panel_visible:
+            return
+        
+        self.panel_visible = True
+        
+        # 創建動畫
+        self.panel_animation = QPropertyAnimation(self.control_panel, b"geometry")
+        self.panel_animation.setDuration(300)  # 300ms
+        self.panel_animation.setStartValue(self.control_panel.geometry())
+        self.panel_animation.setEndValue(QRectF(0, 50, 1920, 300).toRect())  # 從狀態欄下方滑出
+        self.panel_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.panel_animation.start()
+        
+        self.control_panel.show()
+        self.control_panel.raise_()
+    
+    def hide_control_panel(self):
+        """隱藏下拉控制面板"""
+        if not self.panel_visible:
+            return
+        
+        self.panel_visible = False
+        
+        # 創建動畫
+        self.panel_animation = QPropertyAnimation(self.control_panel, b"geometry")
+        self.panel_animation.setDuration(300)
+        self.panel_animation.setStartValue(self.control_panel.geometry())
+        self.panel_animation.setEndValue(QRectF(0, -300, 1920, 300).toRect())
+        self.panel_animation.setEasingCurve(QEasingCurve.Type.InCubic)
+        self.panel_animation.finished.connect(self.control_panel.hide)
+        self.panel_animation.start()
+    
     def show_wifi_manager(self):
         """顯示 WiFi 管理器"""
         try:
             from wifi_manager import WiFiManagerWidget
             
+            # 在 Mac 上自動啟用測試模式
+            test_mode = platform.system() == 'Darwin'
+            
             # 創建 WiFi 管理器對話框
-            self.wifi_dialog = WiFiManagerWidget(self)
+            self.wifi_dialog = WiFiManagerWidget(self, test_mode=test_mode)
             self.wifi_dialog.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
             self.wifi_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
             
@@ -1726,7 +1961,10 @@ class Dashboard(QWidget):
             )
             
             self.wifi_dialog.show()
-            print("WiFi 管理器已開啟")
+            if test_mode:
+                print("WiFi 管理器已開啟 (測試模式)")
+            else:
+                print("WiFi 管理器已開啟")
             
         except ImportError:
             print("WiFi 管理器模組未找到")
@@ -1947,7 +2185,22 @@ class Dashboard(QWidget):
 
     def mousePressEvent(self, event):
         """觸控/滑鼠按下事件"""
-        # 檢查是否在右側區域
+        pos = event.position().toPoint()
+        
+        # 檢查是否在控制面板區域（如果面板已展開）
+        if self.panel_visible and self.control_panel.geometry().contains(pos):
+            self.panel_touch_start = pos
+            self.panel_drag_active = True
+            return
+        
+        # 檢查是否在頂部觸發區域（狀態欄高度 + 額外的觸控緩衝區）
+        # 監聽範圍：頂部 80 像素（狀態欄 50px + 緩衝 30px）
+        if pos.y() <= 80 and not self.panel_visible:
+            self.panel_touch_start = pos
+            self.panel_drag_active = True
+            return
+        
+        # 檢查是否在右側區域（卡片切換）
         right_stack_global = self.right_stack.mapToGlobal(QPoint(0, 0))
         right_stack_rect = self.right_stack.geometry()
         right_stack_rect.moveTopLeft(right_stack_global)
@@ -1960,6 +2213,29 @@ class Dashboard(QWidget):
     
     def mouseMoveEvent(self, event):
         """觸控/滑鼠移動事件"""
+        # 處理控制面板拖拽
+        if self.panel_drag_active and self.panel_touch_start:
+            pos = event.position().toPoint()
+            delta_y = pos.y() - self.panel_touch_start.y()
+            
+            if self.panel_visible:
+                # 面板已展開，處理向上拖拽關閉
+                if delta_y < 0:
+                    # 限制拖拽範圍
+                    new_y = max(-300, 50 + delta_y)
+                    self.control_panel.setGeometry(0, int(new_y), 1920, 300)
+            else:
+                # 面板未展開，處理向下拖拽開啟
+                if delta_y > 0:
+                    # 限制拖拽範圍
+                    new_y = min(50, -300 + delta_y)
+                    self.control_panel.setGeometry(0, int(new_y), 1920, 300)
+                    if not self.control_panel.isVisible():
+                        self.control_panel.show()
+                        self.control_panel.raise_()
+            return
+        
+        # 處理卡片切換滑動
         if self.is_swiping and self.touch_start_pos:
             # 計算滑動距離
             delta = event.position().toPoint() - self.touch_start_pos
@@ -1971,6 +2247,37 @@ class Dashboard(QWidget):
     
     def mouseReleaseEvent(self, event):
         """觸控/滑鼠釋放事件"""
+        # 處理控制面板拖拽結束
+        if self.panel_drag_active and self.panel_touch_start:
+            pos = event.position().toPoint()
+            delta_y = pos.y() - self.panel_touch_start.y()
+            
+            # 根據拖拽距離決定顯示或隱藏
+            threshold = 80  # 閾值：超過 80 像素則觸發
+            
+            if self.panel_visible:
+                # 面板已展開
+                if delta_y < -threshold:
+                    # 向上拖拽超過閾值，關閉面板
+                    self.hide_control_panel()
+                else:
+                    # 未超過閾值，回彈到展開位置
+                    self.show_control_panel()
+            else:
+                # 面板未展開
+                if delta_y > threshold:
+                    # 向下拖拽超過閾值，展開面板
+                    self.show_control_panel()
+                else:
+                    # 未超過閾值，回彈到關閉位置
+                    self.hide_control_panel()
+            
+            # 重置狀態
+            self.panel_touch_start = None
+            self.panel_drag_active = False
+            return
+        
+        # 處理卡片切換滑動
         if self.is_swiping and self.touch_start_pos:
             # 計算滑動距離和方向
             end_pos = event.position().toPoint()
@@ -2026,7 +2333,15 @@ class Dashboard(QWidget):
         """鍵盤模擬控制"""
         key = event.key()
         
-        # F12 或 W 鍵：開啟 WiFi 管理器
+        # ESC 或 P 鍵：切換控制面板
+        if key == Qt.Key.Key_Escape or key == Qt.Key.Key_P:
+            if self.panel_visible:
+                self.hide_control_panel()
+            else:
+                self.show_control_panel()
+            return
+        
+        # F12 或 Ctrl+W：開啟 WiFi 管理器
         if key == Qt.Key.Key_F12 or (event.key() == Qt.Key.Key_W and 
                                       event.modifiers() == Qt.KeyboardModifier.ControlModifier):
             self.show_wifi_manager()
