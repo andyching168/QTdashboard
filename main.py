@@ -2250,7 +2250,7 @@ class TripCard(QWidget):
 
 
 class TripCardWide(QWidget):
-    """Trip 里程卡片（寬版 800x380）- 左右並排顯示 Trip 1 和 Trip 2"""
+    """Trip 里程卡片（寬版 800x380）- 左右並排顯示 Trip 1 和 Trip 2，支援焦點選擇"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -2272,13 +2272,16 @@ class TripCardWide(QWidget):
         self.trip1_distance, self.trip1_reset_time = self.storage.get_trip1()
         self.trip2_distance, self.trip2_reset_time = self.storage.get_trip2()
         
+        # 焦點狀態：0=無焦點, 1=Trip1, 2=Trip2
+        self.focus_index = 0
+        
         # Main layout - 水平排列
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(25, 25, 25, 25)
         main_layout.setSpacing(30)
         
         # === 左側 Trip 1 ===
-        trip1_widget = self._create_trip_panel("Trip 1", is_trip1=True)
+        self.trip1_panel = self._create_trip_panel("Trip 1", is_trip1=True)
         
         # 中央分隔線
         separator = QWidget()
@@ -2286,11 +2289,11 @@ class TripCardWide(QWidget):
         separator.setStyleSheet("background: #333;")
         
         # === 右側 Trip 2 ===
-        trip2_widget = self._create_trip_panel("Trip 2", is_trip1=False)
+        self.trip2_panel = self._create_trip_panel("Trip 2", is_trip1=False)
         
-        main_layout.addWidget(trip1_widget, 1)
+        main_layout.addWidget(self.trip1_panel, 1)
         main_layout.addWidget(separator)
-        main_layout.addWidget(trip2_widget, 1)
+        main_layout.addWidget(self.trip2_panel, 1)
         
         # 初始化顯示（載入的值）
         self.trip1_distance_label.setText(f"{self.trip1_distance:.1f}")
@@ -2348,8 +2351,12 @@ class TripCardWide(QWidget):
         header_layout.addStretch()
         header_layout.addWidget(reset_btn)
         
-        # 里程顯示區域
+        # 里程顯示區域（作為焦點容器）
         distance_container = QWidget()
+        if is_trip1:
+            self.trip1_container = distance_container
+        else:
+            self.trip2_container = distance_container
         distance_container.setStyleSheet("""
             background: rgba(30, 30, 40, 0.5);
             border-radius: 15px;
@@ -2466,6 +2473,93 @@ class TripCardWide(QWidget):
                 self.trip2_reset_label.setText(f"Reset: {time_str}")
             else:
                 self.trip2_reset_label.setText("Never reset")
+    
+    def set_focus(self, focus_index):
+        """
+        設置焦點狀態
+        
+        Args:
+            focus_index: 0=無焦點, 1=Trip1有焦點, 2=Trip2有焦點
+        """
+        self.focus_index = focus_index
+        self._update_focus_style()
+    
+    def get_focus(self):
+        """獲取當前焦點狀態"""
+        return self.focus_index
+    
+    def next_focus(self):
+        """
+        切換到下一個焦點
+        
+        Returns:
+            bool: True=還在 Trip 卡片內, False=應該離開到下一張卡片
+        """
+        if self.focus_index == 0:
+            # 無焦點 -> Trip 1
+            self.focus_index = 1
+            self._update_focus_style()
+            return True
+        elif self.focus_index == 1:
+            # Trip 1 -> Trip 2
+            self.focus_index = 2
+            self._update_focus_style()
+            return True
+        else:
+            # Trip 2 -> 離開（清除焦點）
+            self.focus_index = 0
+            self._update_focus_style()
+            return False
+    
+    def clear_focus(self):
+        """清除焦點"""
+        self.focus_index = 0
+        self._update_focus_style()
+    
+    def reset_focused_trip(self):
+        """
+        重置當前有焦點的 Trip
+        
+        Returns:
+            bool: True=成功重置, False=沒有焦點
+        """
+        if self.focus_index == 1:
+            self.reset_trip1()
+            return True
+        elif self.focus_index == 2:
+            self.reset_trip2()
+            return True
+        return False
+    
+    def _update_focus_style(self):
+        """更新焦點視覺樣式"""
+        # Trip 1 容器樣式
+        if self.focus_index == 1:
+            self.trip1_container.setStyleSheet("""
+                background: rgba(100, 170, 255, 0.15);
+                border-radius: 15px;
+                border: 3px solid #6af;
+            """)
+        else:
+            self.trip1_container.setStyleSheet("""
+                background: rgba(30, 30, 40, 0.5);
+                border-radius: 15px;
+                border: 2px solid #2a2a35;
+            """)
+        
+        # Trip 2 容器樣式
+        if self.focus_index == 2:
+            self.trip2_container.setStyleSheet("""
+                background: rgba(100, 170, 255, 0.15);
+                border-radius: 15px;
+                border: 3px solid #6af;
+            """)
+        else:
+            self.trip2_container.setStyleSheet("""
+                background: rgba(30, 30, 40, 0.5);
+                border-radius: 15px;
+                border: 2px solid #2a2a35;
+            """)
 
 
 class MarqueeLabel(QLabel):
@@ -4084,7 +4178,7 @@ class Dashboard(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("汽車儀表板模擬器 - W/S:速度 Q/E:水溫 A/D:油量 1-6:檔位 Z/X/C:方向燈 7/8/9/0/-:門")
+        self.setWindowTitle("儀表板 - F1:翻左卡片 F2:翻右卡片 Shift+F2:重置Trip")
         
         # 連接 Signals 到 Slots
         self.signal_update_rpm.connect(self._slot_set_rpm)
@@ -5513,6 +5607,109 @@ class Dashboard(QWidget):
                 else:  # 向下滾動
                     self.switch_card(1)
     
+    # === GPIO 按鈕接口（預留給樹莓派 GPIO）===
+    def on_button_a_pressed(self):
+        """
+        按鈕 A 被按下 - 翻左邊卡片頁面
+        
+        用途：
+        - 切換左側卡片（轉速 -> 水溫 -> 油量 -> 轉速...）
+        
+        接口預留：
+        - 可從 GPIO 按鈕回調呼叫此方法
+        - 也可從鍵盤（F1 鍵）觸發
+        """
+        self.switch_left_card(1)  # 向前翻頁
+    
+    def on_button_b_pressed(self):
+        """
+        按鈕 B 短按 - 翻右邊卡片頁面（跨列循環，支援 Trip 焦點）
+        
+        用途：
+        - 在 Trip 卡片時：Trip 1 -> Trip 2 -> 下一張卡片
+        - 其他卡片：直接跳到下一張
+        - 循環順序：音樂 -> 門狀態 -> Trip(1) -> Trip(2) -> ODO -> 音樂...
+        
+        接口預留：
+        - 可從 GPIO 按鈕回調呼叫此方法
+        - 也可從鍵盤（F2 鍵）觸發
+        """
+        # 停止門狀態自動回退計時器（因為使用者手動切換）
+        if hasattr(self, 'door_auto_switch_timer'):
+            self.door_auto_switch_timer.stop()
+        
+        # 檢查是否在 Trip 卡片上（第二列的第一張）
+        TRIP_ROW_INDEX = 1
+        TRIP_CARD_INDEX = 0
+        
+        if self.current_row_index == TRIP_ROW_INDEX and self.current_card_index == TRIP_CARD_INDEX:
+            # 在 Trip 卡片上，使用焦點機制
+            if self.trip_card.next_focus():
+                # 還在 Trip 卡片內（Trip 1 或 Trip 2）
+                focus_names = ["", "Trip 1", "Trip 2"]
+                print(f"按鈕B切換焦點到: {focus_names[self.trip_card.get_focus()]}")
+                return
+            # 否則繼續到下一張卡片
+        
+        # 離開 Trip 卡片時清除焦點
+        if hasattr(self, 'trip_card'):
+            self.trip_card.clear_focus()
+        
+        # 計算下一張卡片的位置
+        current_row_card_count = self.row_card_counts[self.current_row_index]
+        next_card_index = self.current_card_index + 1
+        
+        if next_card_index >= current_row_card_count:
+            # 當前列已翻完，跳到下一列的第一張
+            next_row_index = (self.current_row_index + 1) % len(self.rows)
+            self.current_row_index = next_row_index
+            self.current_card_index = 0
+            self.row_stack.setCurrentIndex(self.current_row_index)
+            self.rows[self.current_row_index].setCurrentIndex(0)
+        else:
+            # 還在當前列，切換到下一張卡片
+            self.current_card_index = next_card_index
+            self.rows[self.current_row_index].setCurrentIndex(self.current_card_index)
+        
+        # 更新指示器
+        self.update_indicators()
+        
+        # 顯示提示
+        row1_card_names = ["音樂播放器", "門狀態"]
+        row2_card_names = ["Trip卡片", "ODO卡片"]
+        all_card_names = [row1_card_names, row2_card_names]
+        card_name = all_card_names[self.current_row_index][self.current_card_index]
+        print(f"按鈕B切換到: {card_name}")
+    
+    def on_button_b_long_pressed(self):
+        """
+        按鈕 B 長按 - 重置當前焦點的 Trip
+        
+        用途：
+        - 在 Trip 卡片有焦點時，長按可清空該 Trip
+        
+        接口預留：
+        - 可從 GPIO 按鈕長按回調呼叫此方法
+        - 也可從鍵盤（Shift+F2）觸發
+        """
+        # 檢查是否在 Trip 卡片上且有焦點
+        TRIP_ROW_INDEX = 1
+        TRIP_CARD_INDEX = 0
+        
+        if (self.current_row_index == TRIP_ROW_INDEX and 
+            self.current_card_index == TRIP_CARD_INDEX and
+            hasattr(self, 'trip_card') and
+            self.trip_card.get_focus() > 0):
+            
+            focus_names = ["", "Trip 1", "Trip 2"]
+            focus = self.trip_card.get_focus()
+            
+            if self.trip_card.reset_focused_trip():
+                print(f"長按按鈕B: 已重置 {focus_names[focus]}")
+            return
+        
+        print("長按按鈕B: 不在 Trip 焦點狀態，忽略")
+    
     def keyPressEvent(self, a0):  # type: ignore
         """鍵盤模擬控制"""
         if a0 is None:
@@ -5531,6 +5728,21 @@ class Dashboard(QWidget):
         if key == Qt.Key.Key_F12 or (a0.key() == Qt.Key.Key_W and 
                                       a0.modifiers() == Qt.KeyboardModifier.ControlModifier):
             self.show_wifi_manager()
+            return
+        
+        # === GPIO 按鈕模擬（F1/F2 鍵）===
+        # F1: 翻左邊卡片（對應按鈕 A）
+        if key == Qt.Key.Key_F1:
+            self.on_button_a_pressed()
+            return
+        # F2: 翻右邊卡片（對應按鈕 B 短按）
+        elif key == Qt.Key.Key_F2:
+            if a0.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                # Shift+F2: 長按按鈕 B（重置 Trip）
+                self.on_button_b_long_pressed()
+            else:
+                # F2: 短按按鈕 B（切換卡片/焦點）
+                self.on_button_b_pressed()
             return
         
         # 上下方向鍵切換列
