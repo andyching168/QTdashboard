@@ -1,0 +1,7 @@
+{
+  "broker": "andyching168.synology.me",
+  "port": 1883,
+  "username": "andyching168",
+  "password": "82266601",
+  "topic": "navigation/info"
+}

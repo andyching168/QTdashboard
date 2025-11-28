@@ -27,7 +27,8 @@ class SpotifyListener:
         
         Args:
             auth_manager: SpotifyAuthManager 實例
-            update_interval: 更新間隔（秒），預設 1 秒
+            update_interval: API 查詢間隔（秒），預設 1 秒
+                           建議設為 2.0 秒以減少 API 呼叫，進度條會透過本地補間保持流暢
         """
         self.auth_manager = auth_manager
         self.update_interval = update_interval
@@ -35,11 +36,18 @@ class SpotifyListener:
         # 監聽器狀態
         self.running = False
         self.thread = None
+        self.interpolation_thread = None  # 進度補間執行緒
         
         # 快取上次的播放資訊
         self.last_track_id = None
         self.last_playback = None
         self.last_album_art = None
+        
+        # 本地進度追蹤（用於補間）
+        self.local_progress_ms = 0
+        self.local_duration_ms = 0
+        self.local_is_playing = False
+        self.last_sync_time = 0  # 上次同步的時間戳
         
         # 錯誤處理
         self.consecutive_errors = 0
@@ -80,16 +88,52 @@ class SpotifyListener:
             return
             
         self.running = True
+        
+        # 啟動 API 輪詢執行緒
         self.thread = threading.Thread(target=self._listen_loop, daemon=True)
         self.thread.start()
-        logger.info("Spotify 監聽器已啟動")
+        
+        # 啟動本地進度補間執行緒（每 200ms 更新一次進度條，不需要 API 呼叫）
+        self.interpolation_thread = threading.Thread(target=self._interpolation_loop, daemon=True)
+        self.interpolation_thread.start()
+        
+        logger.info(f"Spotify 監聽器已啟動（API 間隔: {self.update_interval}秒）")
     
     def stop(self):
         """停止監聽器"""
         self.running = False
         if self.thread:
             self.thread.join(timeout=2)
+        if self.interpolation_thread:
+            self.interpolation_thread.join(timeout=1)
         logger.info("Spotify 監聽器已停止")
+    
+    def _interpolation_loop(self):
+        """本地進度補間循環（不呼叫 API，只更新進度條）"""
+        while self.running:
+            try:
+                if self.local_is_playing and self.local_duration_ms > 0:
+                    # 計算經過的時間
+                    elapsed = (time.time() - self.last_sync_time) * 1000
+                    interpolated_progress = min(
+                        self.local_progress_ms + elapsed,
+                        self.local_duration_ms
+                    )
+                    
+                    # 透過回調更新進度
+                    if self.callbacks['on_progress_update']:
+                        progress_data = {
+                            'progress_ms': interpolated_progress,
+                            'duration_ms': self.local_duration_ms,
+                            'is_playing': self.local_is_playing,
+                        }
+                        self.callbacks['on_progress_update'](progress_data)
+                
+                time.sleep(0.2)  # 每 200ms 更新一次，足夠流暢
+                
+            except Exception as e:
+                logger.debug(f"進度補間錯誤: {e}")
+                time.sleep(0.5)
     
     def _listen_loop(self):
         """監聽循環（在背景執行緒運行）"""
@@ -115,7 +159,7 @@ class SpotifyListener:
                 time.sleep(self.update_interval * self.error_backoff)
     
     def _update_playback_state(self):
-        """更新播放狀態"""
+        """更新播放狀態（從 Spotify API 同步）"""
         sp = self.auth_manager.get_client()
         if not sp:
             return
@@ -126,6 +170,7 @@ class SpotifyListener:
             
             if not playback or not playback.get('item'):
                 # 沒有正在播放的內容
+                self.local_is_playing = False
                 if self.last_playback is not None:
                     logger.info("播放已停止")
                     if self.callbacks['on_playback_state']:
@@ -137,20 +182,20 @@ class SpotifyListener:
             track = playback['item']
             track_id = track['id']
             
+            # 同步本地進度追蹤（供補間使用）
+            self.local_progress_ms = playback['progress_ms']
+            self.local_duration_ms = track['duration_ms']
+            self.local_is_playing = playback['is_playing']
+            self.last_sync_time = time.time()
+            
             # 檢查是否為新歌曲
             if track_id != self.last_track_id:
                 logger.info(f"歌曲變更: {track['name']}")
                 self.last_track_id = track_id
                 self._handle_track_change(track, playback)
             
-            # 更新播放進度
-            if self.callbacks['on_progress_update']:
-                progress_data = {
-                    'progress_ms': playback['progress_ms'],
-                    'duration_ms': track['duration_ms'],
-                    'is_playing': playback['is_playing'],
-                }
-                self.callbacks['on_progress_update'](progress_data)
+            # 注意：進度更新現在由 _interpolation_loop 處理，這裡不再重複呼叫
+            # 但仍然透過同步更新 local_* 變數來校正進度
             
             # 更新播放狀態
             if self.callbacks['on_playback_state']:

@@ -51,6 +51,7 @@ class VehicleSimulator:
         self.fuel = 65.0
         self.temp = 45.0  # 儀表百分比
         self.gear = "P"
+        self.actual_gear = 1  # 實際檔位 (1-5)
         self.turbo = -0.7  # 渦輪增壓 (bar)，待速時為負壓
         
         self.mode = "idle"
@@ -168,11 +169,29 @@ class VehicleSimulator:
         self.temp += random.uniform(-0.1, 0.1)
         self.temp = max(20, min(95, self.temp))
         
-        # 檔位邏輯
-        if self.speed > 5 and self.gear == "P":
-            self.gear = "D"
-        elif self.speed < 1 and self.mode == "idle":
+        # 檔位邏輯 - 根據速度模擬自排換檔
+        if self.mode == "idle" and self.speed < 1:
             self.gear = "P"
+        elif self.speed > 0 or self.mode in ["accelerating", "cruising", "decelerating"]:
+            # 根據速度決定檔位 (模擬 5 速自排)
+            # 1檔: 0-20 km/h
+            # 2檔: 20-40 km/h
+            # 3檔: 40-60 km/h
+            # 4檔: 60-80 km/h
+            # 5檔: 80+ km/h
+            if self.speed < 20:
+                self.actual_gear = 1
+            elif self.speed < 40:
+                self.actual_gear = 2
+            elif self.speed < 60:
+                self.actual_gear = 3
+            elif self.speed < 80:
+                self.actual_gear = 4
+            else:
+                self.actual_gear = 5
+            
+            # 發送具體檔位數字 (與 datagrab.py 一致)
+            self.gear = str(self.actual_gear)
         
         # 音樂播放進度
         self.music_time += dt

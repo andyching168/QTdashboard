@@ -12,7 +12,7 @@ from collections import deque
 os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=false')
 
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton, QDialog, QGraphicsView, QGraphicsScene, QGraphicsProxyWidget, QMainWindow
-from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot, QUrl
+from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot, QUrl, QObject
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QPixmap, QMouseEvent, QTransform
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
@@ -3155,6 +3155,20 @@ class TripCardWide(QWidget):
             """)
 
 
+class ClickableLabel(QLabel):
+    """可點擊的 QLabel，發出 clicked 信號"""
+    clicked = pyqtSignal()
+    
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+
 class MarqueeLabel(QLabel):
     """跑馬燈標籤：當文字過長時自動捲動，全部回到定點後暫停再重新開始"""
     # 類別變數：用於同步所有 MarqueeLabel 實例
@@ -3792,6 +3806,42 @@ class MusicCardWide(QWidget):
         
         # Default to Bind page
         self.stack.setCurrentWidget(self.bind_page)
+        
+        # 網路斷線覆蓋層
+        self.offline_overlay = QWidget(self)
+        self.offline_overlay.setGeometry(0, 0, 800, 380)
+        self.offline_overlay.setStyleSheet("""
+            background: rgba(10, 10, 15, 0.9);
+            border-radius: 20px;
+        """)
+        self.offline_overlay.hide()
+        
+        offline_layout = QVBoxLayout(self.offline_overlay)
+        offline_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        offline_icon = QLabel("📡")
+        offline_icon.setStyleSheet("font-size: 60px; background: transparent;")
+        offline_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        offline_text = QLabel("網路已斷線")
+        offline_text.setStyleSheet("color: #f66; font-size: 28px; font-weight: bold; background: transparent;")
+        offline_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        offline_desc = QLabel("請檢查網路連線")
+        offline_desc.setStyleSheet("color: #888; font-size: 16px; background: transparent;")
+        offline_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        offline_layout.addWidget(offline_icon)
+        offline_layout.addWidget(offline_text)
+        offline_layout.addWidget(offline_desc)
+    
+    def set_offline(self, is_offline):
+        """設定離線狀態"""
+        if is_offline:
+            self.offline_overlay.raise_()
+            self.offline_overlay.show()
+        else:
+            self.offline_overlay.hide()
 
     def setup_bind_ui(self):
         layout = QHBoxLayout(self.bind_page)
@@ -4106,6 +4156,439 @@ class MusicCardWide(QWidget):
             logging.error(f"設置專輯封面失敗: {e}")
 
 
+class NavigationCard(QWidget):
+    """導航資訊卡片 - 顯示導航方向、距離、時間等資訊"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(800, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # 導航資料
+        self.direction = ""
+        self.total_distance = ""
+        self.turn_distance = ""
+        self.turn_direction = ""
+        self.duration = ""
+        self.eta = ""
+        self.icon_base64 = ""
+        
+        # 主佈局使用 StackedWidget 切換無導航/有導航模式
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.stack = QStackedWidget()
+        self.main_layout.addWidget(self.stack)
+        
+        # 頁面 1：無導航狀態
+        self.no_nav_page = QWidget()
+        self.setup_no_nav_ui()
+        self.stack.addWidget(self.no_nav_page)
+        
+        # 頁面 2：導航中狀態
+        self.nav_page = QWidget()
+        self.setup_nav_ui()
+        self.stack.addWidget(self.nav_page)
+        
+        # 預設顯示無導航狀態
+        self.stack.setCurrentWidget(self.no_nav_page)
+        
+        # 網路斷線覆蓋層
+        self.offline_overlay = QWidget(self)
+        self.offline_overlay.setGeometry(0, 0, 800, 380)
+        self.offline_overlay.setStyleSheet("""
+            background: rgba(10, 10, 15, 0.9);
+            border-radius: 20px;
+        """)
+        self.offline_overlay.hide()
+        
+        offline_layout = QVBoxLayout(self.offline_overlay)
+        offline_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        offline_icon = QLabel("📡")
+        offline_icon.setStyleSheet("font-size: 60px; background: transparent;")
+        offline_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        offline_text = QLabel("網路已斷線")
+        offline_text.setStyleSheet("color: #f66; font-size: 28px; font-weight: bold; background: transparent;")
+        offline_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        offline_desc = QLabel("請檢查網路連線")
+        offline_desc.setStyleSheet("color: #888; font-size: 16px; background: transparent;")
+        offline_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        offline_layout.addWidget(offline_icon)
+        offline_layout.addWidget(offline_text)
+        offline_layout.addWidget(offline_desc)
+    
+    def set_offline(self, is_offline):
+        """設定離線狀態"""
+        if is_offline:
+            self.offline_overlay.raise_()
+            self.offline_overlay.show()
+        else:
+            self.offline_overlay.hide()
+    
+    def setup_no_nav_ui(self):
+        """設置無導航狀態的 UI"""
+        layout = QHBoxLayout(self.no_nav_page)
+        layout.setContentsMargins(40, 30, 40, 30)
+        layout.setSpacing(30)
+        
+        # 左側大圖標
+        icon_label = QLabel("🧭")
+        icon_label.setStyleSheet("font-size: 120px; background: transparent;")
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_label.setFixedSize(200, 200)
+        
+        # 右側文字
+        right_widget = QWidget()
+        right_widget.setStyleSheet("background: transparent;")
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setSpacing(15)
+        
+        text_label = QLabel("無導航資訊")
+        text_label.setStyleSheet("color: white; font-size: 32px; font-weight: bold; background: transparent;")
+        
+        desc_label = QLabel("開始導航後，資訊將自動顯示於此")
+        desc_label.setStyleSheet("color: #aaa; font-size: 18px; background: transparent;")
+        desc_label.setWordWrap(True)
+        
+        right_layout.addStretch()
+        right_layout.addWidget(text_label)
+        right_layout.addWidget(desc_label)
+        right_layout.addStretch()
+        
+        layout.addWidget(icon_label)
+        layout.addWidget(right_widget, 1)
+    
+    def setup_nav_ui(self):
+        """設置導航中狀態的 UI"""
+        layout = QHBoxLayout(self.nav_page)
+        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(30)
+        
+        # === 左側：方向圖標 ===
+        icon_container = QWidget()
+        icon_container.setFixedSize(320, 320)
+        icon_container.setStyleSheet("background: transparent;")
+        icon_layout = QVBoxLayout(icon_container)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        icon_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.direction_icon = QLabel()
+        self.direction_icon.setFixedSize(280, 280)
+        self.direction_icon.setStyleSheet("""
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #2a3a4a, stop:0.5 #1d2d3d, stop:1 #101a2a);
+            border-radius: 20px;
+            border: 3px solid #3a5a7a;
+        """)
+        self.direction_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 預設圖標
+        self.default_icon = QLabel("↑", self.direction_icon)
+        self.default_icon.setStyleSheet("""
+            color: #6af;
+            font-size: 120px;
+            background: transparent;
+        """)
+        self.default_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.default_icon.setGeometry(0, 0, 280, 280)
+        
+        icon_layout.addWidget(self.direction_icon)
+        
+        # === 右側：導航資訊 ===
+        info_container = QWidget()
+        info_container.setStyleSheet("background: transparent;")
+        info_layout = QVBoxLayout(info_container)
+        info_layout.setContentsMargins(0, 10, 0, 10)
+        info_layout.setSpacing(15)
+        
+        # Navigation 標題
+        title_label = QLabel("Navigation")
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 16px;
+            font-weight: bold;
+            background: transparent;
+            letter-spacing: 2px;
+        """)
+        
+        # 方向說明（大字）- 支援自動縮小與換行
+        self.direction_label = QLabel("--")
+        self.direction_label.setStyleSheet("""
+            color: white;
+            font-size: 36px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        self.direction_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.direction_label.setFixedHeight(60)  # 稍微增加高度以容納兩行
+        self.direction_label.setWordWrap(True)  # 允許換行
+        
+        # 資訊區塊容器
+        info_grid = QWidget()
+        info_grid.setStyleSheet("background: transparent;")
+        grid_layout = QGridLayout(info_grid)
+        grid_layout.setContentsMargins(0, 0, 0, 0)
+        grid_layout.setSpacing(12)
+        
+        # 下個轉彎距離（突出顯示）
+        turn_distance_title = QLabel("下個轉彎")
+        turn_distance_title.setStyleSheet("color: #888; font-size: 14px; background: transparent;")
+        self.turn_distance_value = QLabel("--")
+        self.turn_distance_value.setStyleSheet("color: #6f6; font-size: 28px; font-weight: bold; background: transparent;")
+        
+        # 總距離
+        distance_title = QLabel("總距離")
+        distance_title.setStyleSheet("color: #888; font-size: 14px; background: transparent;")
+        self.distance_value = QLabel("--")
+        self.distance_value.setStyleSheet("color: #ccc; font-size: 20px; font-weight: bold; background: transparent;")
+        
+        # 預計時間
+        duration_title = QLabel("預計時間")
+        duration_title.setStyleSheet("color: #888; font-size: 14px; background: transparent;")
+        self.duration_value = QLabel("--")
+        self.duration_value.setStyleSheet("color: #ccc; font-size: 20px; font-weight: bold; background: transparent;")
+        
+        # 抵達時間
+        eta_title = QLabel("抵達時間")
+        eta_title.setStyleSheet("color: #888; font-size: 14px; background: transparent;")
+        self.eta_value = QLabel("--")
+        self.eta_value.setStyleSheet("color: #6af; font-size: 24px; font-weight: bold; background: transparent;")
+        
+        # 佈局：
+        # Row 0: 下個轉彎(標題)  | 總距離(標題)
+        # Row 1: 下個轉彎(值)    | 總距離(值)
+        # Row 2: 預計時間(標題) | 抵達時間(標題)
+        # Row 3: 預計時間(值)   | 抵達時間(值)
+        grid_layout.addWidget(turn_distance_title, 0, 0)
+        grid_layout.addWidget(self.turn_distance_value, 1, 0)
+        grid_layout.addWidget(distance_title, 0, 1)
+        grid_layout.addWidget(self.distance_value, 1, 1)
+        grid_layout.addWidget(duration_title, 2, 0)
+        grid_layout.addWidget(self.duration_value, 3, 0)
+        grid_layout.addWidget(eta_title, 2, 1)
+        grid_layout.addWidget(self.eta_value, 3, 1)
+        
+        # 組合右側佈局
+        info_layout.addWidget(title_label)
+        info_layout.addSpacing(10)
+        info_layout.addWidget(self.direction_label)
+        info_layout.addSpacing(10)
+        info_layout.addWidget(info_grid)
+        info_layout.addStretch()
+        
+        # 組合主佈局
+        layout.addWidget(icon_container)
+        layout.addWidget(info_container, 1)
+    
+    def show_no_nav_ui(self):
+        """顯示無導航狀態"""
+        self.stack.setCurrentWidget(self.no_nav_page)
+    
+    def show_nav_ui(self):
+        """顯示導航中狀態"""
+        self.stack.setCurrentWidget(self.nav_page)
+    
+    def update_navigation(self, nav_data: dict):
+        """
+        更新導航資訊
+        
+        Args:
+            nav_data: 包含以下欄位的字典
+                - direction: 方向說明（如 "往南"）
+                - totalDistance: 總距離（如 "9.3 公里"）
+                - turnDistance: 下一個轉彎距離（如 "500 公尺"）
+                - turnDirection: 轉彎方向（如 "左轉"）
+                - duration: 預計時間（如 "24 分鐘"）
+                - eta: 抵達時間（如 "12:32"）
+                - iconBase64: 方向圖標的 base64 編碼 PNG
+        """
+        if not nav_data:
+            self.show_no_nav_ui()
+            return
+        
+        # 檢查關鍵欄位是否都為空，若是則顯示無導航狀態
+        direction = nav_data.get('direction', '').strip()
+        total_distance = nav_data.get('totalDistance', '').strip()
+        turn_distance = nav_data.get('turnDistance', '').strip()
+        turn_direction = nav_data.get('turnDirection', '').strip()
+        
+        if not direction and not total_distance and not turn_distance and not turn_direction:
+            self.show_no_nav_ui()
+            return
+        
+        # 更新資料
+        self.direction = nav_data.get('direction', '')
+        self.total_distance = nav_data.get('totalDistance', '')
+        self.turn_distance = nav_data.get('turnDistance', '')
+        self.turn_direction = nav_data.get('turnDirection', '')
+        self.duration = nav_data.get('duration', '')
+        self.eta = nav_data.get('eta', '')
+        self.icon_base64 = nav_data.get('iconBase64', '')
+        
+        # 更新顯示
+        self._update_direction_label(self.direction if self.direction else "--")
+        self.turn_distance_value.setText(self.turn_distance if self.turn_distance else "--")
+        self.distance_value.setText(self.total_distance if self.total_distance else "--")
+        self.duration_value.setText(self.duration if self.duration else "--")
+        self.eta_value.setText(self.eta if self.eta else "--")
+        
+        # 更新圖標
+        if self.icon_base64:
+            self._set_icon_from_base64(self.icon_base64)
+        else:
+            self._reset_icon()
+        
+        # 切換到導航頁面
+        self.show_nav_ui()
+    
+    def _set_icon_from_base64(self, base64_data: str):
+        """從 base64 編碼設置方向圖標"""
+        try:
+            import base64
+            
+            # 移除可能的換行符和空白
+            base64_data = base64_data.replace('\n', '').replace(' ', '')
+            
+            # 解碼 base64
+            image_data = base64.b64decode(base64_data)
+            
+            # 創建 QPixmap
+            pixmap = QPixmap()
+            pixmap.loadFromData(image_data)
+            
+            if not pixmap.isNull():
+                # 縮放圖片
+                scaled_pixmap = pixmap.scaled(
+                    240, 240,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                
+                # 創建圓角遮罩
+                rounded_pixmap = QPixmap(280, 280)
+                rounded_pixmap.fill(Qt.GlobalColor.transparent)
+                
+                painter = QPainter(rounded_pixmap)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                
+                # 背景
+                path = QPainterPath()
+                path.addRoundedRect(0, 0, 280, 280, 20, 20)
+                
+                bg_gradient = QLinearGradient(0, 0, 280, 280)
+                bg_gradient.setColorAt(0, QColor(42, 58, 74))
+                bg_gradient.setColorAt(0.5, QColor(29, 45, 61))
+                bg_gradient.setColorAt(1, QColor(16, 26, 42))
+                painter.fillPath(path, bg_gradient)
+                
+                # 繪製圖標（居中）
+                x = (280 - scaled_pixmap.width()) // 2
+                y = (280 - scaled_pixmap.height()) // 2
+                painter.drawPixmap(x, y, scaled_pixmap)
+                
+                # 邊框
+                pen = QPen(QColor("#3a5a7a"))
+                pen.setWidth(6)
+                painter.strokePath(path, pen)
+                
+                painter.end()
+                
+                self.direction_icon.setPixmap(rounded_pixmap)
+                self.direction_icon.setStyleSheet("background: transparent; border: none;")
+                self.default_icon.hide()
+            else:
+                self._reset_icon()
+        except Exception as e:
+            print(f"[NavigationCard] 載入圖標失敗: {e}")
+            self._reset_icon()
+    
+    def _reset_icon(self):
+        """重置為預設圖標"""
+        self.direction_icon.clear()
+        self.direction_icon.setStyleSheet("""
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #2a3a4a, stop:0.5 #1d2d3d, stop:1 #101a2a);
+            border-radius: 20px;
+            border: 3px solid #3a5a7a;
+        """)
+        self.default_icon.show()
+    
+    def _update_direction_label(self, text):
+        """更新方向說明標籤，根據文字長度自動調整字體大小和換行"""
+        # 計算文字長度（中文字算 1，英數字算 0.5）
+        def calc_display_length(s):
+            length = 0
+            for char in s:
+                if ord(char) > 127:  # 中文或全形字
+                    length += 1
+                else:
+                    length += 0.5
+            return length
+        
+        display_len = calc_display_length(text)
+        
+        if display_len <= 10:
+            # 短文字：單行大字
+            self.direction_label.setStyleSheet("""
+                color: white;
+                font-size: 36px;
+                font-weight: bold;
+                background: transparent;
+            """)
+            self.direction_label.setText(text)
+        else:
+            # 長文字：縮小字體，允許換行
+            wrapped_text = text
+            
+            # 優先在空格處換行（如「土城出口 台3線/台65線」→「土城出口\n台3線/台65線」）
+            if " " in text:
+                # 找到最接近中間的空格
+                spaces = [i for i, c in enumerate(text) if c == " "]
+                mid = len(text) // 2
+                best_space = min(spaces, key=lambda x: abs(x - mid))
+                wrapped_text = text[:best_space] + "\n" + text[best_space + 1:]
+            elif "/" in text:
+                # 沒有空格時，才在 "/" 後換行
+                # 找到最接近中間的 "/"
+                slashes = [i for i, c in enumerate(text) if c == "/"]
+                mid = len(text) // 2
+                best_slash = min(slashes, key=lambda x: abs(x - mid))
+                wrapped_text = text[:best_slash + 1] + "\n" + text[best_slash + 1:]
+            
+            self.direction_label.setStyleSheet("""
+                color: white;
+                font-size: 22px;
+                font-weight: bold;
+                background: transparent;
+                line-height: 1.1;
+            """)
+            self.direction_label.setText(wrapped_text)
+    
+    def clear_navigation(self):
+        """清除導航資訊，回到無導航狀態"""
+        self.direction = ""
+        self.total_distance = ""
+        self.turn_distance = ""
+        self.turn_direction = ""
+        self.duration = ""
+        self.eta = ""
+        self.icon_base64 = ""
+        self._reset_icon()
+        self.show_no_nav_ui()
+
+
 class AnalogGauge(QWidget):
     def __init__(self, min_val=0, max_val=100, gauge_style=None, labels=None, title="", 
                  red_zone_start=None, parent=None):
@@ -4282,6 +4765,656 @@ class AnalogGauge(QWidget):
         rect = QRectF(-50, 35, 100, 20)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.title)
 
+
+class MQTTSettingsSignals(QObject):
+    """MQTT 設定對話框的訊號"""
+    settings_saved = pyqtSignal(bool)
+    status_update = pyqtSignal(str)
+
+
+class MQTTSettingsDialog(QWidget):
+    """MQTT 設定對話框 - 透過 QR Code 讓使用者用手機填寫設定"""
+    
+    CONFIG_FILE = "mqtt_config.json"
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.signals = MQTTSettingsSignals()
+        self.server = None
+        self.server_thread = None
+        self._is_closing = False
+        self._settings_received = False
+        
+        # 預先取得本機 IP
+        self.local_ip = self._get_local_ip()
+        self.server_port = 8889  # 使用不同於 Spotify 的 port
+        
+        self.init_ui()
+        self.start_server()
+    
+    def _get_local_ip(self):
+        """取得本機 IP"""
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('10.255.255.255', 1))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = '127.0.0.1'
+        finally:
+            s.close()
+        return ip
+    
+    def _create_qr_pixmap(self, data: str, size: int) -> QPixmap:
+        """生成 QR Code 圖片"""
+        try:
+            import qrcode
+            from io import BytesIO
+            
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=8,
+                border=2,
+            )
+            qr.add_data(data)
+            qr.make(fit=True)
+            
+            img = qr.make_image(fill_color="black", back_color="white")
+            buffer = BytesIO()
+            img.save(buffer, format='PNG')
+            buffer.seek(0)
+            
+            from PyQt6.QtGui import QImage
+            qimage = QImage.fromData(buffer.read())
+            pixmap = QPixmap.fromImage(qimage)
+            
+            return pixmap.scaled(
+                size, size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+        except ImportError:
+            # qrcode 未安裝，返回空 pixmap
+            return QPixmap()
+    
+    def init_ui(self):
+        """初始化 UI"""
+        self.setWindowTitle("MQTT 設定")
+        self.setFixedSize(1920, 480)
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #121212;
+                color: white;
+                font-family: "Arial";
+            }
+            QLabel {
+                color: #FFFFFF;
+            }
+            QPushButton {
+                background-color: transparent;
+                border: 2px solid #535353;
+                border-radius: 25px;
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 30px;
+            }
+            QPushButton:hover {
+                border-color: white;
+                background-color: #2a2a2a;
+            }
+        """)
+        
+        # 主佈局
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(60, 30, 60, 30)
+        main_layout.setSpacing(50)
+        
+        # === 左側：說明區 ===
+        left_container = QWidget()
+        left_layout = QVBoxLayout(left_container)
+        left_layout.setSpacing(15)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 標題
+        title_layout = QHBoxLayout()
+        logo_label = QLabel("⚙")
+        logo_label.setFont(QFont("Arial", 36))
+        title = QLabel("MQTT 設定")
+        title.setFont(QFont("Arial", 36, QFont.Weight.Bold))
+        title_layout.addWidget(logo_label)
+        title_layout.addWidget(title)
+        title_layout.addStretch()
+        
+        # 說明文字
+        desc_label = QLabel("請使用手機掃描右側 QR Code，\n連接到設定頁面填寫 MQTT Broker 資訊")
+        desc_label.setFont(QFont("Arial", 18))
+        desc_label.setStyleSheet("color: #B3B3B3;")
+        desc_label.setWordWrap(True)
+        
+        # 步驟說明
+        steps_container = QWidget()
+        steps_container.setStyleSheet("""
+            QWidget {
+                background-color: #181818;
+                border-radius: 15px;
+            }
+        """)
+        steps_layout = QVBoxLayout(steps_container)
+        steps_layout.setContentsMargins(20, 20, 20, 20)
+        steps_layout.setSpacing(12)
+        
+        steps = [
+            "1. 確認手機與車機連接同一 WiFi",
+            "2. 開啟手機相機掃描 QR Code",
+            "3. 在網頁中填寫 MQTT 連線資訊",
+            "4. 點擊「儲存設定」按鈕",
+            "5. 系統將自動驗證連線"
+        ]
+        
+        for step in steps:
+            step_label = QLabel(step)
+            step_label.setFont(QFont("Arial", 16))
+            step_label.setStyleSheet("color: #FFFFFF; background: transparent;")
+            steps_layout.addWidget(step_label)
+        
+        # 狀態顯示
+        self.status_label = QLabel("等待掃描...")
+        self.status_label.setFont(QFont("Arial", 18))
+        self.status_label.setStyleSheet("color: #9C27B0;")
+        
+        # 取消按鈕
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel_btn.setFixedWidth(150)
+        cancel_btn.clicked.connect(self.cancel_settings)
+        
+        left_layout.addLayout(title_layout)
+        left_layout.addWidget(desc_label)
+        left_layout.addSpacing(10)
+        left_layout.addWidget(steps_container)
+        left_layout.addSpacing(15)
+        left_layout.addWidget(self.status_label)
+        left_layout.addStretch()
+        left_layout.addWidget(cancel_btn)
+        
+        # === 右側：QR Code 區 ===
+        right_container = QWidget()
+        right_layout = QVBoxLayout(right_container)
+        right_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        right_layout.setSpacing(20)
+        
+        # QR Code 卡片
+        qr_card = QWidget()
+        qr_card.setFixedSize(300, 300)
+        qr_card.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border-radius: 20px;
+            }
+        """)
+        
+        qr_layout = QVBoxLayout(qr_card)
+        qr_layout.setContentsMargins(15, 15, 15, 15)
+        qr_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.qr_label = QLabel()
+        self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.qr_label.setScaledContents(True)
+        self.qr_label.setFixedSize(270, 270)
+        qr_layout.addWidget(self.qr_label)
+        
+        # URL 提示
+        self.url_label = QLabel(f"http://{self.local_ip}:{self.server_port}")
+        self.url_label.setFont(QFont("Arial", 14))
+        self.url_label.setStyleSheet("""
+            QLabel {
+                color: #B3B3B3;
+                background-color: #181818;
+                padding: 12px 20px;
+                border-radius: 10px;
+            }
+        """)
+        self.url_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        right_layout.addWidget(qr_card)
+        right_layout.addWidget(self.url_label)
+        
+        # 加入主佈局
+        main_layout.addWidget(left_container, 5)
+        main_layout.addWidget(right_container, 4)
+        
+        # 連接訊號
+        self.signals.settings_saved.connect(self.on_settings_saved)
+        self.signals.status_update.connect(self.on_status_update)
+        
+        # 生成 QR Code
+        url = f"http://{self.local_ip}:{self.server_port}"
+        pixmap = self._create_qr_pixmap(url, 270)
+        if not pixmap.isNull():
+            self.qr_label.setPixmap(pixmap)
+        else:
+            self.qr_label.setText("QR Code\n生成失敗")
+            self.qr_label.setStyleSheet("color: #666; font-size: 18px;")
+    
+    def start_server(self):
+        """啟動 HTTP 伺服器"""
+        import threading
+        self.server_thread = threading.Thread(target=self._run_server, daemon=True)
+        self.server_thread.start()
+    
+    def _run_server(self):
+        """運行 HTTP 伺服器"""
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        import urllib.parse
+        
+        dialog = self  # 閉包引用
+        
+        class MQTTSettingsHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                """處理 GET 請求 - 返回設定表單"""
+                # 讀取現有設定
+                existing_config = dialog._load_existing_config()
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html; charset=utf-8')
+                self.end_headers()
+                
+                html = f'''
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+                    <title>MQTT 設定</title>
+                    <style>
+                        * {{ box-sizing: border-box; }}
+                        body {{
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            min-height: 100vh;
+                            margin: 0;
+                            padding: 20px;
+                        }}
+                        .container {{
+                            max-width: 500px;
+                            margin: 0 auto;
+                            background: white;
+                            border-radius: 20px;
+                            padding: 30px;
+                            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        }}
+                        h1 {{
+                            text-align: center;
+                            color: #333;
+                            margin-bottom: 30px;
+                            font-size: 24px;
+                        }}
+                        .form-group {{
+                            margin-bottom: 20px;
+                        }}
+                        label {{
+                            display: block;
+                            margin-bottom: 8px;
+                            font-weight: 600;
+                            color: #555;
+                        }}
+                        input {{
+                            width: 100%;
+                            padding: 15px;
+                            border: 2px solid #ddd;
+                            border-radius: 10px;
+                            font-size: 16px;
+                            transition: border-color 0.3s;
+                        }}
+                        input:focus {{
+                            outline: none;
+                            border-color: #667eea;
+                        }}
+                        button {{
+                            width: 100%;
+                            padding: 18px;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            border: none;
+                            border-radius: 10px;
+                            font-size: 18px;
+                            font-weight: bold;
+                            cursor: pointer;
+                            margin-top: 20px;
+                        }}
+                        button:hover {{
+                            opacity: 0.9;
+                        }}
+                        button:disabled {{
+                            background: #ccc;
+                            cursor: not-allowed;
+                        }}
+                        .status {{
+                            text-align: center;
+                            margin-top: 20px;
+                            padding: 15px;
+                            border-radius: 10px;
+                            display: none;
+                        }}
+                        .status.success {{
+                            background: #d4edda;
+                            color: #155724;
+                            display: block;
+                        }}
+                        .status.error {{
+                            background: #f8d7da;
+                            color: #721c24;
+                            display: block;
+                        }}
+                        .status.loading {{
+                            background: #e2e3e5;
+                            color: #383d41;
+                            display: block;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>🚗 車機 MQTT 設定</h1>
+                        <form id="mqttForm">
+                            <div class="form-group">
+                                <label for="broker">Broker 位址</label>
+                                <input type="text" id="broker" name="broker" 
+                                    placeholder="例如: mqtt.example.com" 
+                                    value="{existing_config.get('broker', '')}" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="port">Port</label>
+                                <input type="number" id="port" name="port" 
+                                    placeholder="1883" 
+                                    value="{existing_config.get('port', '1883')}" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="username">使用者名稱 (選填)</label>
+                                <input type="text" id="username" name="username" 
+                                    placeholder="留空表示無需驗證"
+                                    value="{existing_config.get('username', '')}">
+                            </div>
+                            <div class="form-group">
+                                <label for="password">密碼 (選填)</label>
+                                <input type="password" id="password" name="password" 
+                                    placeholder="留空表示無需驗證"
+                                    value="{existing_config.get('password', '')}">
+                            </div>
+                            <div class="form-group">
+                                <label for="topic">訂閱主題</label>
+                                <input type="text" id="topic" name="topic" 
+                                    placeholder="例如: car/navigation/#"
+                                    value="{existing_config.get('topic', 'car/#')}" required>
+                            </div>
+                            <button type="submit" id="submitBtn">儲存設定</button>
+                        </form>
+                        <div id="status" class="status"></div>
+                    </div>
+                    <script>
+                        document.getElementById('mqttForm').addEventListener('submit', async function(e) {{
+                            e.preventDefault();
+                            
+                            const btn = document.getElementById('submitBtn');
+                            const status = document.getElementById('status');
+                            
+                            btn.disabled = true;
+                            btn.textContent = '正在驗證...';
+                            status.className = 'status loading';
+                            status.textContent = '正在連接 MQTT Broker...';
+                            
+                            const formData = new FormData(this);
+                            const data = Object.fromEntries(formData.entries());
+                            
+                            try {{
+                                const response = await fetch('/save', {{
+                                    method: 'POST',
+                                    headers: {{ 'Content-Type': 'application/json' }},
+                                    body: JSON.stringify(data)
+                                }});
+                                
+                                const result = await response.json();
+                                
+                                if (result.success) {{
+                                    status.className = 'status success';
+                                    status.textContent = '✅ ' + result.message;
+                                    btn.textContent = '設定完成！';
+                                    
+                                    setTimeout(() => {{
+                                        status.textContent += '\\n此頁面將自動關閉...';
+                                    }}, 2000);
+                                }} else {{
+                                    status.className = 'status error';
+                                    status.textContent = '❌ ' + result.message;
+                                    btn.disabled = false;
+                                    btn.textContent = '重新嘗試';
+                                }}
+                            }} catch (error) {{
+                                status.className = 'status error';
+                                status.textContent = '❌ 連線錯誤：' + error.message;
+                                btn.disabled = false;
+                                btn.textContent = '重新嘗試';
+                            }}
+                        }});
+                    </script>
+                </body>
+                </html>
+                '''
+                self.wfile.write(html.encode())
+            
+            def do_POST(self):
+                """處理 POST 請求 - 儲存設定並驗證連線"""
+                if self.path == '/save':
+                    content_length = int(self.headers['Content-Length'])
+                    post_data = self.rfile.read(content_length)
+                    
+                    try:
+                        data = json.loads(post_data.decode())
+                        
+                        # 更新狀態
+                        try:
+                            dialog.signals.status_update.emit("收到設定，正在驗證...")
+                        except RuntimeError:
+                            pass
+                        
+                        # 驗證連線
+                        success, message = dialog._test_mqtt_connection(data)
+                        
+                        if success:
+                            # 儲存設定
+                            dialog._save_config(data)
+                            dialog._settings_received = True
+                            
+                            try:
+                                dialog.signals.status_update.emit("設定已儲存！5秒後關閉...")
+                                dialog.signals.settings_saved.emit(True)
+                            except RuntimeError:
+                                pass
+                        
+                        self.send_response(200)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        
+                        response = json.dumps({
+                            'success': success,
+                            'message': message
+                        })
+                        self.wfile.write(response.encode())
+                        
+                    except Exception as e:
+                        self.send_response(500)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        response = json.dumps({
+                            'success': False,
+                            'message': f'伺服器錯誤：{str(e)}'
+                        })
+                        self.wfile.write(response.encode())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+            
+            def log_message(self, format, *args):
+                """關閉日誌輸出"""
+                pass
+        
+        try:
+            self.server = HTTPServer(('0.0.0.0', self.server_port), MQTTSettingsHandler)
+            if not self._is_closing:
+                try:
+                    self.signals.status_update.emit("伺服器已啟動，等待掃描...")
+                except RuntimeError:
+                    return
+            self.server.serve_forever()
+        except Exception as e:
+            if not self._is_closing:
+                try:
+                    self.signals.status_update.emit(f"伺服器錯誤: {e}")
+                except RuntimeError:
+                    pass
+    
+    def _load_existing_config(self) -> dict:
+        """讀取現有設定"""
+        try:
+            if os.path.exists(self.CONFIG_FILE):
+                with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {}
+    
+    def _save_config(self, data: dict):
+        """儲存設定到檔案"""
+        try:
+            config = {
+                'broker': data.get('broker', ''),
+                'port': int(data.get('port', 1883)),
+                'username': data.get('username', ''),
+                'password': data.get('password', ''),
+                'topic': data.get('topic', 'car/#')
+            }
+            with open(self.CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            print(f"[MQTT] 設定已儲存到 {self.CONFIG_FILE}")
+        except Exception as e:
+            print(f"[MQTT] 儲存設定失敗: {e}")
+    
+    def _test_mqtt_connection(self, data: dict) -> tuple:
+        """
+        測試 MQTT 連線
+        Returns: (success: bool, message: str)
+        """
+        try:
+            import paho.mqtt.client as mqtt
+        except ImportError:
+            return False, "paho-mqtt 未安裝，請執行: pip install paho-mqtt"
+        
+        broker = data.get('broker', '').strip()
+        port = int(data.get('port', 1883))
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not broker:
+            return False, "請填寫 Broker 位址"
+        
+        # 連線測試
+        connected = False
+        error_message = ""
+        
+        def on_connect(client, userdata, flags, rc, properties=None):
+            nonlocal connected, error_message
+            if rc == 0:
+                connected = True
+            else:
+                error_codes = {
+                    1: "協議版本錯誤",
+                    2: "無效的客戶端 ID",
+                    3: "伺服器不可用",
+                    4: "使用者名稱或密碼錯誤",
+                    5: "未授權"
+                }
+                error_message = error_codes.get(rc, f"連線失敗 (錯誤碼: {rc})")
+        
+        try:
+            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+            client.on_connect = on_connect
+            
+            if username:
+                client.username_pw_set(username, password)
+            
+            # 設定超時
+            client.connect(broker, port, keepalive=10)
+            
+            # 等待連線結果（最多 5 秒）
+            start_time = time.time()
+            client.loop_start()
+            
+            while not connected and (time.time() - start_time) < 5:
+                if error_message:
+                    break
+                time.sleep(0.1)
+            
+            client.loop_stop()
+            client.disconnect()
+            
+            if connected:
+                return True, "連線成功！設定已儲存"
+            elif error_message:
+                return False, error_message
+            else:
+                return False, "連線逾時，請檢查 Broker 位址和 Port"
+                
+        except Exception as e:
+            error_str = str(e)
+            if "Connection refused" in error_str:
+                return False, "連線被拒絕，請檢查 Broker 位址和 Port"
+            elif "timed out" in error_str.lower():
+                return False, "連線逾時，請檢查網路連線"
+            elif "Name or service not known" in error_str:
+                return False, "無法解析 Broker 位址"
+            else:
+                return False, f"連線錯誤：{error_str}"
+    
+    def on_settings_saved(self, success: bool):
+        """設定儲存完成"""
+        if success:
+            # 5秒後關閉
+            QTimer.singleShot(5000, self.cleanup_and_close)
+    
+    def on_status_update(self, message: str):
+        """更新狀態文字"""
+        self.status_label.setText(message)
+    
+    def cancel_settings(self):
+        """取消設定"""
+        self.cleanup_and_close()
+    
+    def cleanup_and_close(self):
+        """清理資源並關閉視窗"""
+        self._is_closing = True
+        
+        # 在背景執行緒中關閉伺服器
+        if self.server:
+            import threading
+            def shutdown_server():
+                try:
+                    self.server.shutdown()
+                    self.server.server_close()
+                except:
+                    pass
+            threading.Thread(target=shutdown_server, daemon=True).start()
+        
+        self.close()
+    
+    def closeEvent(self, event):
+        """關閉事件"""
+        if not self._is_closing:
+            self.cleanup_and_close()
+        event.accept()
+
+
 class ControlPanel(QWidget):
     """下拉控制面板（類似 Android 狀態列）"""
     
@@ -4349,7 +5482,8 @@ class ControlPanel(QWidget):
         button_configs = [
             ("WiFi", "📶", "#1DB954"),
             ("藍牙", "🔵", "#4285F4"),
-            ("亮度", "☀", "#FF9800")
+            ("亮度", "☀", "#FF9800"),
+            ("設定", "⚙", "#9C27B0")
         ]
         
         for title, icon, color in button_configs:
@@ -4747,6 +5881,11 @@ class ControlPanel(QWidget):
             print("藍牙功能待實現")
         elif title == "亮度":
             print("亮度調整待實現")
+        elif title == "設定":
+            # 開啟 MQTT 設定對話框
+            parent = self.parent()
+            if parent and hasattr(parent, 'show_mqtt_settings'):
+                parent.show_mqtt_settings()  # type: ignore
     
     def hide_panel(self):
         """隱藏面板"""
@@ -4768,6 +5907,12 @@ class Dashboard(QWidget):
     signal_update_spotify_track = pyqtSignal(str, str, str)
     signal_update_spotify_progress = pyqtSignal(float, float, bool)  # current, total, is_playing
     signal_update_spotify_art = pyqtSignal(object)  # 傳遞 PIL Image 物件
+    
+    # 導航相關 Signal
+    signal_update_navigation = pyqtSignal(dict)  # 傳遞導航資料字典
+    
+    # 網路狀態 Signal
+    signal_update_network = pyqtSignal(bool)  # 傳遞網路狀態 (is_connected)
 
     def __init__(self):
         super().__init__()
@@ -4787,6 +5932,12 @@ class Dashboard(QWidget):
         
         # 連接方向燈 Signal
         self.signal_update_turn_signal.connect(self._slot_update_turn_signal)
+        
+        # 連接導航 Signal
+        self.signal_update_navigation.connect(self._slot_update_navigation)
+        
+        # 連接網路狀態 Signal
+        self.signal_update_network.connect(self._update_network_status)
         
         # 適配 1920x480 螢幕
         self.setFixedSize(1920, 480)
@@ -5188,8 +6339,8 @@ class Dashboard(QWidget):
         speed_gear_layout.setContentsMargins(0, 0, 0, 0)
         speed_gear_layout.setSpacing(10)
         
-        # 檔位顯示（左側）
-        self.gear_label = QLabel("P")
+        # 檔位顯示（左側）- 可點擊切換顯示模式
+        self.gear_label = ClickableLabel("P")
         self.gear_label.setStyleSheet("""
             color: #4ade80;
             font-size: 120px;
@@ -5201,6 +6352,7 @@ class Dashboard(QWidget):
         """)
         self.gear_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.gear_label.setFixedSize(140, 180)
+        self.gear_label.clicked.connect(self._toggle_gear_display_mode)
         
         # 時速區域（右側）
         speed_container = QWidget()
@@ -5282,7 +6434,7 @@ class Dashboard(QWidget):
         self.row_stack = QStackedWidget()
         self.row_stack.setFixedSize(800, 380)
         
-        # === 第一列：音樂卡片 / 門狀態卡片 ===
+        # === 第一列：音樂卡片 / 導航卡片 / 門狀態卡片 ===
         row1_cards = QStackedWidget()
         row1_cards.setFixedSize(800, 380)
         
@@ -5290,12 +6442,16 @@ class Dashboard(QWidget):
         self.music_card = MusicCardWide()
         self.music_card.request_bind.connect(self.start_spotify_auth)
         
+        # 導航卡片（寬版）
+        self.nav_card = NavigationCard()
+        
         # 門狀態卡片
         self.door_card = DoorStatusCard()
         self.door_card.setFixedSize(800, 380)
         
         row1_cards.addWidget(self.music_card)  # row1_index 0
-        row1_cards.addWidget(self.door_card)   # row1_index 1
+        row1_cards.addWidget(self.nav_card)    # row1_index 1
+        row1_cards.addWidget(self.door_card)   # row1_index 2
         
         # === 第二列：Trip 卡片 / ODO 卡片 ===
         row2_cards = QStackedWidget()
@@ -5323,7 +6479,7 @@ class Dashboard(QWidget):
         card_indicator_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.card_indicators = []
-        for i in range(2):  # 第一列有 2 張卡片
+        for i in range(3):  # 第一列有 3 張卡片
             dot = QLabel("●")
             dot.setFixedSize(12, 12)
             dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -5344,7 +6500,7 @@ class Dashboard(QWidget):
         self.current_card_index = 0    # 當前卡片索引（右側）
         self.current_left_index = 0    # 當前左側卡片索引
         self.rows = [row1_cards, row2_cards]  # 列的引用
-        self.row_card_counts = [2, 2]  # 每列的卡片數量
+        self.row_card_counts = [3, 2]  # 每列的卡片數量（第一列: 音樂/導航/門）
         self.left_card_count = 2       # 左側卡片數量（四宮格 + 油量，不含詳細視圖）
         
         # 觸控滑動相關
@@ -5371,13 +6527,18 @@ class Dashboard(QWidget):
         self.rpm = 0
         self.temp = 45  # 正常水溫約在 45-50% 位置（對應 85-95°C）
         self.fuel = 60  # 稍微偏上的油量
-        self.gear = "P"
+        self.gear = "P"  # 顯示用的檔位
+        self.actual_gear = "P"  # 實際檔位（CAN 傳來的原始值）
+        self.show_detailed_gear = False  # False=顯示D, True=顯示具體檔位(1-5)
         self.turbo = -0.7  # 待速時的進氣歧管負壓 (bar)
         self.battery = 12.6  # 電瓶電壓 (V)
         
         # 定速巡航狀態
         self.cruise_switch = False   # 開關是否開啟（白色）
         self.cruise_engaged = False  # 是否作動中（綠色）
+        
+        # 網路狀態
+        self.is_offline = False  # 是否斷線
         
         # RPM 動畫平滑 (GUI 端二次平滑)
         self.target_rpm = 0.0  # 目標轉速
@@ -5422,6 +6583,16 @@ class Dashboard(QWidget):
         
         # 初始化 Spotify
         self.check_spotify_config()
+        
+        # 初始化 MQTT（如果有設定檔）
+        self._check_mqtt_config()
+        
+        # 啟動網路狀態檢測（每 5 秒檢查一次）
+        self.network_check_timer = QTimer()
+        self.network_check_timer.timeout.connect(self._check_network_status)
+        self.network_check_timer.start(5000)  # 5 秒
+        # 立即檢查一次
+        QTimer.singleShot(2000, self._check_network_status)
         
         print("儀表板邏輯已啟動")
 
@@ -5503,6 +6674,189 @@ class Dashboard(QWidget):
             self.auth_dialog.close()
             del self.auth_dialog
     
+    def show_mqtt_settings(self):
+        """顯示 MQTT 設定對話框"""
+        print("開啟 MQTT 設定對話框...")
+        
+        # 先隱藏控制面板
+        if self.panel_visible:
+            self.hide_control_panel()
+        
+        # 創建 MQTT 設定對話框
+        self.mqtt_dialog = MQTTSettingsDialog()
+        self.mqtt_dialog.signals.settings_saved.connect(self.on_mqtt_settings_saved)
+        
+        # 設定為模態對話框
+        self.mqtt_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        
+        # 設定視窗標誌
+        self.mqtt_dialog.setWindowFlags(
+            Qt.WindowType.Dialog | 
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.FramelessWindowHint
+        )
+        
+        # 顯示對話框
+        self.mqtt_dialog.show()
+        
+        # 置於螢幕中央
+        primary_screen = QApplication.primaryScreen()
+        if primary_screen:
+            screen_geometry = primary_screen.geometry()
+            dialog_geometry = self.mqtt_dialog.geometry()
+            x = (screen_geometry.width() - dialog_geometry.width()) // 2
+            y = (screen_geometry.height() - dialog_geometry.height()) // 2
+            self.mqtt_dialog.move(x, y)
+    
+    def on_mqtt_settings_saved(self, success):
+        """MQTT 設定儲存完成回調"""
+        if success:
+            print("MQTT 設定已儲存！")
+            # 可以在這裡初始化 MQTT 連線
+            self._init_mqtt_client()
+        else:
+            print("MQTT 設定失敗")
+        
+        # 關閉對話框 (如果還沒關閉)
+        if hasattr(self, 'mqtt_dialog'):
+            self.mqtt_dialog.close()
+            del self.mqtt_dialog
+    
+    def _check_network_status(self):
+        """檢查網路連線狀態"""
+        import socket
+        import subprocess
+        import platform
+        
+        def check_connection():
+            # 方法 1: 嘗試 socket 連接 Google DNS
+            try:
+                sock = socket.create_connection(("8.8.8.8", 53), timeout=3)
+                sock.close()
+                return True
+            except Exception:
+                pass
+            
+            # 方法 2: 嘗試 socket 連接 Cloudflare DNS
+            try:
+                sock = socket.create_connection(("1.1.1.1", 53), timeout=3)
+                sock.close()
+                return True
+            except Exception:
+                pass
+            
+            # 都失敗了
+            return False
+        
+        # 在背景執行緒檢查，避免卡住 UI
+        import threading
+        
+        def check_and_update():
+            is_connected = check_connection()
+            # 使用 Signal 回到主執行緒更新 UI
+            self.signal_update_network.emit(is_connected)
+        
+        threading.Thread(target=check_and_update, daemon=True).start()
+    
+    def _update_network_status(self, is_connected):
+        """更新網路狀態顯示（主執行緒）"""
+        was_offline = self.is_offline
+        self.is_offline = not is_connected
+        
+        if self.is_offline != was_offline:
+            if self.is_offline:
+                print("[網路] ⚠️ 網路已斷線")
+            else:
+                print("[網路] ✅ 網路已恢復連線")
+        
+        # 更新音樂卡片和導航卡片的離線狀態
+        self.music_card.set_offline(self.is_offline)
+        self.nav_card.set_offline(self.is_offline)
+    
+    def _check_mqtt_config(self):
+        """檢查 MQTT 設定並自動連線"""
+        config_file = "mqtt_config.json"
+        if os.path.exists(config_file):
+            print("[MQTT] 發現設定檔，嘗試自動連線...")
+            self._init_mqtt_client()
+        else:
+            print("[MQTT] 未發現設定檔，可從下拉面板進行設定")
+    
+    def _init_mqtt_client(self):
+        """初始化 MQTT 客戶端"""
+        config_file = "mqtt_config.json"
+        if not os.path.exists(config_file):
+            print("[MQTT] 設定檔不存在")
+            return
+        
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            
+            import paho.mqtt.client as mqtt
+            
+            def on_connect(client, userdata, flags, rc, properties=None):
+                if rc == 0:
+                    print(f"[MQTT] 已連接到 {config['broker']}:{config['port']}")
+                    # 訂閱主題
+                    topic = config.get('topic', 'car/#')
+                    client.subscribe(topic)
+                    print(f"[MQTT] 已訂閱主題: {topic}")
+                else:
+                    print(f"[MQTT] 連線失敗，錯誤碼: {rc}")
+            
+            def on_message(client, userdata, msg):
+                try:
+                    payload = msg.payload.decode('utf-8')
+                    data = json.loads(payload)
+                    print(f"[MQTT] 收到訊息: {msg.topic} -> {payload[:100]}...")
+                    
+                    # 處理導航訊息 - 使用 Signal 確保在主執行緒更新 UI
+                    if 'navigation' in msg.topic or 'nav' in msg.topic:
+                        # 透過 Signal 傳遞資料到主執行緒
+                        self.signal_update_navigation.emit(data)
+                    
+                except Exception as e:
+                    print(f"[MQTT] 處理訊息錯誤: {e}")
+            
+            self.mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+            self.mqtt_client.on_connect = on_connect
+            self.mqtt_client.on_message = on_message
+            
+            # 設定認證
+            username = config.get('username', '').strip()
+            password = config.get('password', '').strip()
+            if username:
+                self.mqtt_client.username_pw_set(username, password)
+            
+            # 在背景執行緒中連線
+            import threading
+            def connect_mqtt():
+                try:
+                    self.mqtt_client.connect(config['broker'], config['port'], keepalive=60)
+                    self.mqtt_client.loop_forever()
+                except Exception as e:
+                    print(f"[MQTT] 連線錯誤: {e}")
+            
+            mqtt_thread = threading.Thread(target=connect_mqtt, daemon=True)
+            mqtt_thread.start()
+            
+        except ImportError:
+            print("[MQTT] paho-mqtt 未安裝")
+        except Exception as e:
+            print(f"[MQTT] 初始化失敗: {e}")
+    
+    @pyqtSlot(dict)
+    def _slot_update_navigation(self, data: dict):
+        """處理導航訊息（Slot - 在主執行緒執行）"""
+        print(f"[Navigation] _slot_update_navigation 被呼叫")
+        print(f"[Navigation] 資料: direction={data.get('direction')}, distance={data.get('totalDistance')}")
+        if hasattr(self, 'nav_card'):
+            self.nav_card.update_navigation(data)
+            print(f"[Navigation] 已更新導航資訊: {data.get('direction', '')}")
+        else:
+            print("[Navigation] 錯誤：nav_card 不存在")
+
     def show_control_panel(self):
         """顯示下拉控制面板"""
         if self.panel_visible or not self.control_panel:
@@ -5653,9 +7007,9 @@ class Dashboard(QWidget):
         # 更新門狀態
         self.door_card.set_door_status(door, is_closed)
         
-        # 門卡片位於第一列的第二張 (row=0, card=1)
+        # 門卡片位於第一列的第三張 (row=0, card=2)
         DOOR_ROW_INDEX = 0
-        DOOR_CARD_INDEX = 1  # 音樂=0, 門=1
+        DOOR_CARD_INDEX = 2  # 音樂=0, 導航=1, 門=2
         
         # 當有門狀態變更時，自動切換到門狀態卡片
         if not (self.current_row_index == DOOR_ROW_INDEX and self.current_card_index == DOOR_CARD_INDEX):
@@ -5693,7 +7047,7 @@ class Dashboard(QWidget):
     def _auto_switch_back_from_door(self):
         """自動從門狀態卡片切回之前的卡片"""
         DOOR_ROW_INDEX = 0
-        DOOR_CARD_INDEX = 1  # 音樂=0, 門=1
+        DOOR_CARD_INDEX = 2  # 音樂=0, 導航=1, 門=2
         
         if self.current_row_index == DOOR_ROW_INDEX and self.current_card_index == DOOR_CARD_INDEX:
             # 切回之前的位置
@@ -5789,11 +7143,41 @@ class Dashboard(QWidget):
     @pyqtSlot(str)
     def _slot_set_gear(self, gear):
         """Slot: 在主執行緒中更新檔位顯示"""
+        # 儲存實際檔位
+        self.actual_gear = gear
+        
+        # 決定顯示的檔位
+        display_gear = self._get_display_gear(gear)
+        
         # 只在檔位真正改變時才收起控制面板
-        if gear != self.gear and self.panel_visible:
+        if display_gear != self.gear and self.panel_visible:
             self.hide_control_panel()
         
-        self.gear = gear
+        self.gear = display_gear
+        self.update_display()
+    
+    def _get_display_gear(self, actual_gear):
+        """根據顯示模式決定要顯示的檔位"""
+        # P, R, N 永遠直接顯示
+        if actual_gear in ["P", "R", "N"]:
+            return actual_gear
+        
+        # 數字檔位 (1-5) 根據模式決定
+        if actual_gear in ["1", "2", "3", "4", "5"]:
+            if self.show_detailed_gear:
+                return actual_gear  # 顯示具體檔位
+            else:
+                return "D"  # 顯示 D
+        
+        # 其他情況直接顯示
+        return actual_gear
+    
+    def _toggle_gear_display_mode(self):
+        """切換檔位顯示模式（D 或具體檔位）"""
+        self.show_detailed_gear = not self.show_detailed_gear
+        
+        # 重新計算顯示的檔位
+        self.gear = self._get_display_gear(self.actual_gear)
         self.update_display()
     
     @pyqtSlot(str)
@@ -5919,6 +7303,9 @@ class Dashboard(QWidget):
         left_stack_rect.moveTopLeft(left_stack_global)
         
         if left_stack_rect.contains(a0.globalPosition().toPoint()):
+            # 如果在詳細視圖中，不處理左側區域的滑動（但仍然接受點擊返回）
+            if self._in_detail_view:
+                return
             self.touch_start_pos = a0.position().toPoint()
             self.is_swiping = True
             self.swipe_direction = None
@@ -6134,6 +7521,14 @@ class Dashboard(QWidget):
         
         # 獲取當前列的卡片總數
         current_row_cards = self.row_card_counts[self.current_row_index]
+        
+        # 安全檢查：確保 current_card_index 在有效範圍內
+        if self.current_card_index >= current_row_cards:
+            print(f"⚠️ 修正卡片索引: {self.current_card_index} -> 0 (max: {current_row_cards-1})")
+            self.current_card_index = 0
+            self.rows[self.current_row_index].setCurrentIndex(0)
+            self.update_indicators()
+        
         old_card_index = self.current_card_index
         new_card_index = (self.current_card_index + direction) % current_row_cards
         
@@ -6144,7 +7539,7 @@ class Dashboard(QWidget):
         self._animate_card_switch(old_card_index, new_card_index, direction)
         
         # 顯示提示
-        row1_card_names = ["音樂播放器", "門狀態"]
+        row1_card_names = ["音樂播放器", "導航", "門狀態"]
         row2_card_names = ["Trip卡片", "ODO卡片"]
         all_card_names = [row1_card_names, row2_card_names]
         
@@ -6217,6 +7612,13 @@ class Dashboard(QWidget):
         from_widget = self.left_card_stack.widget(from_index)
         to_widget = self.left_card_stack.widget(to_index)
         
+        # 安全檢查：確保 widget 存在
+        if from_widget is None or to_widget is None:
+            print(f"⚠️ 左側卡片切換錯誤: from_index={from_index}, to_index={to_index}, "
+                  f"count={self.left_card_stack.count()}")
+            self._left_card_animating = False
+            return
+        
         stack_width = self.left_card_stack.width()
         
         # 設定動畫方向：direction=1 向左滑出，direction=-1 向右滑出
@@ -6274,6 +7676,17 @@ class Dashboard(QWidget):
         from_widget = current_row.widget(from_index)
         to_widget = current_row.widget(to_index)
         
+        # 安全檢查：確保 widget 存在
+        if from_widget is None or to_widget is None:
+            print(f"⚠️ 卡片切換錯誤: from_index={from_index}, to_index={to_index}, "
+                  f"row={self.current_row_index}, count={current_row.count()}")
+            self._right_card_animating = False
+            # 重置到有效的卡片索引
+            self.current_card_index = 0
+            current_row.setCurrentIndex(0)
+            self.update_indicators()
+            return
+        
         stack_width = current_row.width()
         
         # 設定動畫方向：direction=1 向左滑出，direction=-1 向右滑出
@@ -6329,6 +7742,13 @@ class Dashboard(QWidget):
         
         from_widget = self.row_stack.widget(from_row)
         to_widget = self.row_stack.widget(to_row)
+        
+        # 安全檢查：確保 widget 存在
+        if from_widget is None or to_widget is None:
+            print(f"⚠️ 列切換錯誤: from_row={from_row}, to_row={to_row}, "
+                  f"count={self.row_stack.count()}")
+            self._right_row_animating = False
+            return
         
         # 在動畫開始前，先將目標列設為第一張卡片（避免閃現問題）
         self.rows[to_row].setCurrentIndex(0)
@@ -6435,8 +7855,8 @@ class Dashboard(QWidget):
         for indicator in self.left_indicators:
             indicator.setVisible(False)
         
-        # 禁用滑動
-        self.set_swipe_enabled(False)
+        # 注意：不再禁用全局滑動，右側卡片仍可操作
+        # _in_detail_view 狀態會阻止左側區域的滑動切換
         
         gauge_names = ["轉速", "水溫", "渦輪負壓", "電瓶電壓"]
         print(f"進入 {gauge_names[gauge_index]} 詳細視圖")
@@ -6473,8 +7893,7 @@ class Dashboard(QWidget):
             indicator.setVisible(True)
         self._update_left_indicators()
         
-        # 恢復滑動
-        self.set_swipe_enabled(True)
+        # 注意：不再需要恢復滑動，因為進入時沒有禁用
         
         print("返回四宮格視圖")
     
@@ -6611,7 +8030,7 @@ class Dashboard(QWidget):
             self._animate_card_switch(old_card_index, next_card_index, 1)
         
         # 顯示提示
-        row1_card_names = ["音樂播放器", "門狀態"]
+        row1_card_names = ["音樂播放器", "導航", "門狀態"]
         row2_card_names = ["Trip卡片", "ODO卡片"]
         all_card_names = [row1_card_names, row2_card_names]
         # 動畫結束後才會更新索引，所以這裡用計算的值
@@ -6903,6 +8322,11 @@ class Dashboard(QWidget):
             "R": "#f66",   # 紅色
             "N": "#fa6",   # 橙色
             "D": "#4ade80",  # 綠色
+            "1": "#6af",   # 藍色 (1檔)
+            "2": "#6af",   # 藍色 (2檔)
+            "3": "#6af",   # 藍色 (3檔)
+            "4": "#6af",   # 藍色 (4檔)
+            "5": "#6af",   # 藍色 (5檔)
             "S": "#f6f",   # 紫色
             "L": "#ff6",   # 黃色
         }

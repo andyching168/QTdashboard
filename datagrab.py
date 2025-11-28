@@ -243,12 +243,23 @@ def unified_receiver(bus, db, signals):
                         else:
                             gear_str = "P"
                         
-                    elif trans_mode in [0x01, 0x07]: # D 檔 (0x01) 或 R 檔 (0x07)
-                        gear_str = "D" if trans_mode == 0x01 else "R"
+                    elif trans_mode == 0x07: # R 檔
+                        gear_str = "R"
+                    
+                    elif trans_mode >= 0x01 and trans_mode <= 0x05: # D 檔 1-5 檔
+                        # trans_mode 0x01 = 1檔, 0x02 = 2檔, ..., 0x05 = 5檔
+                        gear_str = str(trans_mode)
+                    
+                    elif trans_mode >= 0x06:
+                        # 6 或以上的值，保持上一次的檔位顯示（不更新）
+                        gear_str = last_gear_str if last_gear_str else "5"
                             
                     else:
                         # 其他檔位 (S/L 等)
                         gear_str = str(trans_mode)
+                    
+                    # 記錄當前檔位供下次使用
+                    last_gear_str = gear_str
                     
                     # 更新前端檔位顯示
                     signals.update_gear.emit(gear_str)

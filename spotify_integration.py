@@ -46,7 +46,9 @@ class SpotifyIntegration:
             logger.info("Spotify 認證成功")
             
             # 建立監聽器
-            self.listener = SpotifyListener(self.auth, update_interval=1.0)
+            # update_interval=2.0 秒可減少 API 呼叫，同時仍保持良好的響應性
+            # Spotify 的播放進度可透過本地計算補間，不需要每秒都查詢 API
+            self.listener = SpotifyListener(self.auth, update_interval=2.0)
             
             # 設定回調函數
             self.listener.set_callback('on_track_change', self._on_track_change)

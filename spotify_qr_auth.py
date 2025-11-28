@@ -15,9 +15,10 @@ from urllib.parse import urlparse, parse_qs
 from io import BytesIO
 
 from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout, 
-                              QHBoxLayout, QPushButton, QProgressBar, QStackedWidget)
+                              QHBoxLayout, QPushButton, QProgressBar, QStackedWidget,
+                              QLineEdit, QMessageBox)
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
-from PyQt6.QtGui import QPixmap, QImage, QFont
+from PyQt6.QtGui import QPixmap, QImage, QFont, QClipboard
 
 from spotify_auth import SpotifyAuthManager
 
@@ -28,69 +29,280 @@ class AuthCallbackHandler(BaseHTTPRequestHandler):
     """處理 OAuth 回調的 HTTP 伺服器"""
     
     auth_code = None
+    rpi_ip = None  # RPI 的 IP 位址
+    auth_url = None  # Spotify 授權 URL
     
     def do_GET(self):
         """處理 GET 請求"""
+        path = urlparse(self.path).path
         query = urlparse(self.path).query
         params = parse_qs(query)
         
-        if 'code' in params:
-            AuthCallbackHandler.auth_code = params['code'][0]
-            
-            # 回傳成功頁面
+        if path == '/':
+            # 首頁：顯示授權引導頁面
             self.send_response(200)
             self.send_header('Content-type', 'text/html; charset=utf-8')
             self.end_headers()
             
-            success_html = """
+            rpi_ip = AuthCallbackHandler.rpi_ip or '127.0.0.1'
+            
+            # 手機友好的授權頁面
+            auth_page = f"""
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>授權成功</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+                <title>Spotify 授權</title>
                 <style>
-                    body {
+                    * {{ box-sizing: border-box; }}
+                    body {{
                         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                        background: linear-gradient(135deg, #1DB954 0%, #191414 100%);
+                        background: linear-gradient(135deg, #191414 0%, #1DB954 100%);
                         color: white;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        height: 100vh;
+                        min-height: 100vh;
                         margin: 0;
-                    }
-                    .container {
+                        padding: 20px;
+                    }}
+                    .container {{
+                        max-width: 400px;
+                        margin: 0 auto;
                         text-align: center;
-                        background: rgba(0,0,0,0.5);
-                        padding: 40px;
-                        border-radius: 20px;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-                    }
-                    h1 { font-size: 48px; margin: 0 0 20px 0; }
-                    p { font-size: 20px; opacity: 0.8; }
-                    .checkmark {
-                        font-size: 80px;
-                        color: #1DB954;
-                        margin-bottom: 20px;
-                    }
+                    }}
+                    .logo {{ font-size: 50px; margin: 20px 0; }}
+                    h1 {{ font-size: 22px; margin: 0 0 10px 0; }}
+                    .subtitle {{ font-size: 14px; opacity: 0.8; margin-bottom: 25px; }}
+                    
+                    .step-card {{
+                        background: rgba(0,0,0,0.6);
+                        border-radius: 16px;
+                        padding: 20px;
+                        margin-bottom: 15px;
+                        text-align: left;
+                    }}
+                    .step-header {{
+                        display: flex;
+                        align-items: center;
+                        margin-bottom: 12px;
+                    }}
+                    .step-num {{
+                        background: #1DB954;
+                        color: white;
+                        width: 28px;
+                        height: 28px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: bold;
+                        font-size: 14px;
+                        margin-right: 12px;
+                        flex-shrink: 0;
+                    }}
+                    .step-title {{ font-size: 16px; font-weight: 600; }}
+                    .step-desc {{ font-size: 13px; opacity: 0.8; line-height: 1.5; }}
+                    
+                    .auth-btn {{
+                        display: block;
+                        background-color: #1DB954;
+                        color: white;
+                        text-decoration: none;
+                        padding: 16px;
+                        border-radius: 50px;
+                        font-size: 17px;
+                        font-weight: bold;
+                        margin: 10px 0;
+                        text-align: center;
+                    }}
+                    .auth-btn:active {{ background-color: #1ed760; }}
+                    
+                    .url-input {{
+                        width: 100%;
+                        padding: 14px;
+                        border: 2px solid #333;
+                        border-radius: 12px;
+                        background: #222;
+                        color: white;
+                        font-size: 14px;
+                        margin: 10px 0;
+                    }}
+                    .url-input:focus {{
+                        outline: none;
+                        border-color: #1DB954;
+                    }}
+                    .submit-btn {{
+                        width: 100%;
+                        padding: 14px;
+                        background: #1DB954;
+                        color: white;
+                        border: none;
+                        border-radius: 50px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        cursor: pointer;
+                    }}
+                    .submit-btn:disabled {{
+                        background: #333;
+                        color: #666;
+                    }}
+                    
+                    .success-msg, .error-msg {{
+                        padding: 15px;
+                        border-radius: 12px;
+                        margin: 15px 0;
+                        display: none;
+                    }}
+                    .success-msg {{ background: rgba(29, 185, 84, 0.3); }}
+                    .error-msg {{ background: rgba(255, 0, 0, 0.3); }}
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <div class="checkmark">✓</div>
-                    <h1>授權成功！</h1>
-                    <p>您可以關閉此頁面，回到車機繼續操作</p>
+                    <div class="logo">🎵</div>
+                    <h1>車機 Spotify 連線</h1>
+                    <p class="subtitle">請依照以下步驟完成授權</p>
+                    
+                    <div class="step-card">
+                        <div class="step-header">
+                            <div class="step-num">1</div>
+                            <div class="step-title">點擊授權按鈕</div>
+                        </div>
+                        <a href="{AuthCallbackHandler.auth_url}" class="auth-btn" target="_blank">
+                            🔗 前往 Spotify 授權
+                        </a>
+                    </div>
+                    
+                    <div class="step-card">
+                        <div class="step-header">
+                            <div class="step-num">2</div>
+                            <div class="step-title">同意授權</div>
+                        </div>
+                        <p class="step-desc">
+                            在 Spotify 頁面上點擊「同意」按鈕。<br>
+                            授權後頁面會顯示「無法連線」，這是正常的。
+                        </p>
+                    </div>
+                    
+                    <div class="step-card">
+                        <div class="step-header">
+                            <div class="step-num">3</div>
+                            <div class="step-title">複製網址並貼上</div>
+                        </div>
+                        <p class="step-desc">
+                            複製瀏覽器網址列的完整網址，貼到下方：
+                        </p>
+                        <input type="text" id="urlInput" class="url-input" 
+                               placeholder="貼上網址（以 http://127.0.0.1 開頭）"
+                               oninput="checkInput()">
+                        <button id="submitBtn" class="submit-btn" onclick="submitCode()" disabled>
+                            完成授權
+                        </button>
+                    </div>
+                    
+                    <div id="successMsg" class="success-msg">
+                        ✅ 授權成功！請返回車機查看
+                    </div>
+                    <div id="errorMsg" class="error-msg">
+                        ❌ 授權碼無效，請重新複製網址
+                    </div>
                 </div>
+                
                 <script>
-                    setTimeout(() => window.close(), 3000);
+                    function checkInput() {{
+                        const input = document.getElementById('urlInput').value;
+                        const btn = document.getElementById('submitBtn');
+                        btn.disabled = !input.includes('code=');
+                    }}
+                    
+                    function submitCode() {{
+                        const input = document.getElementById('urlInput').value;
+                        const match = input.match(/code=([^&]+)/);
+                        if (match) {{
+                            const code = match[1];
+                            // 發送到 RPI
+                            fetch('/submit_code?code=' + encodeURIComponent(code))
+                                .then(r => r.json())
+                                .then(data => {{
+                                    if (data.success) {{
+                                        document.getElementById('successMsg').style.display = 'block';
+                                        document.getElementById('errorMsg').style.display = 'none';
+                                        document.getElementById('submitBtn').disabled = true;
+                                        document.getElementById('submitBtn').textContent = '✓ 已完成';
+                                    }} else {{
+                                        document.getElementById('errorMsg').style.display = 'block';
+                                    }}
+                                }})
+                                .catch(e => {{
+                                    document.getElementById('errorMsg').style.display = 'block';
+                                }});
+                        }}
+                    }}
                 </script>
             </body>
             </html>
             """
-            self.wfile.write(success_html.encode())
+            self.wfile.write(auth_page.encode())
+            
+        elif path == '/submit_code':
+            # 接收手機提交的授權碼
+            if 'code' in params:
+                AuthCallbackHandler.auth_code = params['code'][0]
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"success": true}')
+            else:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"success": false, "error": "missing code"}')
+                
+        elif path == '/callback':
+            # Spotify OAuth 回調（如果 RPI 本機訪問會到這）
+            if 'code' in params:
+                AuthCallbackHandler.auth_code = params['code'][0]
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html; charset=utf-8')
+                self.end_headers()
+                
+                success_html = """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <title>授權成功</title>
+                    <style>
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                            background: linear-gradient(135deg, #1DB954 0%, #191414 100%);
+                            color: white;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            height: 100vh;
+                            margin: 0;
+                        }
+                        .container { text-align: center; }
+                        .checkmark { font-size: 80px; }
+                        h1 { font-size: 24px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="checkmark">✓</div>
+                        <h1>授權成功！</h1>
+                        <p>車機將自動完成連線</p>
+                    </div>
+                </body>
+                </html>
+                """
+                self.wfile.write(success_html.encode())
+            else:
+                self.send_response(400)
+                self.end_headers()
         else:
-            self.send_response(400)
+            self.send_response(404)
             self.end_headers()
     
     def log_message(self, format, *args):
@@ -117,9 +329,12 @@ class SpotifyQRAuthDialog(QWidget):
         self._is_closing = False  # 標記是否正在關閉
         self.oauth = None  # 儲存 OAuth 管理器
         
-        # 預先取得 IP 和 Redirect URI
+        # 取得 RPI 的實際 IP
         self.local_ip = self.get_local_ip()
-        self.redirect_uri = f"http://{self.local_ip}:8888/callback"
+        
+        # Spotify 只允許 loopback (127.0.0.1) 使用 HTTP
+        # 所以 redirect_uri 必須用 127.0.0.1（手機上會失敗，但我們用 JS 攔截）
+        self.redirect_uri = "http://127.0.0.1:8888/callback"
         
         self.init_ui()
         self.start_auth_flow()
@@ -205,10 +420,10 @@ class SpotifyQRAuthDialog(QWidget):
         main_layout.setContentsMargins(60, 20, 60, 20)
         main_layout.setSpacing(40)
         
-        # === 左側：資訊切換區 ===
+        # === 左側：說明區 ===
         left_container = QWidget()
         left_layout = QVBoxLayout(left_container)
-        left_layout.setSpacing(10)
+        left_layout.setSpacing(15)
         left_layout.setContentsMargins(0, 0, 0, 0)
         
         # 標題
@@ -221,144 +436,40 @@ class SpotifyQRAuthDialog(QWidget):
         title_layout.addWidget(title)
         title_layout.addStretch()
         
-        # Stacked Widget 用於切換內容
-        self.info_stack = QStackedWidget()
+        # 簡單說明
+        desc_container = QWidget()
+        desc_container.setStyleSheet("background-color: #181818; border-radius: 15px;")
+        desc_layout = QVBoxLayout(desc_container)
+        desc_layout.setContentsMargins(20, 20, 20, 20)
+        desc_layout.setSpacing(12)
         
-        # 頁面 1: Redirect URI QR
-        page1 = QWidget()
-        p1_layout = QHBoxLayout(page1)
-        p1_layout.setContentsMargins(0, 0, 0, 0)
-        p1_layout.setSpacing(20)
+        step1 = QLabel("📱 用手機掃描右側 QR Code")
+        step1.setFont(QFont("Arial", 18))
+        step1.setStyleSheet("color: #FFFFFF;")
         
-        # 左側：標題 + 說明文字
-        p1_left_container = QWidget()
-        p1_left_layout = QVBoxLayout(p1_left_container)
-        p1_left_layout.setContentsMargins(0, 0, 0, 0)
-        p1_left_layout.setSpacing(10)
-        p1_left_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-
-        p1_title = QLabel("步驟 1/3: 設定 Redirect URI")
-        p1_title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        p1_title.setStyleSheet("color: #1DB954;")
+        step2 = QLabel("🔗 在手機上完成 Spotify 授權")
+        step2.setFont(QFont("Arial", 18))
+        step2.setStyleSheet("color: #FFFFFF;")
         
-        p1_desc = QLabel("請掃描右側 QR Code 複製網址，\n並新增至 Spotify Dashboard 的 Redirect URIs")
-        p1_desc.setFont(QFont("Arial", 16))
-        p1_desc.setStyleSheet("color: #B3B3B3;")
-        p1_desc.setWordWrap(True)
+        step3 = QLabel("✅ 授權成功後車機會自動連線")
+        step3.setFont(QFont("Arial", 18))
+        step3.setStyleSheet("color: #FFFFFF;")
         
-        p1_url = QLabel(self.redirect_uri)
-        p1_url.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        p1_url.setStyleSheet("color: #FFFF00; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 5px;")
-        p1_url.setWordWrap(True)
+        desc_layout.addWidget(step1)
+        desc_layout.addWidget(step2)
+        desc_layout.addWidget(step3)
         
-        p1_left_layout.addWidget(p1_title)
-        p1_left_layout.addWidget(p1_desc)
-        p1_left_layout.addSpacing(10)
-        p1_left_layout.addWidget(p1_url)
-        p1_left_layout.addStretch()
+        # 首次設定提示
+        first_time_hint = QLabel("⚠️ 首次使用需先在 Spotify Dashboard 設定 Redirect URI")
+        first_time_hint.setFont(QFont("Arial", 12))
+        first_time_hint.setStyleSheet("color: #FFA500;")
+        first_time_hint.setWordWrap(True)
         
-        # 右側：QR Code
-        p1_qr_container = QWidget()
-        p1_qr_container.setStyleSheet("background-color: white; border-radius: 10px;")
-        p1_qr_container.setFixedSize(200, 200)
-        p1_qr_layout = QVBoxLayout(p1_qr_container)
-        p1_qr_layout.setContentsMargins(5, 5, 5, 5)
-        p1_qr_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        p1_qr_label = QLabel()
-        p1_qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        p1_qr_label.setScaledContents(True)
-        p1_qr_label.setFixedSize(190, 190)
-        p1_qr_label.setPixmap(self.create_qr_pixmap(self.redirect_uri, 190))
-        p1_qr_layout.addWidget(p1_qr_label)
-        
-        p1_layout.addWidget(p1_left_container)
-        p1_layout.addWidget(p1_qr_container)
-        p1_layout.addStretch()
-        
-        # 頁面 2: Dashboard Link
-        page2 = QWidget()
-        p2_layout = QHBoxLayout(page2)
-        p2_layout.setContentsMargins(0, 0, 0, 0)
-        p2_layout.setSpacing(20)
-        
-        # 左側：標題 + 說明文字
-        p2_left_container = QWidget()
-        p2_left_layout = QVBoxLayout(p2_left_container)
-        p2_left_layout.setContentsMargins(0, 0, 0, 0)
-        p2_left_layout.setSpacing(10)
-        p2_left_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-
-        p2_title = QLabel("步驟 2/3: 前往 Dashboard")
-        p2_title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        p2_title.setStyleSheet("color: #1DB954;")
-        
-        p2_desc = QLabel("掃描右側 QR Code 前往\nSpotify Developer Dashboard 進行設定")
-        p2_desc.setFont(QFont("Arial", 16))
-        p2_desc.setStyleSheet("color: #B3B3B3;")
-        p2_desc.setWordWrap(True)
-        
-        p2_left_layout.addWidget(p2_title)
-        p2_left_layout.addWidget(p2_desc)
-        p2_left_layout.addStretch()
-
-        # 右側：QR Code
-        p2_qr_container = QWidget()
-        p2_qr_container.setStyleSheet("background-color: white; border-radius: 10px;")
-        p2_qr_container.setFixedSize(200, 200)
-        p2_qr_layout = QVBoxLayout(p2_qr_container)
-        p2_qr_layout.setContentsMargins(5, 5, 5, 5)
-        p2_qr_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        dashboard_url = "https://developer.spotify.com/dashboard"
-        p2_qr_label = QLabel()
-        p2_qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        p2_qr_label.setScaledContents(True)
-        p2_qr_label.setFixedSize(190, 190)
-        p2_qr_label.setPixmap(self.create_qr_pixmap(dashboard_url, 190))
-        p2_qr_layout.addWidget(p2_qr_label)
-        
-        p2_layout.addWidget(p2_left_container)
-        p2_layout.addWidget(p2_qr_container)
-        p2_layout.addStretch()
-        
-        # 頁面 3: 授權說明
-        page3 = QWidget()
-        p3_layout = QVBoxLayout(page3)
-        p3_layout.setContentsMargins(0, 0, 0, 0)
-        
-        p3_title = QLabel("步驟 3/3: 進行授權")
-        p3_title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        p3_title.setStyleSheet("color: #1DB954;")
-        
-        steps_container = QWidget()
-        steps_container.setStyleSheet("background-color: #181818; border-radius: 10px;")
-        steps_layout = QVBoxLayout(steps_container)
-        steps_layout.setContentsMargins(15, 15, 15, 15)
-        steps_layout.setSpacing(5)
-        
-        step1 = QLabel("1. 開啟手機相機")
-        step2 = QLabel("2. 掃描右側 QR Code")
-        step3 = QLabel("3. 同意授權")
-        
-        for step in [step1, step2, step3]:
-            step.setFont(QFont("Arial", 16))
-            step.setStyleSheet("color: #FFFFFF;")
-            steps_layout.addWidget(step)
-            
-        p3_layout.addWidget(p3_title)
-        p3_layout.addWidget(steps_container)
-        p3_layout.addSpacing(20)
-        
-        # 加入頁面到 Stack
-        self.info_stack.addWidget(page1)
-        self.info_stack.addWidget(page2)
-        self.info_stack.addWidget(page3)
-        
-        # 切換按鈕
-        self.toggle_btn = QPushButton("下一步")
-        self.toggle_btn.setFixedWidth(150)
-        self.toggle_btn.clicked.connect(self.toggle_info_view)
+        redirect_uri_label = QLabel(f"Redirect URI: {self.redirect_uri}")
+        redirect_uri_label.setFont(QFont("Arial", 11))
+        redirect_uri_label.setStyleSheet("color: #888; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 5px;")
+        redirect_uri_label.setWordWrap(True)
+        redirect_uri_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         
         # 狀態與進度
         self.status_label = QLabel("等待掃描...")
@@ -377,9 +488,10 @@ class SpotifyQRAuthDialog(QWidget):
         
         # 組合左側佈局
         left_layout.addLayout(title_layout)
-        left_layout.addWidget(self.info_stack)
-        left_layout.addWidget(self.toggle_btn)
-        left_layout.addSpacing(10)
+        left_layout.addWidget(desc_container)
+        left_layout.addWidget(first_time_hint)
+        left_layout.addWidget(redirect_uri_label)
+        left_layout.addStretch()
         left_layout.addWidget(self.status_label)
         left_layout.addWidget(self.progress)
         left_layout.addWidget(cancel_btn)
@@ -435,34 +547,26 @@ class SpotifyQRAuthDialog(QWidget):
         # 連接訊號
         self.signals.auth_completed.connect(self.on_auth_completed)
         self.signals.status_update.connect(self.on_status_update)
-        
-        # 預設顯示第一頁
-        self.info_stack.setCurrentIndex(0)
-    
-    def toggle_info_view(self):
-        """切換資訊頁面"""
-        current = self.info_stack.currentIndex()
-        next_idx = (current + 1) % self.info_stack.count()
-        self.info_stack.setCurrentIndex(next_idx)
-        
-        # 更新按鈕文字
-        if next_idx == 2:  # 最後一步
-            self.toggle_btn.setText("回到第一步")
-        else:
-            self.toggle_btn.setText("下一步")
 
     def start_auth_flow(self):
         """啟動授權流程"""
         try:
+            # 先生成授權 URL（會設定 AuthCallbackHandler.auth_url）
+            self.get_auth_url()
+            
+            # 設定 RPI IP 供 HTTP handler 使用
+            AuthCallbackHandler.rpi_ip = self.local_ip
+            
             # 啟動 HTTP 伺服器
             self.server_thread = threading.Thread(target=self.run_server, daemon=True)
             self.server_thread.start()
             
-            # 生成授權 URL
-            auth_url = self.get_auth_url()
+            # 生成 QR Code - 指向 RPI 的網頁（不是直接指向 Spotify）
+            rpi_url = f"http://{self.local_ip}:8888/"
+            self.generate_qr_code(rpi_url)
             
-            # 生成 QR Code
-            self.generate_qr_code(auth_url)
+            # 更新提示文字
+            self.ip_label.setText(f"用手機掃描 QR Code\n連接到 {rpi_url}")
             
             # 啟動檢查授權的定時器
             self.check_timer = QTimer()
@@ -498,7 +602,7 @@ class SpotifyQRAuthDialog(QWidget):
                     pass
     
     def get_auth_url(self) -> str:
-        """取得授權 URL"""
+        """取得授權 URL 並設定給 HTTP handler"""
         from spotipy.oauth2 import SpotifyOAuth
         
         # 檢查 config 是否存在
@@ -507,14 +611,10 @@ class SpotifyQRAuthDialog(QWidget):
         
         # 使用預先計算的 redirect_uri
         print(f"Redirect URI: {self.redirect_uri}")
+        print(f"RPI IP: {self.local_ip}")
         
         # 更新 auth_manager 的 config
         self.auth_manager.config['redirect_uri'] = self.redirect_uri
-        
-        # 更新 UI 提示
-        if hasattr(self, 'ip_label'):
-            msg = f"Redirect URI: {self.redirect_uri}"
-            self.ip_label.setText(msg)
         
         # 建立 OAuth 管理器並儲存
         self.oauth = SpotifyOAuth(
@@ -545,7 +645,12 @@ class SpotifyQRAuthDialog(QWidget):
         }
         
         query_string = urllib.parse.urlencode(params)
-        return f"{self.oauth.OAUTH_AUTHORIZE_URL}?{query_string}"
+        auth_url = f"{self.oauth.OAUTH_AUTHORIZE_URL}?{query_string}"
+        
+        # 設定給 HTTP handler 使用
+        AuthCallbackHandler.auth_url = auth_url
+        
+        return auth_url
     
     def generate_qr_code(self, url: str):
         """生成 QR Code"""
