@@ -1499,6 +1499,10 @@ class QuadGaugeDetailView(QWidget):
                 return "#fa0"
         return "#6af"
     
+    def set_value(self, value):
+        """設置數值（update_value 的別名）"""
+        self.update_value(value)
+    
     # === 滑動返回功能 ===
     def mousePressEvent(self, event):
         """記錄滑動起始位置"""

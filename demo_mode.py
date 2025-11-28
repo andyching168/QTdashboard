@@ -39,6 +39,7 @@ class VehicleSignals(QObject):
     update_temp = pyqtSignal(float)
     update_fuel = pyqtSignal(float)
     update_gear = pyqtSignal(str)
+    update_turbo = pyqtSignal(float)  # 渦輪增壓 (bar)
 
 
 class VehicleSimulator:
@@ -50,6 +51,7 @@ class VehicleSimulator:
         self.fuel = 65.0
         self.temp = 45.0  # 儀表百分比
         self.gear = "P"
+        self.turbo = -0.7  # 渦輪增壓 (bar)，待速時為負壓
         
         self.mode = "idle"
         self.time = 0
@@ -118,6 +120,34 @@ class VehicleSimulator:
         # 限制範圍
         self.speed = max(0, min(180, self.speed))
         self.rpm = max(0, min(7, self.rpm))
+        
+        # 更新渦輪增壓 (跟轉速配合)
+        # 待速 (rpm < 1.0): -0.7 bar (進氣歧管負壓)
+        # 輕踩油門 (1.0-2.5): -0.5 ~ -0.2 bar (負壓減少)
+        # 渦輪介入 (2.5-4.0): 0 ~ 0.4 bar (開始增壓)
+        # 全油門 (4.0+): 0.4 ~ 0.8 bar (最大增壓)
+        if self.rpm < 1.0:
+            target_turbo = -0.7
+        elif self.rpm < 2.5:
+            # 從 -0.7 線性過渡到 -0.2
+            target_turbo = -0.7 + (self.rpm - 1.0) / 1.5 * 0.5
+        elif self.rpm < 4.0:
+            # 從 -0.2 過渡到 0.4 (渦輪介入)
+            target_turbo = -0.2 + (self.rpm - 2.5) / 1.5 * 0.6
+        else:
+            # 全油門增壓
+            target_turbo = 0.4 + (self.rpm - 4.0) / 3.0 * 0.4
+        
+        # 渦輪有延遲，平滑過渡
+        turbo_response = 0.15  # 渦輪響應速度
+        self.turbo = self.turbo + (target_turbo - self.turbo) * turbo_response
+        
+        # 加一點小波動（模擬渦輪脆動）
+        if self.rpm > 2.0:
+            self.turbo += random.uniform(-0.02, 0.02)
+        
+        # 限制範圍
+        self.turbo = max(-1.0, min(1.0, self.turbo))
         
         # 更新油量（緩慢減少）
         if self.speed > 0:
@@ -264,6 +294,7 @@ def main():
         vehicle_signals.update_temp.connect(dashboard.set_temperature)
         vehicle_signals.update_fuel.connect(dashboard.set_fuel)
         vehicle_signals.update_gear.connect(dashboard.set_gear)
+        vehicle_signals.update_turbo.connect(dashboard.set_turbo)
         
         # 設定 Spotify 回調（如果啟用）
         if spotify_enabled and spotify_listener:
@@ -321,6 +352,7 @@ def main():
             vehicle_signals.update_fuel.emit(simulator.fuel)
             vehicle_signals.update_temp.emit(simulator.temp)
             vehicle_signals.update_gear.emit(simulator.gear)
+            vehicle_signals.update_turbo.emit(simulator.turbo)
             
             # 如果沒有啟用 Spotify，使用模擬音樂
             if not spotify_enabled:
