@@ -379,19 +379,13 @@ def is_production_environment():
 
 
 class SplashScreen(QWidget):
-    """啟動畫面：全螢幕播放影片"""
+    """啟動畫面：全螢幕播放短版影片（約 8 秒）"""
     
     finished = pyqtSignal()  # 播放完成信號
     
-    # 類別變數：記錄今天是否已經播放過完整影片
-    _last_full_play_date = None
-    _marker_file = ".splash_played_today"
-    
-    def __init__(self, video_path="Splash.mp4", skip_start_seconds=14):
+    def __init__(self, video_path="Splash_short.mp4"):
         super().__init__()
         self.video_path = video_path
-        self.skip_start_seconds = skip_start_seconds
-        self.is_first_play_today = self._check_if_first_play_today()
         
         # 設置為全螢幕無邊框
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
@@ -418,42 +412,8 @@ class SplashScreen(QWidget):
         
         # 連接信號
         self.player.mediaStatusChanged.connect(self.on_media_status_changed)
-        self.player.positionChanged.connect(self.on_position_changed)
-        
-        self.has_seeked = False  # 標記是否已經跳轉過
         
         layout.addWidget(self.video_widget)
-    
-    @staticmethod
-    def _check_if_first_play_today():
-        """檢查今天是否第一次播放"""
-        from datetime import datetime
-        
-        today = datetime.now().date()
-        marker_file = SplashScreen._marker_file
-        
-        # 檢查標記檔案
-        if os.path.exists(marker_file):
-            try:
-                with open(marker_file, 'r') as f:
-                    last_date_str = f.read().strip()
-                    from datetime import datetime
-                    last_date = datetime.strptime(last_date_str, '%Y-%m-%d').date()
-                    
-                    if last_date == today:
-                        # 今天已經播放過
-                        return False
-            except:
-                pass
-        
-        # 第一次播放，寫入標記
-        try:
-            with open(marker_file, 'w') as f:
-                f.write(today.strftime('%Y-%m-%d'))
-        except:
-            pass
-        
-        return True
         
     def showEvent(self, event): # type: ignore
         """視窗顯示時自動播放"""
@@ -466,27 +426,12 @@ class SplashScreen(QWidget):
         if os.path.exists(self.video_path):
             video_url = QUrl.fromLocalFile(os.path.abspath(self.video_path))
             self.player.setSource(video_url)
-            
-            if self.is_first_play_today:
-                print(f"今天第一次啟動，播放完整啟動畫面: {self.video_path}")
-                self.player.play()
-            else:
-                print(f"今天非第一次啟動，從 {self.skip_start_seconds} 秒開始播放")
-                # 先播放，然後在 positionChanged 中跳轉
-                self.player.play()
+            print(f"播放啟動畫面: {self.video_path}")
+            self.player.play()
         else:
             print(f"找不到啟動影片: {self.video_path}")
             # 如果找不到影片，直接發出完成信號
             QTimer.singleShot(100, self.finished.emit)
-    
-    def on_position_changed(self, position):
-        """播放位置變更處理"""
-        # 如果不是第一次播放且還沒跳轉過，跳到指定位置
-        if not self.is_first_play_today and not self.has_seeked and position > 0:
-            target_position = self.skip_start_seconds * 1000  # 轉換為毫秒
-            self.player.setPosition(target_position)
-            self.has_seeked = True
-            print(f"已跳轉到 {self.skip_start_seconds} 秒位置")
     
     def on_media_status_changed(self, status):
         """媒體狀態變更處理"""
@@ -934,6 +879,650 @@ class DigitalGaugeCard(QWidget):
         # 邊框
         painter.setPen(QPen(QColor(60, 60, 80), 2))
         painter.drawPath(path)
+
+
+class QuadGaugeCard(QWidget):
+    """
+    四宮格儀表卡片 - 顯示轉速/水溫/渦輪負壓/電瓶電壓
+    支援點擊放大和焦點選擇機制
+    """
+    
+    # 信號：請求顯示詳細視圖
+    detail_requested = pyqtSignal(int)  # 參數: gauge_index (0-3)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(380, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # 儀表數據
+        self.gauge_data = [
+            {"title": "ENGINE", "unit": "RPM", "value": 0, "min": 0, "max": 8000, 
+             "warning": 5500, "danger": 6500, "decimals": 0},
+            {"title": "COOLANT", "unit": "°C", "value": 0, "min": 0, "max": 120, 
+             "warning": 95, "danger": 105, "decimals": 0},
+            {"title": "TURBO", "unit": "bar", "value": -0.7, "min": -1.0, "max": 1.0, 
+             "warning": 0.8, "danger": 0.95, "decimals": 2},
+            {"title": "BATTERY", "unit": "V", "value": 12.6, "min": 10, "max": 16, 
+             "warning": 11.5, "danger": 11.0, "decimals": 1, "warning_below": True},
+        ]
+        
+
+        
+        # 焦點狀態：0=無焦點, 1-4=對應儀表有焦點
+        self.focus_index = 0
+        
+        # 儲存各個儀表格子的 widget
+        self.gauge_cells = []
+        self.value_labels = []
+        
+        self._init_ui()
+    
+    def _init_ui(self):
+        """初始化 UI"""
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(10)
+        
+        # 標題
+        title_label = QLabel("Engine Monitor")
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 16px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title_label)
+        
+        # 四宮格容器
+        grid_container = QWidget()
+        grid_container.setStyleSheet("background: transparent;")
+        grid_layout = QGridLayout(grid_container)
+        grid_layout.setContentsMargins(5, 5, 5, 5)
+        grid_layout.setSpacing(10)
+        
+        # 創建四個儀表格子
+        positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
+        for i, (row, col) in enumerate(positions):
+            cell = self._create_gauge_cell(i)
+            self.gauge_cells.append(cell)
+            grid_layout.addWidget(cell, row, col)
+        
+        main_layout.addWidget(grid_container, 1)
+        
+        # 提示文字
+        hint_label = QLabel("點擊進入詳細視圖")
+        hint_label.setStyleSheet("""
+            color: #555;
+            font-size: 11px;
+            background: transparent;
+        """)
+        hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(hint_label)
+    
+    def _create_gauge_cell(self, index):
+        """創建單個儀表格子"""
+        data = self.gauge_data[index]
+        
+        cell = QWidget()
+        cell.setFixedSize(165, 145)
+        cell.setStyleSheet("""
+            QWidget {
+                background: rgba(30, 30, 40, 0.5);
+                border-radius: 12px;
+                border: 2px solid #2a2a35;
+            }
+        """)
+        
+        layout = QVBoxLayout(cell)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(3)
+        
+        # 標題
+        title = QLabel(data["title"])
+        title.setStyleSheet("""
+            color: #888;
+            font-size: 12px;
+            font-weight: bold;
+            background: transparent;
+            letter-spacing: 1px;
+        """)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 數值
+        value_label = QLabel(self._format_value(data["value"], data["decimals"]))
+        value_label.setStyleSheet("""
+            color: #6af;
+            font-size: 36px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.value_labels.append(value_label)
+        
+        # 單位
+        unit = QLabel(data["unit"])
+        unit.setStyleSheet("""
+            color: #666;
+            font-size: 11px;
+            background: transparent;
+        """)
+        unit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 進度條
+        progress = QProgressBar()
+        progress.setFixedHeight(6)
+        progress.setTextVisible(False)
+        progress.setMinimum(0)
+        progress.setMaximum(100)
+        progress.setValue(self._calc_progress(index))
+        progress.setStyleSheet("""
+            QProgressBar {
+                background: #2a2a35;
+                border-radius: 3px;
+                border: none;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #4a9eff, stop:1 #6af);
+                border-radius: 3px;
+            }
+        """)
+        
+        # 儲存進度條引用以便後續更新
+        cell.progress_bar = progress
+        
+        layout.addWidget(title)
+        layout.addWidget(value_label)
+        layout.addWidget(unit)
+        layout.addWidget(progress)
+        
+        return cell
+    
+    def _format_value(self, value, decimals):
+        """格式化數值顯示"""
+        if decimals == 0:
+            return f"{int(value):,}"
+        else:
+            return f"{value:.{decimals}f}"
+    
+    def _calc_progress(self, index):
+        """計算進度條百分比"""
+        data = self.gauge_data[index]
+        value = data["value"]
+        min_val = data["min"]
+        max_val = data["max"]
+        progress = int((value - min_val) / (max_val - min_val) * 100)
+        return max(0, min(100, progress))
+    
+    def _get_value_color(self, index):
+        """根據數值獲取顏色"""
+        data = self.gauge_data[index]
+        value = data["value"]
+        warning = data.get("warning")
+        danger = data.get("danger")
+        warning_below = data.get("warning_below", False)
+        
+        if warning_below:
+            # 低於閾值警告（如電瓶電壓）
+            if danger is not None and value <= danger:
+                return "#f44"
+            elif warning is not None and value <= warning:
+                return "#fa0"
+        else:
+            # 高於閾值警告（如轉速、水溫）
+            if danger is not None and value >= danger:
+                return "#f44"
+            elif warning is not None and value >= warning:
+                return "#fa0"
+        return "#6af"
+    
+    def set_rpm(self, value):
+        """設置轉速"""
+        self._set_value(0, value)
+    
+    def set_coolant_temp(self, value):
+        """設置水溫"""
+        self._set_value(1, value)
+    
+    def set_intake_manifold_pressure(self, value):
+        """設置進氣歧管壓力 (kPa, 負值為真空/負壓)"""
+        self._set_value(2, value)
+    
+    # 別名，保持相容
+    def set_boost(self, value):
+        """設置渦輪增壓值 (kPa)"""
+        self._set_value(2, value)
+    
+    def set_turbo(self, value):
+        """設置渦輪增壓值 (bar)"""
+        self._set_value(2, value)
+    
+    def set_battery_voltage(self, value):
+        """設置電瓶電壓"""
+        self._set_value(3, value)
+    
+    def set_battery(self, value):
+        """設置電瓶電壓 (V)"""
+        self._set_value(3, value)
+    
+    def _set_value(self, index, value):
+        """設置指定儀表的數值"""
+        self.gauge_data[index]["value"] = value
+        
+        # 更新顯示
+        data = self.gauge_data[index]
+        self.value_labels[index].setText(self._format_value(value, data["decimals"]))
+        
+        # 更新顏色
+        color = self._get_value_color(index)
+        self.value_labels[index].setStyleSheet(f"""
+            color: {color};
+            font-size: 36px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        
+        # 更新進度條
+        cell = self.gauge_cells[index]
+        progress = self._calc_progress(index)
+        cell.progress_bar.setValue(progress)
+        
+        # 更新進度條顏色
+        if color == "#f44":
+            bar_color = "stop:0 #f44, stop:1 #f66"
+        elif color == "#fa0":
+            bar_color = "stop:0 #fa0, stop:1 #fc6"
+        else:
+            bar_color = "stop:0 #4a9eff, stop:1 #6af"
+        
+        cell.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background: #2a2a35;
+                border-radius: 3px;
+                border: none;
+            }}
+            QProgressBar::chunk {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    {bar_color});
+                border-radius: 3px;
+            }}
+        """)
+    
+    # === 焦點機制 ===
+    def get_focus(self):
+        """獲取當前焦點狀態 (0=無, 1-4=對應儀表)"""
+        return self.focus_index
+    
+    def set_focus(self, index):
+        """設置焦點 (0=無, 1-4=對應儀表)"""
+        self.focus_index = max(0, min(4, index))
+        self._update_focus_style()
+    
+    def next_focus(self):
+        """
+        切換到下一個焦點
+        Returns: True=還在卡片內, False=應該離開到下一張卡片
+        """
+        if self.focus_index == 0:
+            self.focus_index = 1
+            self._update_focus_style()
+            return True
+        elif self.focus_index < 4:
+            self.focus_index += 1
+            self._update_focus_style()
+            return True
+        else:
+            self.focus_index = 0
+            self._update_focus_style()
+            return False
+    
+    def clear_focus(self):
+        """清除焦點"""
+        self.focus_index = 0
+        self._update_focus_style()
+    
+    def _update_focus_style(self):
+        """更新焦點視覺樣式"""
+        for i, cell in enumerate(self.gauge_cells):
+            if i + 1 == self.focus_index:
+                cell.setStyleSheet("""
+                    QWidget {
+                        background: rgba(100, 170, 255, 0.15);
+                        border-radius: 12px;
+                        border: 3px solid #6af;
+                    }
+                """)
+            else:
+                cell.setStyleSheet("""
+                    QWidget {
+                        background: rgba(30, 30, 40, 0.5);
+                        border-radius: 12px;
+                        border: 2px solid #2a2a35;
+                    }
+                """)
+    
+    def enter_detail_view(self):
+        """
+        進入當前焦點的詳細視圖
+        Returns: True=成功進入, False=沒有焦點
+        """
+        if self.focus_index > 0:
+            self.detail_requested.emit(self.focus_index - 1)
+            return True
+        return False
+    
+    def get_gauge_data(self, index):
+        """獲取指定儀表的數據"""
+        if 0 <= index < 4:
+            return self.gauge_data[index].copy()
+        return None
+    
+    # === 觸控/滑鼠事件處理 ===
+    def mousePressEvent(self, event):
+        """滑鼠/觸控按下 - 記錄起始位置"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._press_pos = event.pos()
+            self._press_time = time.time()
+        super().mousePressEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        """滑鼠/觸控放開 - 檢測是否為點擊（非滑動）"""
+        if event.button() == Qt.MouseButton.LeftButton and hasattr(self, '_press_pos') and self._press_pos:
+            release_pos = event.pos()
+            # 計算移動距離
+            dx = abs(release_pos.x() - self._press_pos.x())
+            dy = abs(release_pos.y() - self._press_pos.y())
+            elapsed = time.time() - self._press_time if hasattr(self, '_press_time') else 0
+            
+            # 只有移動距離小於閾值且時間短才視為點擊（非滑動）
+            if dx < 20 and dy < 20 and elapsed < 0.5:
+                clicked_index = self._get_cell_at_pos(release_pos)
+                if clicked_index >= 0:
+                    # 設置焦點並直接進入詳細視圖
+                    self.set_focus(clicked_index + 1)
+                    print(f"點擊儀表 {clicked_index + 1}：進入詳細視圖")
+                    self.detail_requested.emit(clicked_index)
+            
+            self._press_pos = None
+            self._press_time = None
+        super().mouseReleaseEvent(event)
+    
+    def _get_cell_at_pos(self, pos):
+        """根據位置獲取儀表格子索引 (0-3)，沒有則返回 -1"""
+        for i, cell in enumerate(self.gauge_cells):
+            # 將位置轉換為相對於 cell 的座標
+            cell_pos = cell.mapFrom(self, pos)
+            if cell.rect().contains(cell_pos):
+                return i
+        return -1
+
+
+class QuadGaugeDetailView(QWidget):
+    """
+    四宮格儀表詳細視圖 - 全尺寸顯示單一儀表
+    左上角有返回按鈕
+    """
+    
+    # 信號：請求返回
+    back_requested = pyqtSignal()
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(380, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # 當前顯示的儀表數據
+        self.current_data = None
+        
+        # 滑動檢測
+        self._swipe_start_pos = None
+        self._swipe_start_time = None
+        self._swipe_threshold = 80  # 滑動閾值（像素）
+        
+        self._init_ui()
+    
+    def _init_ui(self):
+        """初始化 UI"""
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(10)
+        
+        # 頂部：返回按鈕
+        top_bar = QWidget()
+        top_bar.setStyleSheet("background: transparent;")
+        top_layout = QHBoxLayout(top_bar)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.back_btn = QPushButton("◀ 返回")
+        self.back_btn.setFixedSize(80, 35)
+        self.back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(100, 150, 255, 0.2);
+                color: #6af;
+                border: 2px solid #6af;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(100, 150, 255, 0.4);
+            }
+            QPushButton:pressed {
+                background-color: rgba(100, 150, 255, 0.6);
+            }
+        """)
+        self.back_btn.clicked.connect(self.back_requested.emit)
+        
+        top_layout.addWidget(self.back_btn)
+        top_layout.addStretch()
+        
+        main_layout.addWidget(top_bar)
+        
+        # 標題
+        self.title_label = QLabel("ENGINE")
+        self.title_label.setStyleSheet("""
+            color: #888;
+            font-size: 22px;
+            font-weight: bold;
+            background: transparent;
+            letter-spacing: 3px;
+        """)
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(self.title_label)
+        
+        # 數值
+        self.value_label = QLabel("0")
+        self.value_label.setStyleSheet("""
+            color: #6af;
+            font-size: 96px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        self.value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(self.value_label)
+        
+        # 單位
+        self.unit_label = QLabel("RPM")
+        self.unit_label.setStyleSheet("""
+            color: #666;
+            font-size: 20px;
+            background: transparent;
+        """)
+        self.unit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(self.unit_label)
+        
+        main_layout.addSpacing(10)
+        
+        # 進度條
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(16)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                background: #2a2a35;
+                border-radius: 8px;
+                border: 1px solid #3a3a45;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #4a9eff, stop:1 #6af);
+                border-radius: 7px;
+            }
+        """)
+        main_layout.addWidget(self.progress_bar)
+        
+        # 範圍標示
+        range_layout = QHBoxLayout()
+        self.min_label = QLabel("0")
+        self.min_label.setStyleSheet("color: #555; font-size: 12px; background: transparent;")
+        self.max_label = QLabel("8000")
+        self.max_label.setStyleSheet("color: #555; font-size: 12px; background: transparent;")
+        range_layout.addWidget(self.min_label)
+        range_layout.addStretch()
+        range_layout.addWidget(self.max_label)
+        main_layout.addLayout(range_layout)
+        
+        main_layout.addStretch()
+        
+        # 提示文字
+        hint_label = QLabel("點擊左上角返回")
+        hint_label.setStyleSheet("""
+            color: #555;
+            font-size: 12px;
+            background: transparent;
+        """)
+        hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(hint_label)
+    
+    def set_gauge_data(self, data):
+        """設置要顯示的儀表數據"""
+        self.current_data = data
+        if data:
+            self.title_label.setText(data["title"])
+            self.unit_label.setText(data["unit"])
+            self.min_label.setText(str(data["min"]))
+            self.max_label.setText(str(data["max"]))
+            self.update_value(data["value"])
+    
+    def update_value(self, value):
+        """更新數值顯示"""
+        if not self.current_data:
+            return
+        
+        data = self.current_data
+        data["value"] = value
+        
+        # 格式化顯示
+        decimals = data.get("decimals", 0)
+        if decimals == 0:
+            self.value_label.setText(f"{int(value):,}")
+        else:
+            self.value_label.setText(f"{value:.{decimals}f}")
+        
+        # 計算顏色
+        color = self._get_value_color()
+        self.value_label.setStyleSheet(f"""
+            color: {color};
+            font-size: 96px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        
+        # 更新進度條
+        progress = int((value - data["min"]) / (data["max"] - data["min"]) * 100)
+        progress = max(0, min(100, progress))
+        self.progress_bar.setValue(progress)
+        
+        # 更新進度條顏色
+        if color == "#f44":
+            bar_color = "stop:0 #f44, stop:1 #f66"
+        elif color == "#fa0":
+            bar_color = "stop:0 #fa0, stop:1 #fc6"
+        else:
+            bar_color = "stop:0 #4a9eff, stop:1 #6af"
+        
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background: #2a2a35;
+                border-radius: 8px;
+                border: 1px solid #3a3a45;
+            }}
+            QProgressBar::chunk {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    {bar_color});
+                border-radius: 7px;
+            }}
+        """)
+    
+    def _get_value_color(self):
+        """根據數值獲取顏色"""
+        if not self.current_data:
+            return "#6af"
+        
+        data = self.current_data
+        value = data["value"]
+        warning = data.get("warning")
+        danger = data.get("danger")
+        warning_below = data.get("warning_below", False)
+        
+        if warning_below:
+            if danger is not None and value <= danger:
+                return "#f44"
+            elif warning is not None and value <= warning:
+                return "#fa0"
+        else:
+            if danger is not None and value >= danger:
+                return "#f44"
+            elif warning is not None and value >= warning:
+                return "#fa0"
+        return "#6af"
+    
+    # === 滑動返回功能 ===
+    def mousePressEvent(self, event):
+        """記錄滑動起始位置"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._swipe_start_pos = event.pos()
+            self._swipe_start_time = time.time()
+        super().mousePressEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        """檢測滑動手勢"""
+        if event.button() == Qt.MouseButton.LeftButton and self._swipe_start_pos:
+            end_pos = event.pos()
+            dx = end_pos.x() - self._swipe_start_pos.x()
+            dy = abs(end_pos.y() - self._swipe_start_pos.y())
+            elapsed = time.time() - self._swipe_start_time if self._swipe_start_time else 1
+            
+            # 由左往右滑動：dx > 閾值，且水平滑動為主（dy < dx），且時間短
+            if dx > self._swipe_threshold and dy < abs(dx) and elapsed < 0.5:
+                print("滑動返回：由左往右滑動")
+                self.back_requested.emit()
+            
+            self._swipe_start_pos = None
+            self._swipe_start_time = None
+        super().mouseReleaseEvent(event)
 
 
 class NumericKeypad(QDialog):
@@ -4178,7 +4767,7 @@ class Dashboard(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("儀表板 - F1:翻左卡片 F2:翻右卡片 Shift+F2:重置Trip")
+        self.setWindowTitle("儀表板 - F1:翻左卡片/焦點 Shift+F1:詳細視圖 F2:翻右卡片 Shift+F2:重置Trip")
         
         # 連接 Signals 到 Slots
         self.signal_update_rpm.connect(self._slot_set_rpm)
@@ -4509,29 +5098,13 @@ class Dashboard(QWidget):
         self.left_card_stack = QStackedWidget()
         self.left_card_stack.setFixedSize(380, 380)
         
-        # 轉速數位卡片
-        self.rpm_digital_card = DigitalGaugeCard(
-            title="ENGINE",
-            unit="RPM",
-            min_val=0,
-            max_val=8000,
-            warning_threshold=5500,
-            danger_threshold=6500,
-            decimal_places=0
-        )
-        self.rpm_digital_card.setFixedSize(380, 380)
+        # 四宮格儀表卡片（轉速/水溫/渦輪負壓/電瓶電壓）
+        self.quad_gauge_card = QuadGaugeCard()
+        self.quad_gauge_card.detail_requested.connect(self._show_gauge_detail)
         
-        # 水溫數位卡片
-        self.temp_digital_card = DigitalGaugeCard(
-            title="COOLANT",
-            unit="°C",
-            min_val=0,
-            max_val=120,
-            warning_threshold=95,
-            danger_threshold=105,
-            decimal_places=0
-        )
-        self.temp_digital_card.setFixedSize(380, 380)
+        # 四宮格詳細視圖
+        self.quad_gauge_detail = QuadGaugeDetailView()
+        self.quad_gauge_detail.back_requested.connect(self._hide_gauge_detail)
         
         # 油量數位卡片
         fuel_style = GaugeStyle(
@@ -4545,8 +5118,19 @@ class Dashboard(QWidget):
         self.fuel_gauge = AnalogGauge(0, 100, fuel_style, labels=fuel_labels, title="FUEL")
         self.fuel_gauge.setFixedSize(380, 380)
         
-        self.left_card_stack.addWidget(self.rpm_digital_card)   # index 0
-        self.left_card_stack.addWidget(self.temp_digital_card)  # index 1
+        # 詳細視圖狀態
+        self._in_detail_view = False
+        self._detail_gauge_index = -1
+        
+        # 左側卡片動畫狀態
+        self._left_card_animating = False
+        
+        # 右側卡片動畫狀態
+        self._right_card_animating = False
+        self._right_row_animating = False
+        
+        self.left_card_stack.addWidget(self.quad_gauge_card)    # index 0
+        self.left_card_stack.addWidget(self.quad_gauge_detail)  # index 1 (詳細視圖)
         self.left_card_stack.addWidget(self.fuel_gauge)         # index 2
         
         # 左側卡片指示器
@@ -4559,7 +5143,7 @@ class Dashboard(QWidget):
         left_indicator_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.left_indicators = []
-        for i in range(3):  # 3 張左側卡片
+        for i in range(2):  # 2 張左側卡片（四宮格 + 油量）
             dot = QLabel("●")
             dot.setFixedSize(12, 12)
             dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -4757,11 +5341,7 @@ class Dashboard(QWidget):
         self.current_left_index = 0    # 當前左側卡片索引
         self.rows = [row1_cards, row2_cards]  # 列的引用
         self.row_card_counts = [2, 2]  # 每列的卡片數量
-        self.left_card_count = 3       # 左側卡片數量
-        
-        # 為了相容舊版 API，創建虛擬的儀表物件
-        self.temp_gauge = self.temp_digital_card  # 相容舊 API
-        self.rpm_gauge = self.rpm_digital_card    # 相容舊 API
+        self.left_card_count = 2       # 左側卡片數量（四宮格 + 油量，不含詳細視圖）
         
         # 觸控滑動相關
         self.touch_start_pos = None
@@ -4788,6 +5368,8 @@ class Dashboard(QWidget):
         self.temp = 45  # 正常水溫約在 45-50% 位置（對應 85-95°C）
         self.fuel = 60  # 稍微偏上的油量
         self.gear = "P"
+        self.turbo = -0.7  # 待速時的進氣歧管負壓 (bar)
+        self.battery = 12.6  # 電瓶電壓 (V)
         
         # 定速巡航狀態
         self.cruise_switch = False   # 開關是否開啟（白色）
@@ -5510,24 +6092,27 @@ class Dashboard(QWidget):
         Args:
             direction: 1 為下一列，-1 為上一列
         """
+        # 如果動畫中，不處理
+        if self._right_row_animating:
+            return
+        
         # 停止門狀態自動回退計時器（因為使用者手動切換）
         if hasattr(self, 'door_auto_switch_timer'):
             self.door_auto_switch_timer.stop()
         
         total_rows = len(self.rows)
-        self.current_row_index = (self.current_row_index + direction) % total_rows
-        self.row_stack.setCurrentIndex(self.current_row_index)
+        old_row_index = self.current_row_index
+        new_row_index = (self.current_row_index + direction) % total_rows
         
-        # 切換列時，重置卡片索引為該列的第一張
-        self.current_card_index = 0
-        self.rows[self.current_row_index].setCurrentIndex(0)
+        if old_row_index == new_row_index:
+            return
         
-        # 更新指示器
-        self.update_indicators()
+        # 使用動畫切換列
+        self._animate_row_switch(old_row_index, new_row_index, direction)
         
         # 顯示提示
         row_names = ["第一列 (音樂/門)", "第二列 (Trip/ODO)"]
-        print(f"切換到: {row_names[self.current_row_index]}")
+        print(f"切換到: {row_names[new_row_index]}")
     
     @perf_track
     def switch_card(self, direction):
@@ -5535,45 +6120,258 @@ class Dashboard(QWidget):
         Args:
             direction: 1 為下一張，-1 為上一張
         """
+        # 如果動畫中，不處理
+        if self._right_card_animating:
+            return
+        
         # 停止門狀態自動回退計時器（因為使用者手動切換）
         if hasattr(self, 'door_auto_switch_timer'):
             self.door_auto_switch_timer.stop()
         
         # 獲取當前列的卡片總數
         current_row_cards = self.row_card_counts[self.current_row_index]
-        self.current_card_index = (self.current_card_index + direction) % current_row_cards
-        self.rows[self.current_row_index].setCurrentIndex(self.current_card_index)
+        old_card_index = self.current_card_index
+        new_card_index = (self.current_card_index + direction) % current_row_cards
         
-        # 更新指示器
-        self.update_indicators()
+        if old_card_index == new_card_index:
+            return
+        
+        # 使用動畫切換卡片
+        self._animate_card_switch(old_card_index, new_card_index, direction)
         
         # 顯示提示
         row1_card_names = ["音樂播放器", "門狀態"]
         row2_card_names = ["Trip卡片", "ODO卡片"]
         all_card_names = [row1_card_names, row2_card_names]
         
-        card_name = all_card_names[self.current_row_index][self.current_card_index]
+        card_name = all_card_names[self.current_row_index][new_card_index]
         print(f"切換到: {card_name}")
+    
+    def _switch_left_card_forward(self):
+        """向前切換左側卡片（跳過詳細視圖）"""
+        # 如果在詳細視圖中或動畫中，不處理
+        if self._in_detail_view or self._left_card_animating:
+            return
+        
+        current = self.left_card_stack.currentIndex()
+        # 左側卡片只有兩張可切換：0=四宮格, 2=油量（1=詳細視圖跳過）
+        if current == 0:
+            next_index = 2
+        else:
+            next_index = 0
+        
+        # 使用動畫切換
+        self._animate_left_card_switch(current, next_index, direction=1)
+        
+        left_card_names = {0: "引擎監控", 2: "油量"}
+        print(f"左側切換到: {left_card_names.get(next_index, '未知')}")
     
     @perf_track
     def switch_left_card(self, direction):
-        """切換左側卡片（轉速/水溫/油量）
+        """切換左側卡片（四宮格/油量）
         Args:
             direction: 1 為下一張，-1 為上一張
         """
-        self.current_left_index = (self.current_left_index + direction) % self.left_card_count
-        self.left_card_stack.setCurrentIndex(self.current_left_index)
+        # 如果在詳細視圖中或動畫中，不處理
+        if self._in_detail_view or self._left_card_animating:
+            return
         
-        # 更新左側指示器
-        for i, dot in enumerate(self.left_indicators):
-            if i == self.current_left_index:
-                dot.setStyleSheet("color: #6af; font-size: 18px;")
-            else:
-                dot.setStyleSheet("color: #444; font-size: 18px;")
+        # 清除四宮格焦點
+        if hasattr(self, 'quad_gauge_card'):
+            self.quad_gauge_card.clear_focus()
         
-        # 顯示提示
-        left_card_names = ["轉速", "水溫", "油量"]
-        print(f"左側切換到: {left_card_names[self.current_left_index]}")
+        current = self.left_card_stack.currentIndex()
+        # 左側卡片只有兩張可切換：0=四宮格, 2=油量（1=詳細視圖跳過）
+        valid_indices = [0, 2]
+        try:
+            current_pos = valid_indices.index(current)
+        except ValueError:
+            current_pos = 0
+        
+        next_pos = (current_pos + direction) % len(valid_indices)
+        next_index = valid_indices[next_pos]
+        
+        # 使用動畫切換
+        self._animate_left_card_switch(current, next_index, direction)
+        
+        left_card_names = {0: "引擎監控", 2: "油量"}
+        print(f"左側切換到: {left_card_names.get(next_index, '未知')}")
+    
+    def _animate_left_card_switch(self, from_index, to_index, direction):
+        """動畫切換左側卡片
+        Args:
+            from_index: 當前卡片索引
+            to_index: 目標卡片索引
+            direction: 1 向下/向左滑出，-1 向上/向右滑出
+        """
+        if from_index == to_index:
+            return
+        
+        self._left_card_animating = True
+        
+        # 獲取卡片 widget
+        from_widget = self.left_card_stack.widget(from_index)
+        to_widget = self.left_card_stack.widget(to_index)
+        
+        stack_width = self.left_card_stack.width()
+        
+        # 設定動畫方向：direction=1 向左滑出，direction=-1 向右滑出
+        slide_offset = stack_width if direction > 0 else -stack_width
+        
+        # 準備目標卡片
+        to_widget.setGeometry(0, 0, stack_width, self.left_card_stack.height())
+        to_widget.move(slide_offset, 0)  # 從螢幕外開始
+        to_widget.show()
+        to_widget.raise_()
+        
+        # 當前卡片滑出動畫
+        self._left_out_anim = QPropertyAnimation(from_widget, b"pos")
+        self._left_out_anim.setDuration(200)
+        self._left_out_anim.setStartValue(from_widget.pos())
+        self._left_out_anim.setEndValue(QPoint(-slide_offset, 0))
+        self._left_out_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # 目標卡片滑入動畫
+        self._left_in_anim = QPropertyAnimation(to_widget, b"pos")
+        self._left_in_anim.setDuration(200)
+        self._left_in_anim.setStartValue(QPoint(slide_offset, 0))
+        self._left_in_anim.setEndValue(QPoint(0, 0))
+        self._left_in_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # 動畫完成後切換
+        def on_animation_finished():
+            self.left_card_stack.setCurrentIndex(to_index)
+            self.current_left_index = to_index
+            self._update_left_indicators()
+            # 重設位置
+            from_widget.move(0, 0)
+            to_widget.move(0, 0)
+            self._left_card_animating = False
+        
+        self._left_in_anim.finished.connect(on_animation_finished)
+        
+        # 啟動動畫
+        self._left_out_anim.start()
+        self._left_in_anim.start()
+    
+    def _animate_card_switch(self, from_index, to_index, direction):
+        """動畫切換右側列內的卡片（左右滑動）
+        Args:
+            from_index: 當前卡片索引
+            to_index: 目標卡片索引
+            direction: 1 向左滑出，-1 向右滑出
+        """
+        if from_index == to_index:
+            return
+        
+        self._right_card_animating = True
+        
+        current_row = self.rows[self.current_row_index]
+        from_widget = current_row.widget(from_index)
+        to_widget = current_row.widget(to_index)
+        
+        stack_width = current_row.width()
+        
+        # 設定動畫方向：direction=1 向左滑出，direction=-1 向右滑出
+        slide_offset = stack_width if direction > 0 else -stack_width
+        
+        # 準備目標卡片
+        to_widget.setGeometry(0, 0, stack_width, current_row.height())
+        to_widget.move(slide_offset, 0)
+        to_widget.show()
+        to_widget.raise_()
+        
+        # 當前卡片滑出動畫
+        self._card_out_anim = QPropertyAnimation(from_widget, b"pos")
+        self._card_out_anim.setDuration(200)
+        self._card_out_anim.setStartValue(from_widget.pos())
+        self._card_out_anim.setEndValue(QPoint(-slide_offset, 0))
+        self._card_out_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # 目標卡片滑入動畫
+        self._card_in_anim = QPropertyAnimation(to_widget, b"pos")
+        self._card_in_anim.setDuration(200)
+        self._card_in_anim.setStartValue(QPoint(slide_offset, 0))
+        self._card_in_anim.setEndValue(QPoint(0, 0))
+        self._card_in_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # 動畫完成後切換
+        def on_card_animation_finished():
+            self.current_card_index = to_index
+            current_row.setCurrentIndex(to_index)
+            self.update_indicators()
+            # 重設位置
+            from_widget.move(0, 0)
+            to_widget.move(0, 0)
+            self._right_card_animating = False
+        
+        self._card_in_anim.finished.connect(on_card_animation_finished)
+        
+        # 啟動動畫
+        self._card_out_anim.start()
+        self._card_in_anim.start()
+    
+    def _animate_row_switch(self, from_row, to_row, direction):
+        """動畫切換右側的列（上下滑動）
+        Args:
+            from_row: 當前列索引
+            to_row: 目標列索引
+            direction: 1 向上滑出，-1 向下滑出
+        """
+        if from_row == to_row:
+            return
+        
+        self._right_row_animating = True
+        
+        from_widget = self.row_stack.widget(from_row)
+        to_widget = self.row_stack.widget(to_row)
+        
+        # 在動畫開始前，先將目標列設為第一張卡片（避免閃現問題）
+        self.rows[to_row].setCurrentIndex(0)
+        
+        stack_height = self.row_stack.height()
+        
+        # 設定動畫方向：direction=1 向上滑出，direction=-1 向下滑出
+        slide_offset = stack_height if direction > 0 else -stack_height
+        
+        # 準備目標列
+        to_widget.setGeometry(0, 0, self.row_stack.width(), stack_height)
+        to_widget.move(0, slide_offset)
+        to_widget.show()
+        to_widget.raise_()
+        
+        # 當前列滑出動畫
+        self._row_out_anim = QPropertyAnimation(from_widget, b"pos")
+        self._row_out_anim.setDuration(200)
+        self._row_out_anim.setStartValue(from_widget.pos())
+        self._row_out_anim.setEndValue(QPoint(0, -slide_offset))
+        self._row_out_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # 目標列滑入動畫
+        self._row_in_anim = QPropertyAnimation(to_widget, b"pos")
+        self._row_in_anim.setDuration(200)
+        self._row_in_anim.setStartValue(QPoint(0, slide_offset))
+        self._row_in_anim.setEndValue(QPoint(0, 0))
+        self._row_in_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # 動畫完成後切換
+        def on_row_animation_finished():
+            self.current_row_index = to_row
+            self.row_stack.setCurrentIndex(to_row)
+            # 切換列時，重置卡片索引為該列的第一張
+            self.current_card_index = 0
+            self.rows[to_row].setCurrentIndex(0)
+            self.update_indicators()
+            # 重設位置
+            from_widget.move(0, 0)
+            to_widget.move(0, 0)
+            self._right_row_animating = False
+        
+        self._row_in_anim.finished.connect(on_row_animation_finished)
+        
+        # 啟動動畫
+        self._row_out_anim.start()
+        self._row_in_anim.start()
     
     def wheelEvent(self, a0):  # type: ignore
         """滑鼠滾輪切換卡片（桌面使用）"""
@@ -5607,19 +6405,153 @@ class Dashboard(QWidget):
                 else:  # 向下滾動
                     self.switch_card(1)
     
+    # === 四宮格詳細視圖管理 ===
+    def _show_gauge_detail(self, gauge_index):
+        """顯示四宮格的詳細視圖（帶滑入動畫）"""
+        self._in_detail_view = True
+        self._detail_gauge_index = gauge_index
+        
+        # 獲取儀表數據並設置到詳細視圖
+        data = self.quad_gauge_card.get_gauge_data(gauge_index)
+        self.quad_gauge_detail.set_gauge_data(data)
+        
+        # 準備動畫：詳細視圖從右側滑入
+        self.quad_gauge_detail.setGeometry(380, 0, 380, 380)  # 起始位置在右側
+        self.left_card_stack.setCurrentWidget(self.quad_gauge_detail)
+        
+        # 創建滑入動畫
+        self._detail_anim = QPropertyAnimation(self.quad_gauge_detail, b"geometry")
+        self._detail_anim.setDuration(200)  # 200ms
+        self._detail_anim.setStartValue(QRectF(380, 0, 380, 380))
+        self._detail_anim.setEndValue(QRectF(0, 0, 380, 380))
+        self._detail_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._detail_anim.start()
+        
+        # 隱藏指示器（因為在詳細視圖中）
+        for indicator in self.left_indicators:
+            indicator.setVisible(False)
+        
+        # 禁用滑動
+        self.set_swipe_enabled(False)
+        
+        gauge_names = ["轉速", "水溫", "渦輪負壓", "電瓶電壓"]
+        print(f"進入 {gauge_names[gauge_index]} 詳細視圖")
+    
+    def _hide_gauge_detail(self):
+        """隱藏詳細視圖，返回四宮格（帶滑出動畫）"""
+        # 創建滑出動畫：詳細視圖滑向右側
+        self._detail_anim = QPropertyAnimation(self.quad_gauge_detail, b"geometry")
+        self._detail_anim.setDuration(200)  # 200ms
+        self._detail_anim.setStartValue(QRectF(0, 0, 380, 380))
+        self._detail_anim.setEndValue(QRectF(380, 0, 380, 380))
+        self._detail_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # 動畫結束後切換回四宮格
+        self._detail_anim.finished.connect(self._on_hide_detail_finished)
+        self._detail_anim.start()
+    
+    def _on_hide_detail_finished(self):
+        """詳細視圖滑出動畫完成"""
+        self._in_detail_view = False
+        self._detail_gauge_index = -1
+        
+        # 清除四宮格焦點
+        self.quad_gauge_card.clear_focus()
+        
+        # 切換回四宮格
+        self.left_card_stack.setCurrentWidget(self.quad_gauge_card)
+        
+        # 恢復詳細視圖位置（為下次動畫準備）
+        self.quad_gauge_detail.setGeometry(0, 0, 380, 380)
+        
+        # 恢復指示器
+        for indicator in self.left_indicators:
+            indicator.setVisible(True)
+        self._update_left_indicators()
+        
+        # 恢復滑動
+        self.set_swipe_enabled(True)
+        
+        print("返回四宮格視圖")
+    
+    def _update_left_indicators(self):
+        """更新左側卡片指示器"""
+        current_index = self.left_card_stack.currentIndex()
+        # 詳細視圖(index 1)時不更新指示器
+        if current_index == 1:  # 詳細視圖
+            return
+        
+        # index 0 = 四宮格, index 2 = 油量
+        # 映射: 0 -> 0, 2 -> 1
+        indicator_index = 0 if current_index == 0 else 1
+        
+        for i, indicator in enumerate(self.left_indicators):
+            if i == indicator_index:
+                indicator.setStyleSheet("color: #6af; font-size: 18px;")
+            else:
+                indicator.setStyleSheet("color: #444; font-size: 18px;")
+    
     # === GPIO 按鈕接口（預留給樹莓派 GPIO）===
     def on_button_a_pressed(self):
         """
-        按鈕 A 被按下 - 翻左邊卡片頁面
+        按鈕 A 被按下 - 切換左側卡片或焦點
         
         用途：
-        - 切換左側卡片（轉速 -> 水溫 -> 油量 -> 轉速...）
+        - 在四宮格卡片時：切換焦點（轉速 -> 水溫 -> 渦輪 -> 電瓶 -> 下一張卡片）
+        - 其他卡片：直接切換
+        - 在詳細視圖時：不做任何事
         
         接口預留：
         - 可從 GPIO 按鈕回調呼叫此方法
         - 也可從鍵盤（F1 鍵）觸發
         """
-        self.switch_left_card(1)  # 向前翻頁
+        # 如果在詳細視圖中，不處理
+        if self._in_detail_view:
+            print("在詳細視圖中，按鈕A不作用")
+            return
+        
+        # 檢查是否在四宮格卡片上（左側卡片的 index 0）
+        if self.left_card_stack.currentIndex() == 0:
+            # 在四宮格卡片上，使用焦點機制
+            if self.quad_gauge_card.next_focus():
+                # 還在四宮格卡片內
+                gauge_names = ["", "轉速", "水溫", "渦輪負壓", "電瓶電壓"]
+                focus = self.quad_gauge_card.get_focus()
+                print(f"按鈕A切換焦點到: {gauge_names[focus]}")
+                return
+            # 焦點循環完畢，切換到下一張卡片
+        
+        # 清除四宮格焦點
+        if hasattr(self, 'quad_gauge_card'):
+            self.quad_gauge_card.clear_focus()
+        
+        # 切換左側卡片
+        self._switch_left_card_forward()
+    
+    def on_button_a_long_pressed(self):
+        """
+        按鈕 A 長按 - 進入/退出四宮格詳細視圖
+        
+        用途：
+        - 在四宮格有焦點時：進入該儀表的詳細視圖
+        - 在詳細視圖時：退出返回四宮格
+        
+        接口預留：
+        - 可從 GPIO 按鈕長按回調呼叫此方法
+        - 也可從鍵盤（Shift+F1）觸發
+        """
+        # 如果在詳細視圖中，長按返回
+        if self._in_detail_view:
+            self._hide_gauge_detail()
+            return
+        
+        # 如果在四宮格卡片上且有焦點，進入詳細視圖
+        if self.left_card_stack.currentIndex() == 0:
+            if self.quad_gauge_card.get_focus() > 0:
+                self.quad_gauge_card.enter_detail_view()
+                return
+        
+        print("長按按鈕A: 不在四宮格焦點狀態，忽略")
     
     def on_button_b_pressed(self):
         """
@@ -5634,6 +6566,10 @@ class Dashboard(QWidget):
         - 可從 GPIO 按鈕回調呼叫此方法
         - 也可從鍵盤（F2 鍵）觸發
         """
+        # 如果動畫中，不處理
+        if self._right_card_animating or self._right_row_animating:
+            return
+        
         # 停止門狀態自動回退計時器（因為使用者手動切換）
         if hasattr(self, 'door_auto_switch_timer'):
             self.door_auto_switch_timer.stop()
@@ -5660,25 +6596,26 @@ class Dashboard(QWidget):
         next_card_index = self.current_card_index + 1
         
         if next_card_index >= current_row_card_count:
-            # 當前列已翻完，跳到下一列的第一張
+            # 當前列已翻完，跳到下一列的第一張（使用動畫）
             next_row_index = (self.current_row_index + 1) % len(self.rows)
-            self.current_row_index = next_row_index
-            self.current_card_index = 0
-            self.row_stack.setCurrentIndex(self.current_row_index)
-            self.rows[self.current_row_index].setCurrentIndex(0)
+            old_row_index = self.current_row_index
+            # 使用動畫切換列
+            self._animate_row_switch(old_row_index, next_row_index, 1)
         else:
-            # 還在當前列，切換到下一張卡片
-            self.current_card_index = next_card_index
-            self.rows[self.current_row_index].setCurrentIndex(self.current_card_index)
-        
-        # 更新指示器
-        self.update_indicators()
+            # 還在當前列，切換到下一張卡片（使用動畫）
+            old_card_index = self.current_card_index
+            self._animate_card_switch(old_card_index, next_card_index, 1)
         
         # 顯示提示
         row1_card_names = ["音樂播放器", "門狀態"]
         row2_card_names = ["Trip卡片", "ODO卡片"]
         all_card_names = [row1_card_names, row2_card_names]
-        card_name = all_card_names[self.current_row_index][self.current_card_index]
+        # 動畫結束後才會更新索引，所以這裡用計算的值
+        if next_card_index >= current_row_card_count:
+            next_row = (self.current_row_index + 1) % len(self.rows)
+            card_name = all_card_names[next_row][0]
+        else:
+            card_name = all_card_names[self.current_row_index][next_card_index]
         print(f"按鈕B切換到: {card_name}")
     
     def on_button_b_long_pressed(self):
@@ -5733,7 +6670,12 @@ class Dashboard(QWidget):
         # === GPIO 按鈕模擬（F1/F2 鍵）===
         # F1: 翻左邊卡片（對應按鈕 A）
         if key == Qt.Key.Key_F1:
-            self.on_button_a_pressed()
+            if a0.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                # Shift+F1: 長按按鈕 A（進入/退出詳細視圖）
+                self.on_button_a_long_pressed()
+            else:
+                # F1: 短按按鈕 A（切換左側卡片/焦點）
+                self.on_button_a_pressed()
             return
         # F2: 翻右邊卡片（對應按鈕 B 短按）
         elif key == Qt.Key.Key_F2:
@@ -5876,6 +6818,32 @@ class Dashboard(QWidget):
         self.cruise_engaged = cruise_engaged
         self.update_cruise_display()
     
+    def set_turbo(self, turbo_bar: float):
+        """設定渦輪增壓值（從 OBD 訊號）
+        Args:
+            turbo_bar: 增壓值 (bar)，負值為真空/負壓，正值為增壓
+        """
+        self.turbo = turbo_bar
+        # 更新四宮格卡片
+        if hasattr(self, 'quad_gauge_card'):
+            self.quad_gauge_card.set_turbo(turbo_bar)
+        # 如果在詳細視圖中且顯示的是 TURBO，也更新
+        if self._in_detail_view and self._detail_gauge_index == 2:
+            self.quad_gauge_detail.set_value(turbo_bar)
+    
+    def set_battery(self, voltage: float):
+        """設定電瓶電壓（從 OBD 訊號）
+        Args:
+            voltage: 電壓值 (V)
+        """
+        self.battery = voltage
+        # 更新四宮格卡片
+        if hasattr(self, 'quad_gauge_card'):
+            self.quad_gauge_card.set_battery(voltage)
+        # 如果在詳細視圖中且顯示的是 BATTERY，也更新
+        if self._in_detail_view and self._detail_gauge_index == 3:
+            self.quad_gauge_detail.set_value(voltage)
+    
     def update_cruise_display(self):
         """更新巡航顯示 - 三種狀態"""
         if not self.cruise_switch:
@@ -5906,13 +6874,21 @@ class Dashboard(QWidget):
 
     def update_display(self):
         """更新所有儀表顯示"""
-        # rpm 是以「千轉」為單位 (0-8)，數位卡片顯示實際轉速
-        self.rpm_digital_card.set_value(self.rpm * 1000)
+        # 更新四宮格卡片
+        # rpm 是以「千轉」為單位 (0-8)，轉換為實際轉速
+        self.quad_gauge_card.set_rpm(self.rpm * 1000)
         
         # temp 是百分比 (0-100)，轉換為大約的攝氏溫度
         # 假設 0% = 40°C, 100% = 120°C
         temp_celsius = 40 + (self.temp / 100) * 80
-        self.temp_digital_card.set_value(temp_celsius)
+        self.quad_gauge_card.set_coolant_temp(temp_celsius)
+        
+        # 如果在詳細視圖中，同步更新
+        if self._in_detail_view:
+            if self._detail_gauge_index == 0:  # RPM
+                self.quad_gauge_detail.update_value(self.rpm * 1000)
+            elif self._detail_gauge_index == 1:  # 水溫
+                self.quad_gauge_detail.update_value(temp_celsius)
         
         self.fuel_gauge.set_value(self.fuel)
         self.speed_label.setText(str(int(self.speed)))
@@ -6042,6 +7018,34 @@ class ScalableWindow(QMainWindow):
         # 更新比例資訊
         self._update_scale_info()
     
+    def showEvent(self, event):
+        """視窗顯示時強制更新縮放"""
+        super().showEvent(event)
+        # 使用 QTimer.singleShot 確保在視窗完全顯示後更新縮放
+        QTimer.singleShot(0, self._force_update_scale)
+    
+    def _force_update_scale(self):
+        """強制更新縮放比例"""
+        view_width = self.view.viewport().width()
+        view_height = self.view.viewport().height()
+        
+        if view_width <= 0 or view_height <= 0:
+            return
+        
+        # 計算縮放比例
+        scale = view_width / 1920
+        
+        # 應用縮放
+        transform = QTransform()
+        transform.scale(scale, scale)
+        self.view.setTransform(transform)
+        
+        # 置中顯示
+        self.view.centerOn(self.proxy)
+        
+        # 更新比例資訊
+        self._update_scale_info()
+    
     def _update_scale_info(self):
         """更新視窗標題顯示當前縮放比例"""
         view_width = self.view.viewport().width()
@@ -6156,11 +7160,11 @@ def run_dashboard(
             if cleanup:
                 cleanup_funcs.append(cleanup)
     
-    # 檢查是否有啟動影片
-    has_splash = os.path.exists("Splash.mp4")
+    # 檢查是否有啟動影片（優先使用短版）
+    has_splash = os.path.exists("Splash_short.mp4")
     
     if has_splash:
-        splash = SplashScreen("Splash.mp4")
+        splash = SplashScreen("Splash_short.mp4")
         on_splash_finished.splash = splash
         
         splash.finished.connect(on_splash_finished)
@@ -6168,10 +7172,10 @@ def run_dashboard(
         if is_production:
             splash.showFullScreen()
         else:
-            splash.resize(800, 600)
+            splash.resize(800, 200)  # 4:1 比例 (1920x480 影片的縮小版)
             splash.show()
     else:
-        print("未找到 Splash.mp4，跳過啟動畫面")
+        print("未找到 Splash_short.mp4，跳過啟動畫面")
         # 沒有 splash，直接執行啟動流程
         on_splash_finished()
     

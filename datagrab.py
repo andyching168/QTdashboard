@@ -45,13 +45,15 @@ class WorkerSignals(QObject):
     update_turn_signal = pyqtSignal(str)  # 發送方向燈狀態 (str: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off")
     update_door_status = pyqtSignal(str, bool)  # 發送門狀態 (door: str, is_closed: bool)
     update_cruise = pyqtSignal(bool, bool)  # 發送巡航狀態 (cruise_switch: bool, cruise_engaged: bool)
+    update_turbo = pyqtSignal(float)  # 發送渦輪增壓 (bar)
+    update_battery = pyqtSignal(float)  # 發送電瓶電壓 (V)
     # update_nav_icon = pyqtSignal(str) # 預留給導航圖片
 
 # --- 全局變數 ---
 current_mode = "HYBRID" 
 data_store = {
     "CAN": {"rpm": 0, "speed": 0, "fuel": 0, "hz": 0, "last_update": 0},
-    "OBD": {"rpm": 0, "speed": 0, "temp": 0, "hz": 0, "last_update": 0}
+    "OBD": {"rpm": 0, "speed": 0, "temp": 0, "turbo": 0, "battery": 0, "hz": 0, "last_update": 0}
 }
 stop_threads = False
 console = Console()
@@ -170,7 +172,6 @@ def unified_receiver(bus, db, signals):
                         signals.update_rpm.emit(current_rpm_smoothed / 1000.0)
                     
                     # PID 05 (Temp) - 水箱溫度 (通常只在 ECU 0x7E8)
-                    # PID 05 (Temp) - 水箱溫度 (通常只在 ECU 0x7E8)
                     elif msg.data[2] == 0x05 and msg.arbitration_id == 0x7E8:
                         if len(msg.data) < 4:
                             logger.warning("水溫資料長度不足")
@@ -184,6 +185,36 @@ def unified_receiver(bus, db, signals):
                         temp_normalized = ((temp - 40) / 80.0) * 100
                         temp_normalized = max(0, min(100, temp_normalized))
                         signals.update_temp.emit(temp_normalized)  # ✅ 安全發送
+                    
+                    # PID 0B (Intake Manifold Pressure) - 進氣歧管壓力 (渦輪增壓)
+                    elif msg.data[2] == 0x0B and msg.arbitration_id == 0x7E8:
+                        if len(msg.data) < 4:
+                            logger.warning("進氣歧管壓力資料長度不足")
+                            continue
+                        # OBD 返回的是絕對壓力 (kPa)，0-255 kPa
+                        # 需要轉換為相對壓力 (相對於大氣壓 ~101 kPa)
+                        abs_pressure_kpa = msg.data[3]
+                        # 轉換為相對壓力 (bar): (絕對壓力 - 大氣壓) / 100
+                        # 負值 = 真空/負壓，正值 = 增壓
+                        turbo_bar = (abs_pressure_kpa - 101) / 100.0
+                        data_store["OBD"]["turbo"] = turbo_bar
+                        logger.debug(f"渦輪增壓: {turbo_bar:.2f} bar (絕對: {abs_pressure_kpa} kPa)")
+                        
+                        # 更新前端渦輪增壓顯示
+                        signals.update_turbo.emit(turbo_bar)
+                    
+                    # PID 42 (Control Module Voltage) - 控制模組電壓 (電瓶電壓)
+                    elif msg.data[2] == 0x42 and msg.arbitration_id == 0x7E8:
+                        if len(msg.data) < 5:
+                            logger.warning("電瓶電壓資料長度不足")
+                            continue
+                        # 公式: (A*256 + B) / 1000 = 電壓 (V)
+                        voltage = (msg.data[3] * 256 + msg.data[4]) / 1000.0
+                        data_store["OBD"]["battery"] = voltage
+                        logger.debug(f"電瓶電壓: {voltage:.1f} V")
+                        
+                        # 更新前端電瓶電壓顯示
+                        signals.update_battery.emit(voltage)
                         
                 except (IndexError, KeyError) as e:
                     logger.error(f"解析 OBD 訊息錯誤: {e}, data: {msg.data.hex()}")
@@ -450,11 +481,30 @@ def obd_query(bus, signals):
                 data=[0x02, 0x01, 0x05, 0, 0, 0, 0, 0], 
                 is_extended_id=False
             )
-            
             with send_lock:
                 bus.send(msg_temp)
+            time.sleep(0.05)
             
-            time.sleep(0.05)  # 加速查詢頻率 (20Hz) 以獲得更流暢的指針
+            # 查詢 進氣歧管壓力/渦輪增壓 (PID 0x0B)
+            msg_turbo = can.Message(
+                arbitration_id=0x7DF, 
+                data=[0x02, 0x01, 0x0B, 0, 0, 0, 0, 0], 
+                is_extended_id=False
+            )
+            with send_lock:
+                bus.send(msg_turbo)
+            time.sleep(0.05)
+            
+            # 查詢 電瓶電壓 (PID 0x42)
+            msg_battery = can.Message(
+                arbitration_id=0x7DF, 
+                data=[0x02, 0x01, 0x42, 0, 0, 0, 0, 0], 
+                is_extended_id=False
+            )
+            with send_lock:
+                bus.send(msg_battery)
+            
+            time.sleep(0.05)  # 查詢間隔
             
         except can.CanError:
             time.sleep(1)
@@ -522,6 +572,8 @@ def main():
             signals.update_turn_signal.connect(dashboard.set_turn_signal)
             signals.update_door_status.connect(dashboard.set_door_status)
             signals.update_cruise.connect(dashboard.set_cruise)
+            signals.update_turbo.connect(dashboard.set_turbo)
+            signals.update_battery.connect(dashboard.set_battery)
             
             # 啟動背景執行緒
             logger.info("正在啟動背景執行緒...")
