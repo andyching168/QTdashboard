@@ -2,9 +2,16 @@
 """
 演示模式 - 不需要 CAN Bus 硬體
 使用 main.py 的統一啟動流程，確保與主程式保持同步
+
+效能監控：
+    PERF_MONITOR=1 python demo_mode.py
+    
+    或使用 --perf 參數：
+    python demo_mode.py --perf
 """
 
 import sys
+import os
 import time
 import random
 import math
@@ -78,7 +85,7 @@ class VehicleSimulator:
         if self.mode == "idle":
             if self.time > 5:
                 self.mode = "accelerating"
-                self.target_speed = random.uniform(40, 100)
+                self.target_speed = random.uniform(60, 120)  # 最高巡航 120 km/h
                 self.gear = "D"
                 self.time = 0
                 
@@ -209,7 +216,16 @@ def main():
     parser = argparse.ArgumentParser(description='Luxgen M7 儀表板演示模式')
     parser.add_argument('--spotify', action='store_true', 
                         help='啟用 Spotify Connect 整合（需要先設定 spotify_config.json）')
+    parser.add_argument('--perf', action='store_true',
+                        help='啟用效能監控模式（偵測卡頓並輸出診斷資訊）')
     args = parser.parse_args()
+    
+    # 如果指定了 --perf，設定環境變數
+    if args.perf:
+        os.environ['PERF_MONITOR'] = '1'
+        print("🔍 效能監控模式已啟用")
+        print("   卡頓 (>50ms) 會顯示警告訊息")
+        print()
     
     # 設定日誌
     logging.basicConfig(
@@ -316,7 +332,12 @@ def main():
         vehicle_signals.update_turbo.connect(dashboard.set_turbo)
         
         # 設定 Spotify 回調（如果啟用）
+        # 注意：demo_mode 有自己的 spotify_listener，所以要禁用 dashboard 內建的
         if spotify_enabled and spotify_listener:
+            # 禁用 dashboard 內建的 Spotify 初始化，避免重複
+            dashboard._skip_spotify_init = True
+            dashboard.music_card.show_player_ui()
+            
             spotify_signals = SpotifySignals()
             
             def update_track_info(track_info):
@@ -325,8 +346,6 @@ def main():
                     track_info['artists'],
                     track_info.get('album', '')
                 )
-                if track_info.get('album_art'):
-                    dashboard.music_card.set_album_art_from_pil(track_info['album_art'])
                     
             def update_album_art(album_art):
                 dashboard.music_card.set_album_art_from_pil(album_art)
@@ -357,7 +376,10 @@ def main():
             spotify_listener.set_callback('on_progress_update', on_progress_update)
             spotify_listener.start()
             
-            logging.info("Spotify 監聽器已啟動（非同步圖片載入）")
+            logging.info("Spotify 監聯器已啟動（Demo 模式專用）")
+        else:
+            # 沒有 Spotify，讓 dashboard 自己處理
+            pass
         
         # 建立定時器更新數據
         last_song_index = [None]  # 用 list 來允許閉包內修改

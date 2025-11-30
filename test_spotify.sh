@@ -12,12 +12,14 @@ which python
 python --version
 echo ""
 
+VENV_PYTHON="/home/andyching168/QTdashboard/venv/bin/python3"
+
 # 檢查套件安裝
 echo "2. 檢查必要套件..."
-python -c "import spotipy; print(f'✅ spotipy {spotipy.__version__}')" 2>/dev/null || echo "❌ spotipy 未安裝"
-python -c "import requests; print(f'✅ requests {requests.__version__}')" 2>/dev/null || echo "❌ requests 未安裝"
-python -c "import PIL; print(f'✅ Pillow {PIL.__version__}')" 2>/dev/null || echo "❌ Pillow 未安裝"
-python -c "import PyQt6; print(f'✅ PyQt6 已安裝')" 2>/dev/null || echo "❌ PyQt6 未安裝"
+$VENV_PYTHON -c "import spotipy; print(f'✅ spotipy {spotipy.__version__}')" 2>/dev/null || echo "❌ spotipy 未安裝"
+$VENV_PYTHON -c "import requests; print(f'✅ requests {requests.__version__}')" 2>/dev/null || echo "❌ requests 未安裝"
+$VENV_PYTHON -c "import PIL; print(f'✅ Pillow {PIL.__version__}')" 2>/dev/null || echo "❌ Pillow 未安裝"
+$VENV_PYTHON -c "import PyQt6; print(f'✅ PyQt6 已安裝')" 2>/dev/null || echo "❌ PyQt6 未安裝"
 echo ""
 
 # 檢查配置檔
@@ -55,25 +57,25 @@ case $choice in
         echo ""
         echo "執行 Spotify 認證測試..."
         echo "瀏覽器將自動開啟進行授權"
-        python spotify_auth.py
+        $VENV_PYTHON spotify_auth.py
         ;;
     2)
         echo ""
         echo "執行 Spotify 監聽器測試..."
         echo "請先在 Spotify 開始播放音樂"
         echo "按 Ctrl+C 停止測試"
-        python spotify_listener.py
+        $VENV_PYTHON spotify_listener.py
         ;;
     3)
         echo ""
         echo "啟動演示模式（模擬音樂）..."
-        python demo_mode.py
+        $VENV_PYTHON demo_mode.py
         ;;
     4)
         echo ""
         echo "啟動演示模式（Spotify 整合）..."
         echo "請先在 Spotify 開始播放音樂"
-        python demo_mode.py --spotify
+        $VENV_PYTHON demo_mode.py --spotify
         ;;
     5)
         echo "退出測試"

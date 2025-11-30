@@ -278,19 +278,31 @@ class SpotifyListener:
     
     def _download_album_art(self, url: str) -> Optional[Image.Image]:
         """
-        下載專輯封面圖片
+        下載專輯封面圖片（優化版本：在背景縮小圖片）
         
         Args:
             url: 圖片 URL
             
         Returns:
-            PIL.Image.Image: 圖片物件，失敗則返回 None
+            PIL.Image.Image: 縮小後的圖片物件，失敗則返回 None
         """
         try:
             response = requests.get(url, timeout=5)
             response.raise_for_status()
             
             image = Image.open(BytesIO(response.content))
+            
+            # 在背景執行緒先縮小圖片，減少主執行緒的工作量
+            # 目標大小 300x300（MusicCardWide 使用的尺寸）
+            target_size = 300
+            if image.size[0] > target_size or image.size[1] > target_size:
+                # 使用 LANCZOS (高品質) 縮放，因為這是在背景執行緒
+                image = image.resize((target_size, target_size), resample=Image.Resampling.LANCZOS)
+            
+            # 轉換為 RGB 模式（避免 RGBA 轉換問題）
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
             self.last_album_art = image
             return image
             

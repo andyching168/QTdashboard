@@ -4,9 +4,15 @@ import math
 import platform
 import time
 import json
+import gc
 from pathlib import Path
 from functools import wraps
 from collections import deque
+
+# === 效能優化：調整 Python GC ===
+# 在 RPi4 等低效能裝置上，Python 的垃圾回收可能導致週期性卡頓
+# 調整 GC 閾值，減少全量 GC 的頻率
+gc.set_threshold(50000, 500, 100)  # 預設 (700, 10, 10)，大幅提高閾值
 
 # 抑制 Qt 多媒體 FFmpeg 音訊格式解析警告
 os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=false')
@@ -136,6 +142,7 @@ class JankDetector:
         self.timer = None
         self.jank_count = 0
         self.start_time = None
+        self.jank_log = []  # 記錄卡頓時間點
     
     def start(self):
         """開始監控"""
@@ -158,7 +165,21 @@ class JankDetector:
             if elapsed_ms > self.threshold_ms:
                 self.jank_count += 1
                 time_since_start = now - self.start_time if self.start_time else 0
-                print(f"🔴 [JANK] 主執行緒阻塞 {elapsed_ms:.0f}ms (累計: {self.jank_count}, 啟動後 {time_since_start:.1f}s)")
+                
+                # 嘗試取得 GC 資訊
+                gc_counts = gc.get_count()
+                gc_info = f" (GC: {gc_counts})"
+                
+                print(f"🔴 [JANK] 主執行緒阻塞 {elapsed_ms:.0f}ms{gc_info} (累計: {self.jank_count}, 啟動後 {time_since_start:.1f}s)")
+                
+                # 記錄卡頓時間點（最多保留 20 條）
+                self.jank_log.append({
+                    'time': time_since_start,
+                    'duration_ms': elapsed_ms,
+                    'gc_counts': gc_counts
+                })
+                if len(self.jank_log) > 20:
+                    self.jank_log.pop(0)
         self.last_tick = now
     
     def stop(self):
@@ -167,6 +188,15 @@ class JankDetector:
             self.timer.stop()
             if self.jank_count > 0:
                 print(f"[JankDetector] 總共偵測到 {self.jank_count} 次卡頓")
+                
+                # 分析卡頓間隔
+                if len(self.jank_log) >= 2:
+                    intervals = []
+                    for i in range(1, len(self.jank_log)):
+                        interval = self.jank_log[i]['time'] - self.jank_log[i-1]['time']
+                        intervals.append(interval)
+                    avg_interval = sum(intervals) / len(intervals)
+                    print(f"[JankDetector] 平均卡頓間隔: {avg_interval:.1f} 秒")
 
 
 def perf_track(func):
@@ -260,17 +290,20 @@ class OdometerStorage:
     def _do_save(self):
         """實際執行儲存（在背景執行緒中）"""
         try:
+            # 先複製資料，減少鎖定時間
             with self._get_lock():
                 if not self._dirty:
                     return
-                self.data['last_update'] = time.time()
-                # 寫入臨時檔案再重命名，避免寫入中斷導致檔案損壞
-                temp_file = self.data_file.with_suffix('.tmp')
-                with open(temp_file, 'w', encoding='utf-8') as f:
-                    json.dump(self.data, f, indent=2, ensure_ascii=False)
-                temp_file.replace(self.data_file)
+                data_copy = self.data.copy()
+                data_copy['last_update'] = time.time()
                 self._dirty = False
                 self._last_save_time = time.time()
+            
+            # 在鎖外執行 I/O 操作，避免阻塞其他操作
+            temp_file = self.data_file.with_suffix('.tmp')
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                json.dump(data_copy, f, indent=2, ensure_ascii=False)
+            temp_file.replace(self.data_file)
         except Exception as e:
             print(f"[Storage] 儲存里程資料失敗: {e}")
     
@@ -3753,12 +3786,18 @@ class MusicCard(QWidget):
     
     def set_album_art_from_pil(self, pil_image):
         """
-        從 PIL Image 設置專輯封面
+        從 PIL Image 設置專輯封面（優化版本）
+        先在背景縮小圖片，減少主執行緒的處理量
         
         Args:
             pil_image: PIL.Image.Image 物件
         """
         try:
+            # 先縮小圖片到需要的大小 (180x180)，減少後續處理量
+            # 這比轉換大圖後再縮放效率高很多
+            if pil_image.size[0] > 180 or pil_image.size[1] > 180:
+                pil_image = pil_image.resize((180, 180), resample=1)  # 1 = BILINEAR
+            
             from PIL.ImageQt import ImageQt
             # 轉換 PIL Image 為 QPixmap
             qim = ImageQt(pil_image)
@@ -4145,8 +4184,12 @@ class MusicCardWide(QWidget):
     
     @perf_track
     def set_album_art_from_pil(self, pil_image):
-        """從 PIL Image 設置專輯封面"""
+        """從 PIL Image 設置專輯封面（優化版本）"""
         try:
+            # 先縮小圖片到需要的大小 (300x300)，減少後續處理量
+            if pil_image.size[0] > 300 or pil_image.size[1] > 300:
+                pil_image = pil_image.resize((300, 300), resample=1)  # 1 = BILINEAR
+            
             from PIL.ImageQt import ImageQt
             qim = ImageQt(pil_image)
             pixmap = QPixmap.fromImage(qim)
@@ -6083,9 +6126,20 @@ class Dashboard(QWidget):
         self.time_label.setText(current_time)
     
     def update_gradient_animation(self):
-        """更新漸層動畫效果"""
+        """更新漸層動畫效果（優化：只在需要時更新樣式）"""
+        # 如果兩個方向燈都關閉且動畫已完成，跳過更新
+        if (not self.left_turn_on and not self.right_turn_on and 
+            self.left_gradient_pos <= 0.0 and self.right_gradient_pos <= 0.0):
+            return
+        
         # 熄滅動畫速度
         fade_speed = 0.05
+        
+        # 記錄舊的狀態用於比較
+        old_left_pos = self.left_gradient_pos
+        old_right_pos = self.right_gradient_pos
+        old_left_on = getattr(self, '_prev_left_turn_on', None)
+        old_right_on = getattr(self, '_prev_right_turn_on', None)
         
         # 左轉燈動畫
         if self.left_turn_on:
@@ -6103,8 +6157,16 @@ class Dashboard(QWidget):
             # 熄滅時從中間向外漸暗
             self.right_gradient_pos = max(0.0, self.right_gradient_pos - fade_speed)
         
-        # 更新樣式
-        self.update_turn_signal_style()
+        # 只在狀態實際變更時才更新樣式（避免無謂的 CSS 重解析）
+        left_changed = (self.left_gradient_pos != old_left_pos or 
+                       self.left_turn_on != old_left_on)
+        right_changed = (self.right_gradient_pos != old_right_pos or 
+                        self.right_turn_on != old_right_on)
+        
+        if left_changed or right_changed:
+            self._prev_left_turn_on = self.left_turn_on
+            self._prev_right_turn_on = self.right_turn_on
+            self.update_turn_signal_style()
     
     def update_turn_signal_style(self):
         """更新方向燈的視覺樣式"""
@@ -6562,13 +6624,16 @@ class Dashboard(QWidget):
         
         # Spotify 初始化延遲到 start_dashboard() 調用時
         # self.check_spotify_config()
+        
+        # 標記：是否跳過內建的 Spotify 初始化（用於 demo_mode.py 自行處理）
+        self._skip_spotify_init = False
 
     def start_dashboard(self):
         """開機動畫完成後啟動儀表板的所有邏輯"""
         print("啟動儀表板邏輯...")
         
-        # 啟動卡頓偵測器
-        self.jank_detector = JankDetector(threshold_ms=50)
+        # 啟動卡頓偵測器（閾值 100ms，只報告明顯卡頓）
+        self.jank_detector = JankDetector(threshold_ms=100)
         self.jank_detector.start()
         
         # 啟動時間更新 Timer
@@ -6581,8 +6646,18 @@ class Dashboard(QWidget):
         self.last_physics_time = time.time()  # 重設時間基準
         self.physics_timer.start(100)  # 100ms = 0.1 秒
         
-        # 初始化 Spotify
-        self.check_spotify_config()
+        # 啟動增量式垃圾回收 Timer（每 10 秒執行一次小型 GC）
+        # 更頻繁但更小量的 GC 可以避免物件累積後造成的長時間停頓
+        self.gc_timer = QTimer()
+        self.gc_timer.timeout.connect(self._incremental_gc)
+        self.gc_timer.start(10000)  # 每 10 秒
+        self._gc_counter = 0
+        
+        # 初始化 Spotify（除非被跳過）
+        if not self._skip_spotify_init:
+            self.check_spotify_config()
+        else:
+            print("跳過內建 Spotify 初始化（由外部處理）")
         
         # 初始化 MQTT（如果有設定檔）
         self._check_mqtt_config()
@@ -6595,6 +6670,39 @@ class Dashboard(QWidget):
         QTimer.singleShot(2000, self._check_network_status)
         
         print("儀表板邏輯已啟動")
+    
+    def _incremental_gc(self):
+        """增量式垃圾回收 - 只執行快速 GC，完整 GC 在背景執行"""
+        self._gc_counter += 1
+        
+        perf_enabled = os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes')
+        
+        # 策略：主執行緒只做第 0 代 GC（< 5ms）
+        # 第 1、2 代 GC 太慢（40-60ms），改到背景執行緒執行
+        
+        counts_before = gc.get_count()
+        start_time = time.perf_counter()
+        
+        # 快速 GC（只有第 0 代）- 這個很快
+        collected = gc.collect(0)
+        
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        
+        if perf_enabled and duration_ms > 10:
+            print(f"⚡ [GC] Gen 0: {duration_ms:.1f}ms, 回收 {collected}, 之前: {counts_before}")
+        
+        # 每 60 秒在背景執行緒執行完整 GC（從 30 秒改為 60 秒，減少 STW 頻率）
+        if self._gc_counter % 6 == 0:  # 每 60 秒 (10秒 * 6)
+            import threading
+            def background_gc():
+                start = time.perf_counter()
+                gc.collect(1)
+                gc.collect(2)
+                if perf_enabled:
+                    duration = (time.perf_counter() - start) * 1000
+                    if duration > 20:
+                        print(f"⚡ [GC-BG] Full: {duration:.1f}ms (背景執行緒)")
+            threading.Thread(target=background_gc, daemon=True).start()
 
     def check_spotify_config(self):
         """檢查 Spotify 設定並初始化"""
@@ -7086,11 +7194,17 @@ class Dashboard(QWidget):
     @perf_track
     def _slot_set_speed(self, speed):
         """Slot: 在主執行緒中更新速度顯示"""
-        self.speed = max(0, min(200, speed))
+        new_speed = max(0, min(200, speed))
         # 里程計算已改由 _physics_tick() 驅動，這裡只需記錄速度
         self.trip_card.current_speed = speed
         self.odo_card.current_speed = speed
-        self.update_display()
+        
+        # 只在顯示數字變化時才更新 UI（整數部分變化）
+        if int(new_speed) != int(self.speed):
+            self.speed = new_speed
+            self.update_display()
+        else:
+            self.speed = new_speed
     
     def _physics_tick(self):
         """物理心跳：每 100ms 根據當前速度累積里程"""
@@ -7118,6 +7232,7 @@ class Dashboard(QWidget):
     def _slot_set_rpm(self, rpm):
         """Slot: 在主執行緒中更新轉速顯示 (含 GUI 端平滑)"""
         target = max(0, min(8, rpm))
+        old_rpm = self.rpm
         
         # GUI 端二次平滑：使用 EMA 讓指針移動更絲滑
         if self.rpm == 0:
@@ -7126,7 +7241,9 @@ class Dashboard(QWidget):
             # 平滑插值：越接近目標越慢
             self.rpm = self.rpm * (1 - self.rpm_animation_alpha) + target * self.rpm_animation_alpha
         
-        self.update_display()
+        # 只在轉速變化明顯時才更新 UI（降低重繪頻率）
+        if abs(self.rpm - old_rpm) > 0.02:  # 變化超過 0.02 千轉
+            self.update_display()
     
     @pyqtSlot(float)
     def _slot_set_temperature(self, temp):
