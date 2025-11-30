@@ -8539,6 +8539,11 @@ def run_dashboard(
     print(f"檢測到 {env_name}")
     print(f"系統: {platform.system()}, 全螢幕模式: {'是' if is_production else '否'}")
     
+    # 生產環境（樹莓派）隱藏滑鼠游標
+    if is_production:
+        app.setOverrideCursor(Qt.CursorShape.BlankCursor)
+        print("已隱藏滑鼠游標")
+    
     # 建立主儀表板
     dashboard = Dashboard()
     
