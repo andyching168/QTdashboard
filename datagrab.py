@@ -73,8 +73,15 @@ def select_serial_port():
     
     # 合併所有可用的 ports
     all_ports = []
+    canable_port = None  # 記錄 CANable 裝置
+    
     for p in ports:
         all_ports.append((p.device, p.description))
+        # 檢查是否為 CANable 裝置 (不分大小寫)
+        if 'canable' in p.description.lower():
+            canable_port = p.device
+            logger.info(f"偵測到 CANable 裝置: {p.device} - {p.description}")
+    
     for vp in virtual_ports:
         if not any(vp == p[0] for p in all_ports):  # 避免重複
             all_ports.append((vp, "Virtual Serial Port"))
@@ -87,7 +94,16 @@ def select_serial_port():
     
     console.print("[yellow]可用的 Serial 裝置：[/yellow]")
     for i, (device, desc) in enumerate(all_ports):
-        console.print(f"[{i}] {device} - {desc}")
+        # 標注 CANable 裝置
+        if 'canable' in desc.lower():
+            console.print(f"[{i}] {device} - {desc} [bold green](CANable)[/bold green]")
+        else:
+            console.print(f"[{i}] {device} - {desc}")
+    
+    # 優先自動選擇 CANable 裝置
+    if canable_port:
+        console.print(f"[green]自動選擇 CANable 裝置: {canable_port}[/green]")
+        return canable_port
     
     # 提供手動輸入選項
     console.print("[cyan]或直接輸入 port 路徑 (例如: /dev/ttys014)[/cyan]")
