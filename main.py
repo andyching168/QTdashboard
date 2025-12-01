@@ -1105,6 +1105,10 @@ class QuadGaugeCard(QWidget):
         danger = data.get("danger")
         warning_below = data.get("warning_below", False)
         
+        # TURBO 特殊處理：>=0 時顯示紅色（熱血！）
+        if index == 2 and value >= 0:
+            return "#f44"
+        
         if warning_below:
             # 低於閾值警告（如電瓶電壓）
             if danger is not None and value <= danger:
@@ -1519,6 +1523,10 @@ class QuadGaugeDetailView(QWidget):
         warning = data.get("warning")
         danger = data.get("danger")
         warning_below = data.get("warning_below", False)
+        
+        # TURBO 特殊處理：>=0 時顯示紅色（熱血！）
+        if data.get("title") == "TURBO" and value >= 0:
+            return "#f44"
         
         if warning_below:
             if danger is not None and value <= danger:
@@ -4827,6 +4835,7 @@ class MQTTSettingsDialog(QWidget):
         self.server_thread = None
         self._is_closing = False
         self._settings_received = False
+        self._parent_ref = parent  # 保存父視窗參考用於計算縮放
         
         # 預先取得本機 IP
         self.local_ip = self._get_local_ip()
@@ -4834,6 +4843,46 @@ class MQTTSettingsDialog(QWidget):
         
         self.init_ui()
         self.start_server()
+    
+    def _get_window_scale(self):
+        """取得視窗縮放比例"""
+        from PyQt6.QtWidgets import QApplication, QMainWindow
+        
+        parent_width = 1920
+        parent_height = 480
+        
+        # 嘗試找到 ScalableWindow（QMainWindow 類型的父視窗）
+        widget = self._parent_ref
+        while widget:
+            parent = widget.parent() if hasattr(widget, 'parent') else None
+            if parent is None:
+                # 檢查當前 widget 是否是 QMainWindow
+                if isinstance(widget, QMainWindow):
+                    parent_width = widget.width()
+                    parent_height = widget.height()
+                    print(f"[MQTT設定] 找到 ScalableWindow: {parent_width}x{parent_height}")
+                break
+            if isinstance(parent, QMainWindow):
+                parent_width = parent.width()
+                parent_height = parent.height()
+                print(f"[MQTT設定] 找到 ScalableWindow: {parent_width}x{parent_height}")
+                break
+            widget = parent
+        
+        # 如果找不到 ScalableWindow，檢查螢幕大小
+        if parent_width == 1920 and parent_height == 480:
+            screen = QApplication.primaryScreen()
+            if screen:
+                geometry = screen.availableGeometry()
+                if geometry.width() < 1920 or geometry.height() < 480:
+                    parent_width = geometry.width()
+                    parent_height = min(geometry.height(), int(geometry.width() / 4))
+                    print(f"[MQTT設定] 使用螢幕大小: {parent_width}x{parent_height}")
+        
+        print(f"[MQTT設定] 最終視窗大小: {parent_width}x{parent_height}")
+        scale = min(parent_width / 1920, parent_height / 480)
+        print(f"[MQTT設定] 縮放比例: {scale}")
+        return scale, parent_width, parent_height
     
     def _get_local_ip(self):
         """取得本機 IP"""
@@ -4883,70 +4932,90 @@ class MQTTSettingsDialog(QWidget):
     
     def init_ui(self):
         """初始化 UI"""
+        # 取得縮放比例
+        scale, window_width, window_height = self._get_window_scale()
+        
+        # 計算縮放後的尺寸
+        title_font = max(12, int(36 * scale))
+        desc_font = max(10, int(18 * scale))
+        step_font = max(9, int(16 * scale))
+        status_font = max(10, int(18 * scale))
+        url_font = max(9, int(14 * scale))
+        btn_font = max(10, int(18 * scale))
+        btn_radius = max(10, int(25 * scale))
+        btn_width = max(80, int(150 * scale))
+        qr_card_size = max(150, int(300 * scale))
+        qr_size = max(135, int(270 * scale))
+        margin_h = max(20, int(60 * scale))
+        margin_v = max(15, int(30 * scale))
+        spacing = max(20, int(50 * scale))
+        steps_margin = max(10, int(20 * scale))
+        steps_radius = max(8, int(15 * scale))
+        
         self.setWindowTitle("MQTT 設定")
-        self.setFixedSize(1920, 480)
-        self.setStyleSheet("""
-            QWidget {
+        self.setFixedSize(window_width, window_height)
+        self.setStyleSheet(f"""
+            QWidget {{
                 background-color: #121212;
                 color: white;
                 font-family: "Arial";
-            }
-            QLabel {
+            }}
+            QLabel {{
                 color: #FFFFFF;
-            }
-            QPushButton {
+            }}
+            QPushButton {{
                 background-color: transparent;
                 border: 2px solid #535353;
-                border-radius: 25px;
+                border-radius: {btn_radius}px;
                 color: white;
-                font-size: 18px;
+                font-size: {btn_font}px;
                 font-weight: bold;
-                padding: 10px 30px;
-            }
-            QPushButton:hover {
+                padding: {max(5, int(10 * scale))}px {max(15, int(30 * scale))}px;
+            }}
+            QPushButton:hover {{
                 border-color: white;
                 background-color: #2a2a2a;
-            }
+            }}
         """)
         
         # 主佈局
         main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(60, 30, 60, 30)
-        main_layout.setSpacing(50)
+        main_layout.setContentsMargins(margin_h, margin_v, margin_h, margin_v)
+        main_layout.setSpacing(spacing)
         
         # === 左側：說明區 ===
         left_container = QWidget()
         left_layout = QVBoxLayout(left_container)
-        left_layout.setSpacing(15)
+        left_layout.setSpacing(max(8, int(15 * scale)))
         left_layout.setContentsMargins(0, 0, 0, 0)
         
         # 標題
         title_layout = QHBoxLayout()
         logo_label = QLabel("⚙")
-        logo_label.setFont(QFont("Arial", 36))
+        logo_label.setFont(QFont("Arial", title_font))
         title = QLabel("MQTT 設定")
-        title.setFont(QFont("Arial", 36, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", title_font, QFont.Weight.Bold))
         title_layout.addWidget(logo_label)
         title_layout.addWidget(title)
         title_layout.addStretch()
         
         # 說明文字
         desc_label = QLabel("請使用手機掃描右側 QR Code，\n連接到設定頁面填寫 MQTT Broker 資訊")
-        desc_label.setFont(QFont("Arial", 18))
+        desc_label.setFont(QFont("Arial", desc_font))
         desc_label.setStyleSheet("color: #B3B3B3;")
         desc_label.setWordWrap(True)
         
         # 步驟說明
         steps_container = QWidget()
-        steps_container.setStyleSheet("""
-            QWidget {
+        steps_container.setStyleSheet(f"""
+            QWidget {{
                 background-color: #181818;
-                border-radius: 15px;
-            }
+                border-radius: {steps_radius}px;
+            }}
         """)
         steps_layout = QVBoxLayout(steps_container)
-        steps_layout.setContentsMargins(20, 20, 20, 20)
-        steps_layout.setSpacing(12)
+        steps_layout.setContentsMargins(steps_margin, steps_margin, steps_margin, steps_margin)
+        steps_layout.setSpacing(max(6, int(12 * scale)))
         
         steps = [
             "1. 確認手機與車機連接同一 WiFi",
@@ -4958,26 +5027,26 @@ class MQTTSettingsDialog(QWidget):
         
         for step in steps:
             step_label = QLabel(step)
-            step_label.setFont(QFont("Arial", 16))
+            step_label.setFont(QFont("Arial", step_font))
             step_label.setStyleSheet("color: #FFFFFF; background: transparent;")
             steps_layout.addWidget(step_label)
         
         # 狀態顯示
         self.status_label = QLabel("等待掃描...")
-        self.status_label.setFont(QFont("Arial", 18))
+        self.status_label.setFont(QFont("Arial", status_font))
         self.status_label.setStyleSheet("color: #9C27B0;")
         
         # 取消按鈕
         cancel_btn = QPushButton("取消")
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel_btn.setFixedWidth(150)
+        cancel_btn.setFixedWidth(btn_width)
         cancel_btn.clicked.connect(self.cancel_settings)
         
         left_layout.addLayout(title_layout)
         left_layout.addWidget(desc_label)
-        left_layout.addSpacing(10)
+        left_layout.addSpacing(max(5, int(10 * scale)))
         left_layout.addWidget(steps_container)
-        left_layout.addSpacing(15)
+        left_layout.addSpacing(max(8, int(15 * scale)))
         left_layout.addWidget(self.status_label)
         left_layout.addStretch()
         left_layout.addWidget(cancel_btn)
@@ -4986,38 +5055,39 @@ class MQTTSettingsDialog(QWidget):
         right_container = QWidget()
         right_layout = QVBoxLayout(right_container)
         right_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        right_layout.setSpacing(20)
+        right_layout.setSpacing(max(10, int(20 * scale)))
         
         # QR Code 卡片
         qr_card = QWidget()
-        qr_card.setFixedSize(300, 300)
-        qr_card.setStyleSheet("""
-            QWidget {
+        qr_card.setFixedSize(qr_card_size, qr_card_size)
+        qr_card.setStyleSheet(f"""
+            QWidget {{
                 background-color: white;
-                border-radius: 20px;
-            }
+                border-radius: {max(10, int(20 * scale))}px;
+            }}
         """)
         
         qr_layout = QVBoxLayout(qr_card)
-        qr_layout.setContentsMargins(15, 15, 15, 15)
+        qr_layout.setContentsMargins(max(8, int(15 * scale)), max(8, int(15 * scale)), 
+                                      max(8, int(15 * scale)), max(8, int(15 * scale)))
         qr_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.qr_label = QLabel()
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.qr_label.setScaledContents(True)
-        self.qr_label.setFixedSize(270, 270)
+        self.qr_label.setFixedSize(qr_size, qr_size)
         qr_layout.addWidget(self.qr_label)
         
         # URL 提示
         self.url_label = QLabel(f"http://{self.local_ip}:{self.server_port}")
-        self.url_label.setFont(QFont("Arial", 14))
-        self.url_label.setStyleSheet("""
-            QLabel {
+        self.url_label.setFont(QFont("Arial", url_font))
+        self.url_label.setStyleSheet(f"""
+            QLabel {{
                 color: #B3B3B3;
                 background-color: #181818;
-                padding: 12px 20px;
-                border-radius: 10px;
-            }
+                padding: {max(6, int(12 * scale))}px {max(10, int(20 * scale))}px;
+                border-radius: {max(5, int(10 * scale))}px;
+            }}
         """)
         self.url_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
@@ -5034,7 +5104,7 @@ class MQTTSettingsDialog(QWidget):
         
         # 生成 QR Code
         url = f"http://{self.local_ip}:{self.server_port}"
-        pixmap = self._create_qr_pixmap(url, 270)
+        pixmap = self._create_qr_pixmap(url, qr_size)
         if not pixmap.isNull():
             self.qr_label.setPixmap(pixmap)
         else:
@@ -5522,16 +5592,20 @@ class ControlPanel(QWidget):
         button_layout.setSpacing(20)
         
         self.buttons = []
+        self.button_widgets = {}  # 用於存取特定按鈕
         button_configs = [
             ("WiFi", "📶", "#1DB954"),
             ("藍牙", "🔵", "#4285F4"),
             ("亮度", "☀", "#FF9800"),
+            ("更新", "🔄", "#00BCD4"),
+            ("電源", "⏻", "#E91E63"),
             ("設定", "⚙", "#9C27B0")
         ]
         
         for title, icon, color in button_configs:
             btn = self.create_control_button(title, icon, color)
             self.buttons.append(btn)
+            self.button_widgets[title] = btn
             button_layout.addWidget(btn)
         
         content_layout.addLayout(button_layout)
@@ -5826,6 +5900,19 @@ class ControlPanel(QWidget):
             self.wifi_detail_label.setText(str(e)[:30])
             self.wifi_signal_label.setText("")
         
+        # 更新「更新」按鈕狀態 (只在有網路時啟用)
+        self._update_update_button_state()
+    
+    def _update_update_button_state(self):
+        """根據網路狀態更新「更新」按鈕"""
+        # 檢查父視窗的網路狀態
+        parent = self.parent()
+        is_online = True
+        if parent and hasattr(parent, 'is_offline'):
+            is_online = not parent.is_offline
+        
+        self.set_update_button_enabled(is_online)
+        
     def paintEvent(self, a0):  # type: ignore
         """自定義繪製半透明背景"""
         painter = QPainter(self)
@@ -5923,12 +6010,498 @@ class ControlPanel(QWidget):
         elif title == "藍牙":
             print("藍牙功能待實現")
         elif title == "亮度":
-            print("亮度調整待實現")
+            self.cycle_brightness()
+        elif title == "更新":
+            self.do_auto_update()
+        elif title == "電源":
+            self.show_power_menu()
         elif title == "設定":
             # 開啟 MQTT 設定對話框
             parent = self.parent()
             if parent and hasattr(parent, 'show_mqtt_settings'):
                 parent.show_mqtt_settings()  # type: ignore
+    
+    def cycle_brightness(self):
+        """循環切換亮度"""
+        parent = self.parent()
+        if parent and hasattr(parent, 'cycle_brightness'):
+            level = parent.cycle_brightness()
+            # 更新按鈕顯示
+            self._update_brightness_button(level)
+    
+    def _update_brightness_button(self, level):
+        """更新亮度按鈕的顯示"""
+        if "亮度" not in self.button_widgets:
+            return
+        
+        btn_container = self.button_widgets["亮度"]
+        for child in btn_container.findChildren(QPushButton):
+            # 根據亮度等級更新圖示
+            if level == 0:
+                child.setText("☀")  # 全亮
+                color = "#FF9800"
+            elif level == 1:
+                child.setText("🔅")  # 75%
+                color = "#FFA726"
+            else:
+                child.setText("🔆")  # 50%
+                color = "#FFB74D"
+            
+            child.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color};
+                    border: none;
+                    border-radius: 20px;
+                    font-size: 48px;
+                    color: white;
+                }}
+                QPushButton:hover {{
+                    background-color: {self.adjust_color(color, 1.2)};
+                }}
+                QPushButton:pressed {{
+                    background-color: {self.adjust_color(color, 0.8)};
+                }}
+            """)
+    
+    def set_update_button_enabled(self, enabled):
+        """設定更新按鈕的啟用狀態"""
+        if "更新" in self.button_widgets:
+            btn_container = self.button_widgets["更新"]
+            # 找到容器內的 QPushButton
+            for child in btn_container.findChildren(QPushButton):
+                child.setEnabled(enabled)
+                if enabled:
+                    child.setStyleSheet("""
+                        QPushButton {
+                            background-color: #00BCD4;
+                            border: none;
+                            border-radius: 20px;
+                            font-size: 48px;
+                            color: white;
+                        }
+                        QPushButton:hover {
+                            background-color: #26C6DA;
+                        }
+                        QPushButton:pressed {
+                            background-color: #0097A7;
+                        }
+                    """)
+                else:
+                    child.setStyleSheet("""
+                        QPushButton {
+                            background-color: #444;
+                            border: none;
+                            border-radius: 20px;
+                            font-size: 48px;
+                            color: #888;
+                        }
+                    """)
+    
+    def do_auto_update(self):
+        """執行自動更新"""
+        from PyQt6.QtWidgets import QMessageBox, QApplication
+        import subprocess
+        import sys
+        
+        # 檢查網路狀態
+        main_window = self.parent()
+        if main_window and hasattr(main_window, 'is_offline') and main_window.is_offline:
+            msg = QMessageBox()
+            msg.setWindowTitle("無法更新")
+            msg.setText("網路未連線，無法執行自動更新。\n請先連接網路後再試。")
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            msg.exec()
+            return
+        
+        # 確認對話框
+        msg = QMessageBox()
+        msg.setWindowTitle("自動更新")
+        msg.setText("是否要從 GitHub 拉取最新版本並重新啟動？")
+        msg.setInformativeText(
+            "這將會：\n"
+            "• 執行 git pull 取得最新程式碼\n"
+            "• 關閉目前程式\n"
+            "• 重新啟動儀表板"
+        )
+        msg.setIcon(QMessageBox.Icon.Question)
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.setDefaultButton(QMessageBox.StandardButton.No)
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        
+        if msg.exec() != QMessageBox.StandardButton.Yes:
+            return
+        
+        try:
+            # 取得腳本所在目錄
+            import os
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            # 執行 git pull
+            print("[更新] 正在執行 git pull...")
+            result = subprocess.run(
+                ['git', 'pull'],
+                cwd=script_dir,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout or "未知錯誤"
+                err_box = QMessageBox()
+                err_box.setWindowTitle("更新失敗")
+                err_box.setText(f"Git pull 失敗:\n{error_msg}")
+                err_box.setIcon(QMessageBox.Icon.Critical)
+                err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+                err_box.exec()
+                return
+            
+            print(f"[更新] Git pull 結果: {result.stdout}")
+            
+            # 顯示成功訊息
+            success_box = QMessageBox()
+            success_box.setWindowTitle("更新完成")
+            success_box.setText("已成功取得最新版本！")
+            success_box.setInformativeText(f"{result.stdout}\n\n程式將在 2 秒後重新啟動...")
+            success_box.setIcon(QMessageBox.Icon.Information)
+            success_box.setWindowFlags(success_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            success_box.exec()
+            
+            # 延遲重啟 (給使用者看到訊息)
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(2000, lambda: self._restart_application(script_dir))
+            
+        except subprocess.TimeoutExpired:
+            err_box = QMessageBox()
+            err_box.setWindowTitle("更新逾時")
+            err_box.setText("Git pull 執行逾時，請檢查網路連線後重試。")
+            err_box.setIcon(QMessageBox.Icon.Critical)
+            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            err_box.exec()
+        except FileNotFoundError:
+            err_box = QMessageBox()
+            err_box.setWindowTitle("Git 未安裝")
+            err_box.setText("找不到 git 指令，請確認已安裝 Git。")
+            err_box.setIcon(QMessageBox.Icon.Critical)
+            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            err_box.exec()
+        except Exception as e:
+            err_box = QMessageBox()
+            err_box.setWindowTitle("更新錯誤")
+            err_box.setText(f"更新過程發生錯誤:\n{str(e)}")
+            err_box.setIcon(QMessageBox.Icon.Critical)
+            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            err_box.exec()
+    
+    def show_power_menu(self):
+        """顯示電源選單"""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QApplication, QMainWindow
+        import platform
+        
+        is_linux = platform.system() == 'Linux'
+        
+        # 取得實際顯示的視窗大小
+        # 在開發環境中，Dashboard 被包在 ScalableWindow (QMainWindow) 裡面
+        # Dashboard 本身永遠是 1920x480，但 ScalableWindow 是縮放過的
+        parent_width = 1920
+        parent_height = 480
+        
+        # 嘗試找到 ScalableWindow（QMainWindow 類型的父視窗）
+        widget = self
+        while widget:
+            parent = widget.parent()
+            if parent is None:
+                break
+            # 檢查是否是 QMainWindow（ScalableWindow）
+            if isinstance(parent, QMainWindow):
+                parent_width = parent.width()
+                parent_height = parent.height()
+                print(f"[電源選單] 找到 ScalableWindow: {parent_width}x{parent_height}")
+                break
+            widget = parent
+        
+        # 如果找不到 ScalableWindow，檢查是否在全螢幕模式
+        if parent_width == 1920 and parent_height == 480:
+            # 可能是全螢幕模式或直接顯示 Dashboard
+            screen = QApplication.primaryScreen()
+            if screen:
+                geometry = screen.availableGeometry()
+                # 如果螢幕小於 1920x480，使用螢幕大小
+                if geometry.width() < 1920 or geometry.height() < 480:
+                    parent_width = geometry.width()
+                    parent_height = min(geometry.height(), int(geometry.width() / 4))
+                    print(f"[電源選單] 使用螢幕大小: {parent_width}x{parent_height}")
+        
+        print(f"[電源選單] 最終視窗大小: {parent_width}x{parent_height}")
+        
+        # 計算縮放比例（以 1920x480 為基準）
+        scale = min(parent_width / 1920, parent_height / 480)
+        print(f"[電源選單] 縮放比例: {scale}")
+        
+        dialog_width = int(1920 * scale)
+        dialog_height = int(480 * scale)
+        btn_width = int(280 * scale)
+        btn_height = int(200 * scale)
+        title_font_size = max(12, int(36 * scale))
+        btn_font_size = max(10, int(28 * scale))
+        btn_radius = max(5, int(20 * scale))
+        margin = max(10, int(60 * scale))
+        spacing = max(10, int(40 * scale))
+        
+        # 創建電源選單對話框
+        dialog = QDialog()
+        dialog.setWindowTitle("電源選項")
+        dialog.setFixedSize(dialog_width, dialog_height)
+        dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
+        dialog.setStyleSheet(f"""
+            QDialog {{
+                background-color: #1a1a25;
+            }}
+            QLabel {{
+                color: white;
+                font-size: 18px;
+                background: transparent;
+            }}
+            QPushButton {{
+                background-color: #2a2a3a;
+                color: white;
+                border: none;
+                border-radius: {btn_radius}px;
+                font-size: {int(24 * scale)}px;
+                font-weight: bold;
+                padding: {int(20 * scale)}px;
+            }}
+            QPushButton:hover {{
+                background-color: #3a3a4a;
+            }}
+            QPushButton:pressed {{
+                background-color: #4a4a5a;
+            }}
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(margin, int(40 * scale), margin, int(40 * scale))
+        layout.setSpacing(int(30 * scale))
+        
+        # 標題
+        title = QLabel("⏻ 電源選項")
+        title.setStyleSheet(f"font-size: {title_font_size}px; font-weight: bold; color: white;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+        
+        layout.addStretch()
+        
+        # 水平按鈕佈局
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(spacing)
+        
+        # 程式重啟按鈕
+        btn_app_restart = QPushButton("🔄\n程式重啟")
+        btn_app_restart.setFixedSize(btn_width, btn_height)
+        btn_app_restart.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_app_restart.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #00BCD4;
+                font-size: {btn_font_size}px;
+                border-radius: {btn_radius}px;
+            }}
+            QPushButton:hover {{
+                background-color: #26C6DA;
+            }}
+        """)
+        btn_app_restart.clicked.connect(lambda: self._power_action('app_restart', dialog))
+        button_layout.addWidget(btn_app_restart)
+        
+        # 系統重啟按鈕
+        btn_sys_reboot = QPushButton("🔃\n系統重啟")
+        btn_sys_reboot.setFixedSize(btn_width, btn_height)
+        btn_sys_reboot.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_sys_reboot.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #FF9800;
+                font-size: {btn_font_size}px;
+                border-radius: {btn_radius}px;
+            }}
+            QPushButton:hover {{
+                background-color: #FFB74D;
+            }}
+        """)
+        btn_sys_reboot.clicked.connect(lambda: self._power_action('reboot', dialog))
+        button_layout.addWidget(btn_sys_reboot)
+        
+        # 關機按鈕
+        btn_shutdown = QPushButton("⏻\n關機")
+        btn_shutdown.setFixedSize(btn_width, btn_height)
+        btn_shutdown.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_shutdown.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #E91E63;
+                font-size: {btn_font_size}px;
+                border-radius: {btn_radius}px;
+            }}
+            QPushButton:hover {{
+                background-color: #F06292;
+            }}
+        """)
+        btn_shutdown.clicked.connect(lambda: self._power_action('shutdown', dialog))
+        button_layout.addWidget(btn_shutdown)
+        
+        # 取消按鈕
+        btn_cancel = QPushButton("✕\n取消")
+        btn_cancel.setFixedSize(btn_width, btn_height)
+        btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cancel.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #424242;
+                font-size: {btn_font_size}px;
+                border-radius: {btn_radius}px;
+            }}
+            QPushButton:hover {{
+                background-color: #616161;
+            }}
+        """)
+        btn_cancel.clicked.connect(dialog.reject)
+        button_layout.addWidget(btn_cancel)
+        
+        layout.addLayout(button_layout)
+        
+        layout.addStretch()
+        
+        dialog.exec()
+    
+    def _power_action(self, action, dialog):
+        """執行電源操作"""
+        from PyQt6.QtWidgets import QMessageBox, QApplication
+        import subprocess
+        import os
+        import platform
+        
+        is_linux = platform.system() == 'Linux'
+        dialog.close()
+        
+        action_names = {
+            'app_restart': '程式重啟',
+            'reboot': '系統重啟',
+            'shutdown': '關機'
+        }
+        
+        # 確認對話框
+        msg = QMessageBox()
+        msg.setWindowTitle("確認操作")
+        
+        if action == 'app_restart':
+            msg.setText("是否要重新啟動儀表板程式？")
+        elif action == 'reboot':
+            if is_linux:
+                msg.setText("是否要重新啟動系統？\n\n系統將會完全重啟。")
+            else:
+                msg.setText("是否要模擬系統重啟？\n\n（macOS 上僅模擬，不會真的重啟）")
+        elif action == 'shutdown':
+            if is_linux:
+                msg.setText("是否要關閉系統？\n\n系統將會關機。")
+            else:
+                msg.setText("是否要模擬關機？\n\n（macOS 上僅模擬，不會真的關機）")
+        
+        msg.setIcon(QMessageBox.Icon.Question)
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.setDefaultButton(QMessageBox.StandardButton.No)
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        
+        if msg.exec() != QMessageBox.StandardButton.Yes:
+            return
+        
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            if action == 'app_restart':
+                print("[電源] 準備程式重啟...")
+                self._show_power_countdown("程式重啟", 1)
+                QTimer.singleShot(1000, lambda: self._restart_application(script_dir))
+                
+            elif action == 'reboot':
+                if is_linux:
+                    print("[電源] 準備系統重啟...")
+                    self._show_power_countdown("系統重啟", 3)
+                    QTimer.singleShot(3000, lambda: subprocess.run(['sudo', 'reboot']))
+                else:
+                    # macOS 模擬
+                    info_box = QMessageBox()
+                    info_box.setWindowTitle("模擬系統重啟")
+                    info_box.setText("🔃 模擬系統重啟中...\n\n（macOS 上僅顯示此訊息）")
+                    info_box.setIcon(QMessageBox.Icon.Information)
+                    info_box.setWindowFlags(info_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+                    info_box.exec()
+                    
+            elif action == 'shutdown':
+                if is_linux:
+                    print("[電源] 準備關機...")
+                    self._show_power_countdown("關機", 3)
+                    QTimer.singleShot(3000, lambda: subprocess.run(['sudo', 'shutdown', '-h', 'now']))
+                else:
+                    # macOS 模擬
+                    info_box = QMessageBox()
+                    info_box.setWindowTitle("模擬關機")
+                    info_box.setText("⏻ 模擬關機中...\n\n（macOS 上僅顯示此訊息）")
+                    info_box.setIcon(QMessageBox.Icon.Information)
+                    info_box.setWindowFlags(info_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+                    info_box.exec()
+                    
+        except Exception as e:
+            err_box = QMessageBox()
+            err_box.setWindowTitle("錯誤")
+            err_box.setText(f"操作失敗:\n{str(e)}")
+            err_box.setIcon(QMessageBox.Icon.Critical)
+            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            err_box.exec()
+    
+    def _show_power_countdown(self, action_name, seconds):
+        """顯示電源操作倒數提示"""
+        from PyQt6.QtWidgets import QMessageBox, QApplication
+        
+        info_box = QMessageBox()
+        info_box.setWindowTitle(action_name)
+        info_box.setText(f"⏳ {action_name}將在 {seconds} 秒後執行...")
+        info_box.setIcon(QMessageBox.Icon.Information)
+        info_box.setWindowFlags(info_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        info_box.setStandardButtons(QMessageBox.StandardButton.NoButton)
+        info_box.show()
+        QApplication.processEvents()
+    
+    def _restart_application(self, script_dir):
+        """重新啟動應用程式"""
+        import subprocess
+        import sys
+        import os
+        
+        # 啟動 auto_start.sh
+        auto_start_script = os.path.join(script_dir, 'auto_start.sh')
+        
+        if os.path.exists(auto_start_script):
+            print(f"[更新] 正在啟動 {auto_start_script}...")
+            # 使用 nohup 在背景啟動新進程
+            subprocess.Popen(
+                ['bash', auto_start_script],
+                cwd=script_dir,
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        else:
+            print(f"[更新] 找不到 auto_start.sh，嘗試直接啟動 main.py...")
+            # 備用方案：直接啟動 main.py
+            python_exe = sys.executable
+            subprocess.Popen(
+                [python_exe, os.path.join(script_dir, 'main.py')],
+                cwd=script_dir,
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        
+        # 關閉當前應用
+        from PyQt6.QtWidgets import QApplication
+        QApplication.quit()
     
     def hide_panel(self):
         """隱藏面板"""
@@ -5999,9 +6572,16 @@ class Dashboard(QWidget):
         self.panel_visible = False
         self.panel_touch_start = None
         self.panel_drag_active = False
+        
+        # 亮度控制相關
+        self.brightness_level = 0  # 0=100%, 1=75%, 2=50%
+        self.brightness_overlay = None
 
         self.init_ui()
         self.init_data()
+        
+        # 創建亮度覆蓋層（必須在 init_ui 之後，確保在最上層）
+        self._create_brightness_overlay()
     
     def create_status_bar(self):
         """創建頂部狀態欄，包含方向燈指示"""
@@ -6582,6 +7162,49 @@ class Dashboard(QWidget):
         main_layout.addStretch(1)  # 所有彈性空間都在左邊
         main_layout.addWidget(center_section)
         main_layout.addWidget(right_section)
+    
+    def _create_brightness_overlay(self):
+        """創建亮度調節覆蓋層"""
+        self.brightness_overlay = QWidget(self)
+        self.brightness_overlay.setGeometry(0, 0, 1920, 480)
+        self.brightness_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)  # 讓滑鼠事件穿透
+        self.brightness_overlay.setStyleSheet("background: transparent;")
+        self.brightness_overlay.hide()
+        self.brightness_overlay.raise_()  # 確保在最上層
+    
+    def set_brightness(self, level):
+        """
+        設定亮度等級
+        level: 0=100% (全亮), 1=75%, 2=50%
+        """
+        self.brightness_level = level
+        
+        if level == 0:
+            # 全亮 - 隱藏覆蓋層
+            self.brightness_overlay.hide()
+            print("[亮度] 設定為 100%")
+        else:
+            # 計算透明度 (level 1 = 25% 黑, level 2 = 50% 黑)
+            opacity = level * 0.25  # 0.25 或 0.50
+            alpha = int(opacity * 255)
+            self.brightness_overlay.setStyleSheet(f"background: rgba(0, 0, 0, {alpha});")
+            self.brightness_overlay.show()
+            self.brightness_overlay.raise_()
+            print(f"[亮度] 設定為 {100 - level * 25}%")
+    
+    def cycle_brightness(self):
+        """循環切換亮度等級 100% -> 75% -> 50% -> 100%"""
+        next_level = (self.brightness_level + 1) % 3
+        self.set_brightness(next_level)
+        return next_level
+    
+    def get_brightness_level(self):
+        """取得當前亮度等級"""
+        return self.brightness_level
+    
+    def get_brightness_percent(self):
+        """取得當前亮度百分比"""
+        return 100 - self.brightness_level * 25
 
     def init_data(self):
         """初始化儀表數據，可以從外部數據源更新"""
@@ -6880,6 +7503,10 @@ class Dashboard(QWidget):
         # 更新音樂卡片和導航卡片的離線狀態
         self.music_card.set_offline(self.is_offline)
         self.nav_card.set_offline(self.is_offline)
+        
+        # 更新下拉面板的「更新」按鈕狀態
+        if self.control_panel:
+            self.control_panel.set_update_button_enabled(is_connected)
     
     def _check_mqtt_config(self):
         """檢查 MQTT 設定並自動連線"""
@@ -6982,6 +7609,10 @@ class Dashboard(QWidget):
         
         self.control_panel.show()
         self.control_panel.raise_()
+        
+        # 確保控制面板在亮度覆蓋層之上
+        if self.brightness_overlay:
+            self.control_panel.raise_()
     
     def hide_control_panel(self):
         """隱藏下拉控制面板"""
