@@ -15382,3 +15382,107 @@ cantools.database.errors.UnsupportedDatabaseFormatError: DBC: "The signals TRANS
 2025-11-28 16:19:56,178 - spotify_integration - INFO - 正在初始化 Spotify 連線...
 2025-11-28 16:20:16,848 - __main__ - INFO - 正在關閉系統...
 2025-11-28 16:20:16,849 - __main__ - ERROR - CAN Bus 錯誤: Could not read from serial device
+2025-12-01 16:06:16,435 - __main__ - INFO - ==================================================
+2025-12-01 16:06:16,436 - __main__ - INFO - Luxgen M7 儀表板系統啟動 (Safe Mode)
+2025-12-01 16:06:16,436 - __main__ - INFO - ==================================================
+2025-12-01 16:06:16,445 - __main__ - INFO - 偵測到 CANable 裝置: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-01 16:06:16,464 - __main__ - INFO - 已選擇裝置: /dev/ttyACM0
+2025-12-01 16:06:16,465 - __main__ - INFO - 正在初始化 CAN Bus...
+2025-12-01 16:06:18,476 - __main__ - INFO - CAN Bus 已連接: unknown
+2025-12-01 16:06:18,477 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-01 16:06:18,507 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:06:18,508 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:06:18,508 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:06:18,509 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:06:18,510 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-01 16:06:29,592 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-01 16:06:29,593 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-01 16:06:29,594 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-01 16:06:29,594 - __main__ - INFO - 儀表板運行中...
+2025-12-01 16:06:29,599 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-01 16:06:29,798 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-01 16:06:29,798 - spotify_integration - INFO - Spotify 認證成功
+2025-12-01 16:06:29,799 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-01 16:06:29,800 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-01 16:06:29,888 - spotify_listener - INFO - 歌曲變更: ジャストアモーメント！
+2025-12-01 16:06:29,888 - spotify_integration - INFO - 🎵 ジャストアモーメント！ - ノゾミ (CV: 日笠陽子), チカ (CV: 福原綾香), ツムギ (CV: 木戸衣吹) | Album: 'プリンセスコネクト！Re:Dive PRICONNE CHARACTER SONG 23'
+2025-12-01 16:08:45,265 - spotify_listener - INFO - 歌曲變更: Seize The Day!
+2025-12-01 16:08:45,265 - spotify_integration - INFO - 🎵 Seize The Day! - カヤ (CV: 小市眞琴), ホマレ (CV: 大西沙織), イノリ (CV: 藤田 茜) | Album: 'プリンセスコネクト！Re:Dive PRICONNE CHARACTER SONG 22'
+2025-12-01 16:12:53,430 - spotify_listener - INFO - 歌曲變更: 木もれびモンタージュ
+2025-12-01 16:12:53,431 - spotify_integration - INFO - 🎵 木もれびモンタージュ - カスミ (CV: 水瀬いのり), シオリ (CV: 小清水亜美) | Album: 'プリンセスコネクト！Re:Dive PRICONNE CHARACTER SONG 15'
+2025-12-01 16:14:33,895 - __main__ - INFO - ==================================================
+2025-12-01 16:14:33,896 - __main__ - INFO - Luxgen M7 儀表板系統啟動 (Safe Mode)
+2025-12-01 16:14:33,896 - __main__ - INFO - ==================================================
+2025-12-01 16:14:33,905 - __main__ - INFO - 偵測到 CANable 裝置: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-01 16:14:33,923 - __main__ - INFO - 已選擇裝置: /dev/ttyACM0
+2025-12-01 16:14:33,924 - __main__ - INFO - 正在初始化 CAN Bus...
+2025-12-01 16:14:35,930 - __main__ - INFO - CAN Bus 已連接: unknown
+2025-12-01 16:14:35,931 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-01 16:14:35,961 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:14:35,962 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:14:35,962 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:14:35,963 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:14:35,965 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-01 16:14:47,159 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-01 16:14:47,160 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-01 16:14:47,161 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-01 16:14:47,162 - __main__ - INFO - 儀表板運行中...
+2025-12-01 16:14:47,168 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-01 16:14:47,353 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-01 16:14:47,354 - spotify_integration - INFO - Spotify 認證成功
+2025-12-01 16:14:47,355 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-01 16:14:47,357 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-01 16:14:47,450 - spotify_listener - INFO - 歌曲變更: 木もれびモンタージュ
+2025-12-01 16:14:47,451 - spotify_integration - INFO - 🎵 木もれびモンタージュ - カスミ (CV: 水瀬いのり), シオリ (CV: 小清水亜美) | Album: 'プリンセスコネクト！Re:Dive PRICONNE CHARACTER SONG 15'
+2025-12-01 16:15:45,105 - __main__ - INFO - ==================================================
+2025-12-01 16:15:45,105 - __main__ - INFO - Luxgen M7 儀表板系統啟動 (Safe Mode)
+2025-12-01 16:15:45,106 - __main__ - INFO - ==================================================
+2025-12-01 16:15:45,115 - __main__ - INFO - 偵測到 CANable 裝置: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-01 16:15:45,133 - __main__ - INFO - 已選擇裝置: /dev/ttyACM0
+2025-12-01 16:15:45,133 - __main__ - INFO - 正在初始化 CAN Bus...
+2025-12-01 16:15:47,141 - __main__ - INFO - CAN Bus 已連接: unknown
+2025-12-01 16:15:47,142 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-01 16:15:47,189 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:15:47,190 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:15:47,190 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:15:47,191 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:15:47,192 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-01 16:15:58,331 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-01 16:15:58,332 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-01 16:15:58,332 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-01 16:15:58,332 - __main__ - INFO - 儀表板運行中...
+2025-12-01 16:15:58,338 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-01 16:15:58,548 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-01 16:15:58,549 - spotify_integration - INFO - Spotify 認證成功
+2025-12-01 16:15:58,550 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-01 16:15:58,552 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-01 16:15:58,676 - spotify_listener - INFO - 歌曲變更: 木もれびモンタージュ
+2025-12-01 16:15:58,677 - spotify_integration - INFO - 🎵 木もれびモンタージュ - カスミ (CV: 水瀬いのり), シオリ (CV: 小清水亜美) | Album: 'プリンセスコネクト！Re:Dive PRICONNE CHARACTER SONG 15'
+2025-12-01 16:17:09,231 - spotify_listener - INFO - 歌曲變更: ツバサのプロローグ
+2025-12-01 16:17:09,232 - spotify_integration - INFO - 🎵 ツバサのプロローグ - ジータ (CV: 金元寿子) | Album: 'プリンセスコネクト! Re:Dive PRICONNE CHARACTER SONG 34'
+2025-12-01 16:20:13,381 - __main__ - INFO - ==================================================
+2025-12-01 16:20:13,381 - __main__ - INFO - Luxgen M7 儀表板系統啟動 (Safe Mode)
+2025-12-01 16:20:13,597 - __main__ - INFO - ==================================================
+2025-12-01 16:20:13,607 - __main__ - INFO - 偵測到 CANable 裝置: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-01 16:20:13,626 - __main__ - INFO - 已選擇裝置: /dev/ttyACM0
+2025-12-01 16:20:13,627 - __main__ - INFO - 正在初始化 CAN Bus...
+2025-12-01 16:20:15,634 - __main__ - INFO - CAN Bus 已連接: unknown
+2025-12-01 16:20:15,634 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-01 16:20:15,661 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:20:15,662 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:20:15,662 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:20:15,663 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-01 16:20:15,664 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-01 16:20:26,720 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-01 16:20:26,720 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-01 16:20:26,721 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-01 16:20:26,722 - __main__ - INFO - 儀表板運行中...
+2025-12-01 16:20:26,726 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-01 16:20:26,899 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-01 16:20:26,899 - spotify_integration - INFO - Spotify 認證成功
+2025-12-01 16:20:26,901 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-01 16:20:26,901 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-01 16:20:26,982 - spotify_listener - INFO - 歌曲變更: ツバサのプロローグ
+2025-12-01 16:20:26,982 - spotify_integration - INFO - 🎵 ツバサのプロローグ - ジータ (CV: 金元寿子) | Album: 'プリンセスコネクト! Re:Dive PRICONNE CHARACTER SONG 34'
+2025-12-01 16:21:35,622 - spotify_listener - INFO - 歌曲變更: リトルアドベンチャー
+2025-12-01 16:21:35,624 - spotify_integration - INFO - 🎵 リトルアドベンチャー - ミミ (CV: 日高里菜), ミソギ (CV: 諸星すみれ), キョウカ (CV: 小倉 唯) | Album: 'プリンセスコネクト！Re:Dive PRICONNE CHARACTER SONG 05'

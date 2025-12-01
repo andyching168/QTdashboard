@@ -17,6 +17,11 @@ gc.set_threshold(50000, 500, 100)  # 預設 (700, 10, 10)，大幅提高閾值
 # 抑制 Qt 多媒體 FFmpeg 音訊格式解析警告
 os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=false')
 
+# === Raspberry Pi 硬體加速設定 ===
+# 強制 Qt 使用 GStreamer 後端（對 V4L2 硬體解碼支援較好）
+# 必須在 import PyQt6.QtMultimedia 之前設定
+os.environ.setdefault('QT_MEDIA_BACKEND', 'gstreamer')
+
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton, QDialog, QGraphicsView, QGraphicsScene, QGraphicsProxyWidget, QMainWindow
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot, QUrl, QObject
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QPixmap, QMouseEvent, QTransform
@@ -419,6 +424,7 @@ class SplashScreen(QWidget):
     def __init__(self, video_path="Splash_short.mp4"):
         super().__init__()
         self.video_path = video_path
+        self._finished_emitted = False  # 防止重複發送信號
         
         # 設置為全螢幕無邊框
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
@@ -445,6 +451,12 @@ class SplashScreen(QWidget):
         
         # 連接信號
         self.player.mediaStatusChanged.connect(self.on_media_status_changed)
+        self.player.errorOccurred.connect(self.on_error)
+        
+        # 超時保護：10 秒後強制結束（避免 GStreamer 卡住）
+        self.timeout_timer = QTimer()
+        self.timeout_timer.setSingleShot(True)
+        self.timeout_timer.timeout.connect(self.on_timeout)
         
         layout.addWidget(self.video_widget)
         
@@ -461,32 +473,55 @@ class SplashScreen(QWidget):
             self.player.setSource(video_url)
             print(f"播放啟動畫面: {self.video_path}")
             self.player.play()
+            # 啟動超時計時器
+            self.timeout_timer.start(10000)  # 10 秒超時
         else:
             print(f"找不到啟動影片: {self.video_path}")
             # 如果找不到影片，直接發出完成信號
-            QTimer.singleShot(100, self.finished.emit)
+            QTimer.singleShot(100, self._emit_finished)
+    
+    def _emit_finished(self):
+        """安全地發出完成信號（防止重複）"""
+        if not self._finished_emitted:
+            self._finished_emitted = True
+            self.timeout_timer.stop()
+            self.player.stop()
+            self.finished.emit()
     
     def on_media_status_changed(self, status):
         """媒體狀態變更處理"""
+        print(f"[Splash] 媒體狀態: {status}")
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
             print("啟動畫面播放完成")
-            self.finished.emit()
+            self._emit_finished()
         elif status == QMediaPlayer.MediaStatus.InvalidMedia:
             print("無效的媒體檔案")
-            self.finished.emit()
+            self._emit_finished()
+        elif status == QMediaPlayer.MediaStatus.NoMedia:
+            print("無媒體")
+            # 給一點時間讓媒體載入
+            pass
+    
+    def on_error(self, error, error_string):
+        """播放器錯誤處理"""
+        print(f"[Splash] 播放錯誤: {error} - {error_string}")
+        self._emit_finished()
+    
+    def on_timeout(self):
+        """超時處理"""
+        print("[Splash] 超時，強制結束啟動畫面")
+        self._emit_finished()
     
     def keyPressEvent(self, a0):  # type: ignore
         """按任意鍵跳過啟動畫面"""
         if a0 and a0.key() in (Qt.Key.Key_Escape, Qt.Key.Key_Space, Qt.Key.Key_Return):
             print("使用者跳過啟動畫面")
-            self.player.stop()
-            self.finished.emit()
+            self._emit_finished()
     
     def mousePressEvent(self, event): # pyright: ignore[reportIncompatibleMethodOverride]
         """點擊滑鼠跳過啟動畫面"""
         print("使用者跳過啟動畫面")
-        self.player.stop()
-        self.finished.emit()
+        self._emit_finished()
 
 
 class GaugeStyle:
@@ -936,15 +971,15 @@ class QuadGaugeCard(QWidget):
             }
         """)
         
-        # 儀表數據
+        # 儀表數據 (value=None 表示未連線，顯示 "--")
         self.gauge_data = [
-            {"title": "ENGINE", "unit": "RPM", "value": 0, "min": 0, "max": 8000, 
+            {"title": "ENGINE", "unit": "RPM", "value": None, "min": 0, "max": 8000, 
              "warning": 5500, "danger": 6500, "decimals": 0},
-            {"title": "COOLANT", "unit": "°C", "value": 0, "min": 0, "max": 120, 
+            {"title": "COOLANT", "unit": "°C", "value": None, "min": 0, "max": 120, 
              "warning": 95, "danger": 105, "decimals": 0},
-            {"title": "TURBO", "unit": "bar", "value": -0.7, "min": -1.0, "max": 1.0, 
+            {"title": "TURBO", "unit": "bar", "value": None, "min": -1.0, "max": 1.0, 
              "warning": 0.8, "danger": 0.95, "decimals": 2},
-            {"title": "BATTERY", "unit": "V", "value": 12.6, "min": 10, "max": 16, 
+            {"title": "BATTERY", "unit": "V", "value": None, "min": 10, "max": 16, 
              "warning": 11.5, "danger": 11.0, "decimals": 1, "warning_below": True},
         ]
         
@@ -1083,6 +1118,8 @@ class QuadGaugeCard(QWidget):
     
     def _format_value(self, value, decimals):
         """格式化數值顯示"""
+        if value is None:
+            return "--"
         if decimals == 0:
             return f"{int(value):,}"
         else:
@@ -1092,6 +1129,8 @@ class QuadGaugeCard(QWidget):
         """計算進度條百分比"""
         data = self.gauge_data[index]
         value = data["value"]
+        if value is None:
+            return 0  # 未連線時進度條為空
         min_val = data["min"]
         max_val = data["max"]
         progress = int((value - min_val) / (max_val - min_val) * 100)
@@ -1101,6 +1140,11 @@ class QuadGaugeCard(QWidget):
         """根據數值獲取顏色"""
         data = self.gauge_data[index]
         value = data["value"]
+        
+        # 未連線時顯示灰色
+        if value is None:
+            return "#666"
+        
         warning = data.get("warning")
         danger = data.get("danger")
         warning_below = data.get("warning_below", False)
@@ -1471,15 +1515,22 @@ class QuadGaugeDetailView(QWidget):
         data = self.current_data
         data["value"] = value
         
-        # 格式化顯示
-        decimals = data.get("decimals", 0)
-        if decimals == 0:
-            self.value_label.setText(f"{int(value):,}")
+        # 格式化顯示（處理 None 值）
+        if value is None:
+            self.value_label.setText("--")
+            color = "#666"
+            progress = 0
         else:
-            self.value_label.setText(f"{value:.{decimals}f}")
+            decimals = data.get("decimals", 0)
+            if decimals == 0:
+                self.value_label.setText(f"{int(value):,}")
+            else:
+                self.value_label.setText(f"{value:.{decimals}f}")
+            color = self._get_value_color()
+            progress = int((value - data["min"]) / (data["max"] - data["min"]) * 100)
+            progress = max(0, min(100, progress))
         
-        # 計算顏色
-        color = self._get_value_color()
+        # 設置顏色
         self.value_label.setStyleSheet(f"""
             color: {color};
             font-size: 96px;
@@ -1488,8 +1539,6 @@ class QuadGaugeDetailView(QWidget):
         """)
         
         # 更新進度條
-        progress = int((value - data["min"]) / (data["max"] - data["min"]) * 100)
-        progress = max(0, min(100, progress))
         self.progress_bar.setValue(progress)
         
         # 更新進度條顏色
@@ -1520,6 +1569,11 @@ class QuadGaugeDetailView(QWidget):
         
         data = self.current_data
         value = data["value"]
+        
+        # 未連線時顯示灰色
+        if value is None:
+            return "#666"
+        
         warning = data.get("warning")
         danger = data.get("danger")
         warning_below = data.get("warning_below", False)
@@ -5598,7 +5652,7 @@ class ControlPanel(QWidget):
             ("藍牙", "🔵", "#4285F4"),
             ("亮度", "☀", "#FF9800"),
             ("更新", "🔄", "#00BCD4"),
-            ("電源", "⏻", "#E91E63"),
+            ("電源", "🔌", "#E91E63"),
             ("設定", "⚙", "#9C27B0")
         ]
         
@@ -6285,7 +6339,7 @@ class ControlPanel(QWidget):
         layout.setSpacing(int(30 * scale))
         
         # 標題
-        title = QLabel("⏻ 電源選項")
+        title = QLabel("🔌 電源選項")
         title.setStyleSheet(f"font-size: {title_font_size}px; font-weight: bold; color: white;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
@@ -6331,7 +6385,7 @@ class ControlPanel(QWidget):
         button_layout.addWidget(btn_sys_reboot)
         
         # 關機按鈕
-        btn_shutdown = QPushButton("⏻\n關機")
+        btn_shutdown = QPushButton("🔌\n關機")
         btn_shutdown.setFixedSize(btn_width, btn_height)
         btn_shutdown.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_shutdown.setStyleSheet(f"""
@@ -6442,7 +6496,7 @@ class ControlPanel(QWidget):
                     # macOS 模擬
                     info_box = QMessageBox()
                     info_box.setWindowTitle("模擬關機")
-                    info_box.setText("⏻ 模擬關機中...\n\n（macOS 上僅顯示此訊息）")
+                    info_box.setText("🔌 模擬關機中...\n\n（macOS 上僅顯示此訊息）")
                     info_box.setIcon(QMessageBox.Icon.Information)
                     info_box.setWindowFlags(info_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
                     info_box.exec()
@@ -6474,30 +6528,26 @@ class ControlPanel(QWidget):
         import sys
         import os
         
-        # 啟動 auto_start.sh
-        auto_start_script = os.path.join(script_dir, 'auto_start.sh')
+        # 在 X11 環境中，直接重新啟動 Python 程式（不需要重啟整個 X Server）
+        # 這樣可以保持 X11 session 不中斷
+        python_exe = sys.executable
+        main_script = os.path.join(script_dir, 'main.py')
         
-        if os.path.exists(auto_start_script):
-            print(f"[更新] 正在啟動 {auto_start_script}...")
-            # 使用 nohup 在背景啟動新進程
+        if os.path.exists(main_script):
+            print(f"[更新] 正在重新啟動 {main_script}...")
+            # 使用當前的 Python 解釋器重新啟動 main.py
+            # 繼承當前的環境變數（包括 DISPLAY 等 X11 設定）
+            env = os.environ.copy()
             subprocess.Popen(
-                ['bash', auto_start_script],
+                [python_exe, main_script],
                 cwd=script_dir,
+                env=env,
                 start_new_session=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
         else:
-            print(f"[更新] 找不到 auto_start.sh，嘗試直接啟動 main.py...")
-            # 備用方案：直接啟動 main.py
-            python_exe = sys.executable
-            subprocess.Popen(
-                [python_exe, os.path.join(script_dir, 'main.py')],
-                cwd=script_dir,
-                start_new_session=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
+            print(f"[更新] 找不到 main.py: {main_script}")
         
         # 關閉當前應用
         from PyQt6.QtWidgets import QApplication
@@ -7210,13 +7260,13 @@ class Dashboard(QWidget):
         """初始化儀表數據，可以從外部數據源更新"""
         self.speed = 0
         self.rpm = 0
-        self.temp = 45  # 正常水溫約在 45-50% 位置（對應 85-95°C）
+        self.temp = None  # None = OBD 未回應，顯示 "--"
         self.fuel = 60  # 稍微偏上的油量
         self.gear = "P"  # 顯示用的檔位
         self.actual_gear = "P"  # 實際檔位（CAN 傳來的原始值）
         self.show_detailed_gear = False  # False=顯示D, True=顯示具體檔位(1-5)
-        self.turbo = -0.7  # 待速時的進氣歧管負壓 (bar)
-        self.battery = 12.6  # 電瓶電壓 (V)
+        self.turbo = None  # None = OBD 未回應，顯示 "--"
+        self.battery = None  # None = OBD 未回應，顯示 "--"
         
         # 定速巡航狀態
         self.cruise_switch = False   # 開關是否開啟（白色）
@@ -9051,7 +9101,11 @@ class Dashboard(QWidget):
         
         # temp 是百分比 (0-100)，轉換為大約的攝氏溫度
         # 假設 0% = 40°C, 100% = 120°C
-        temp_celsius = 40 + (self.temp / 100) * 80
+        # 如果 temp 為 None（OBD 未回應），則傳入 None
+        if self.temp is not None:
+            temp_celsius = 40 + (self.temp / 100) * 80
+        else:
+            temp_celsius = None
         self.quad_gauge_card.set_coolant_temp(temp_celsius)
         
         # 如果在詳細視圖中，同步更新

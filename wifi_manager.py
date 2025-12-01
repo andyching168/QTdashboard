@@ -175,15 +175,27 @@ class WiFiScanner(QThread):
     def run(self):
         """掃描可用的 WiFi 網路"""
         try:
-            # 使用 nmcli 掃描 WiFi
+            # 先執行重新掃描（需要 root 權限或 polkit 授權）
+            subprocess.run(
+                ['nmcli', 'dev', 'wifi', 'rescan'],
+                capture_output=True,
+                timeout=10
+            )
+            # 等待掃描完成
+            import time
+            time.sleep(2)
+            
+            # 使用 nmcli 列出 WiFi（--rescan yes 會自動重新掃描）
             result = subprocess.run(
-                ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'],
+                ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list', '--rescan', 'yes'],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=15
             )
             
             networks = []
+            seen_ssids = set()  # 用於去重
+            
             for line in result.stdout.strip().split('\n'):
                 if line:
                     parts = line.split(':')
@@ -192,7 +204,9 @@ class WiFiScanner(QThread):
                         signal = parts[1]
                         security = parts[2]
                         
-                        if ssid:  # 忽略隱藏的 SSID
+                        # 忽略隱藏的 SSID 和重複的 SSID
+                        if ssid and ssid not in seen_ssids:
+                            seen_ssids.add(ssid)
                             networks.append({
                                 'ssid': ssid,
                                 'signal': int(signal) if signal.isdigit() else 0,
