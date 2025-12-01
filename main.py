@@ -8024,6 +8024,8 @@ class Dashboard(QWidget):
         """Slot: 在主執行緒中更新方向燈狀態（從 CAN 訊號）
         Args:
             state: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off"
+        
+        RPI4 優化：收到 CAN 訊號時立即更新 UI，不等待 animation_timer
         """
         # 方向燈剛啟動時收起控制面板（狀態從 off 變成 on）
         # 注意：雙閃燈 (both_on) 不收起控制面板，因為通常是停車時使用
@@ -8039,22 +8041,36 @@ class Dashboard(QWidget):
         if state == "left_on":
             self.left_turn_on = True
             self.right_turn_on = False
+            # RPI4 優化：立即更新漸層位置和樣式
+            self.left_gradient_pos = 1.0
+            self.update_turn_signal_style()
         elif state == "left_off":
             self.left_turn_on = False
+            # 熄滅動畫由 animation_timer 處理
         elif state == "right_on":
             self.right_turn_on = True
             self.left_turn_on = False
+            # RPI4 優化：立即更新漸層位置和樣式
+            self.right_gradient_pos = 1.0
+            self.update_turn_signal_style()
         elif state == "right_off":
             self.right_turn_on = False
+            # 熄滅動畫由 animation_timer 處理
         elif state == "both_on":
             self.left_turn_on = True
             self.right_turn_on = True
+            # RPI4 優化：立即更新漸層位置和樣式
+            self.left_gradient_pos = 1.0
+            self.right_gradient_pos = 1.0
+            self.update_turn_signal_style()
         elif state == "both_off":
             self.left_turn_on = False
             self.right_turn_on = False
+            # 熄滅動畫由 animation_timer 處理
         elif state == "off":
             self.left_turn_on = False
             self.right_turn_on = False
+            # 熄滅動畫由 animation_timer 處理
 
     # === Spotify Slots ===
     @pyqtSlot(str, str, str)
