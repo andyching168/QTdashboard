@@ -37,6 +37,9 @@ from PyQt6.QtMultimediaWidgets import QVideoWidget
 # 啟動進度視窗
 from startup_progress import StartupProgressWindow
 
+# 關機監控
+from shutdown_monitor import get_shutdown_monitor, ShutdownMonitor
+
 # Spotify Imports
 from spotify_integration import setup_spotify
 from spotify_auth import SpotifyAuthManager
@@ -6646,6 +6649,9 @@ class Dashboard(QWidget):
         self.init_ui()
         self.init_data()
         
+        # 初始化關機監控器
+        self._init_shutdown_monitor()
+        
         # 創建亮度覆蓋層（必須在 init_ui 之後，確保在最上層）
         self._create_brightness_overlay()
     
@@ -7228,6 +7234,25 @@ class Dashboard(QWidget):
         main_layout.addStretch(1)  # 所有彈性空間都在左邊
         main_layout.addWidget(center_section)
         main_layout.addWidget(right_section)
+    
+    def _init_shutdown_monitor(self):
+        """初始化關機監控器"""
+        self._shutdown_monitor = get_shutdown_monitor()
+        
+        # 連接信號
+        self._shutdown_monitor.power_lost.connect(self._on_power_lost)
+        self._shutdown_monitor.power_restored.connect(self._on_power_restored)
+        
+        print("[ShutdownMonitor] 關機監控器已初始化")
+    
+    def _on_power_lost(self):
+        """電源中斷時顯示關機對話框"""
+        print("⚠️ 偵測到電源中斷，顯示關機對話框")
+        self._shutdown_monitor.show_shutdown_dialog(self)
+    
+    def _on_power_restored(self):
+        """電源恢復"""
+        print("✅ 電源已恢復")
     
     def _create_brightness_overlay(self):
         """創建亮度調節覆蓋層"""
@@ -9080,6 +9105,10 @@ class Dashboard(QWidget):
         # 如果在詳細視圖中且顯示的是 BATTERY，也更新
         if self._in_detail_view and self._detail_gauge_index == 3:
             self.quad_gauge_detail.set_value(voltage)
+        
+        # 關機監控：檢測電壓掉落
+        if hasattr(self, '_shutdown_monitor'):
+            self._shutdown_monitor.update_voltage(voltage)
     
     def update_cruise_display(self):
         """更新巡航顯示 - 三種狀態"""

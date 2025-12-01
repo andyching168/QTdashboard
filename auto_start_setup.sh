@@ -1,0 +1,135 @@
+#!/bin/bash
+# =============================================================================
+# Luxgen M7 儀表板 - 開機自動啟動設定腳本
+#
+# 使用方式：
+#   sudo bash /home/ac/QTdashboard/auto_start_setup.sh
+#
+# 功能：
+#   1. 設定 tty1 自動登入 (使用者: ac)
+#   2. 設定登入後自動啟動 X11 + 儀表板
+#   3. 禁用桌面環境 (如果有)
+# =============================================================================
+
+set -e
+
+SCRIPT_DIR="/home/ac/QTdashboard"
+USERNAME="ac"
+
+echo "=============================================="
+echo "  Luxgen M7 儀表板 - 開機自動啟動設定"
+echo "=============================================="
+echo ""
+
+# 檢查是否以 root 執行
+if [ "$EUID" -ne 0 ]; then
+    echo "❌ 請使用 sudo 執行此腳本"
+    echo "   sudo bash $0"
+    exit 1
+fi
+
+# --- 1. 設定 tty1 自動登入 ---
+echo "📝 設定 tty1 自動登入..."
+
+mkdir -p /etc/systemd/system/getty@tty1.service.d
+
+cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin $USERNAME --noclear %I \$TERM
+EOF
+
+echo "   ✅ 已設定自動登入使用者: $USERNAME"
+
+# --- 2. 設定登入後自動啟動 X11 ---
+echo "📝 設定登入後自動啟動儀表板..."
+
+# 建立 .bash_profile (登入 shell 會讀取)
+cat > /home/$USERNAME/.bash_profile << 'EOF'
+# ~/.bash_profile - 登入時執行
+
+# 載入 .bashrc
+if [ -f ~/.bashrc ]; then
+    . ~/.bashrc
+fi
+
+# 只在 tty1 且沒有 X 執行時啟動儀表板
+if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
+    echo "🚗 Luxgen M7 儀表板自動啟動中..."
+    sleep 2  # 等待系統穩定
+    exec startx /home/ac/QTdashboard/startx_dashboard.sh -- -nocursor 2>/dev/null
+fi
+EOF
+
+chown $USERNAME:$USERNAME /home/$USERNAME/.bash_profile
+chmod 644 /home/$USERNAME/.bash_profile
+
+echo "   ✅ 已設定 .bash_profile"
+
+# --- 3. 設定 .xinitrc (備用) ---
+echo "📝 設定 .xinitrc (備用)..."
+
+cat > /home/$USERNAME/.xinitrc << 'EOF'
+#!/bin/bash
+# ~/.xinitrc - startx 預設腳本 (備用)
+exec /home/ac/QTdashboard/startx_dashboard.sh
+EOF
+
+chown $USERNAME:$USERNAME /home/$USERNAME/.xinitrc
+chmod 755 /home/$USERNAME/.xinitrc
+
+echo "   ✅ 已設定 .xinitrc"
+
+# --- 4. 確保啟動腳本有執行權限 ---
+echo "📝 檢查腳本權限..."
+
+chmod +x $SCRIPT_DIR/startx_dashboard.sh
+chmod +x $SCRIPT_DIR/startup_progress.py 2>/dev/null || true
+
+echo "   ✅ 腳本權限已設定"
+
+# --- 5. 設定系統為 multi-user (CLI) 模式 ---
+echo "📝 設定系統為 CLI 模式..."
+
+# 使用 raspi-config 設定為 CLI 自動登入
+if command -v raspi-config >/dev/null 2>&1; then
+    # B1 = Console, B2 = Console Autologin, B3 = Desktop, B4 = Desktop Autologin
+    raspi-config nonint do_boot_behaviour B2 2>/dev/null || true
+    echo "   ✅ 已設定為 Console 自動登入模式"
+else
+    # 手動設定 default target
+    systemctl set-default multi-user.target
+    echo "   ✅ 已設定 multi-user.target"
+fi
+
+# --- 6. 禁用不需要的服務 (加快開機) ---
+echo "📝 優化開機速度..."
+
+# 禁用藍牙 (如果不需要)
+# systemctl disable bluetooth 2>/dev/null || true
+
+# 禁用 ModemManager (如果有)
+systemctl disable ModemManager 2>/dev/null || true
+
+echo "   ✅ 已優化"
+
+# --- 7. 重新載入 systemd ---
+echo "📝 重新載入 systemd..."
+systemctl daemon-reload
+
+echo ""
+echo "=============================================="
+echo "  ✅ 設定完成！"
+echo "=============================================="
+echo ""
+echo "重新啟動後，系統會自動："
+echo "  1. 登入使用者 '$USERNAME'"
+echo "  2. 啟動 X11"
+echo "  3. 執行儀表板程式"
+echo ""
+echo "請執行以下命令重新啟動："
+echo "  sudo reboot"
+echo ""
+echo "如需取消自動啟動，執行："
+echo "  sudo bash $SCRIPT_DIR/auto_start_disable.sh"
+echo ""
