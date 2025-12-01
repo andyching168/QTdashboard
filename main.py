@@ -5601,6 +5601,86 @@ class MQTTSettingsDialog(QWidget):
         event.accept()
 
 
+class TurnSignalBar(QWidget):
+    """方向燈漸層條 - 使用 QPainter 繪製，避免 CSS 效能問題
+    
+    這個 Widget 取代了原本使用 setStyleSheet 動態更新的 QWidget，
+    使用 QPainter 直接繪製漸層，大幅降低 CPU 負擔。
+    """
+    
+    def __init__(self, direction: str = "left", parent=None):
+        """
+        Args:
+            direction: "left" 或 "right"，決定漸層方向
+        """
+        super().__init__(parent)
+        self.direction = direction
+        self.gradient_pos = 0.0  # 0.0 (熄滅) 到 1.0 (全亮)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        
+        # 預先建立顏色，避免每次 paintEvent 都重新建立
+        self._color_bright = QColor(177, 255, 0)
+        self._color_mid = QColor(140, 255, 0)
+        self._color_dim = QColor(120, 255, 0)
+        self._color_dark = QColor(30, 30, 30)
+    
+    def set_gradient_pos(self, pos: float):
+        """設定漸層位置並觸發重繪
+        Args:
+            pos: 0.0 到 1.0
+        """
+        if self.gradient_pos != pos:
+            self.gradient_pos = max(0.0, min(1.0, pos))
+            self.update()  # 觸發 paintEvent
+    
+    def paintEvent(self, event):
+        """使用 QPainter 繪製漸層效果"""
+        if self.gradient_pos <= 0:
+            return  # 完全熄滅，不繪製任何東西
+        
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        w = self.width()
+        h = self.height()
+        pos = self.gradient_pos
+        
+        # 建立漸層
+        if self.direction == "left":
+            # 左轉燈：從左邊（亮）到右邊（暗）
+            gradient = QLinearGradient(0, 0, w, 0)
+        else:
+            # 右轉燈：從右邊（亮）到左邊（暗）
+            gradient = QLinearGradient(w, 0, 0, 0)
+        
+        if pos >= 1.0:
+            # 完全亮起：整條均勻亮色
+            self._color_bright.setAlphaF(0.7)
+            gradient.setColorAt(0, self._color_bright)
+            gradient.setColorAt(1, self._color_bright)
+        else:
+            # 熄滅中：從邊緣向中間漸暗
+            self._color_bright.setAlphaF(pos * 0.7)
+            self._color_mid.setAlphaF(pos * 0.5)
+            self._color_dim.setAlphaF(pos * 0.3)
+            self._color_dark.setAlphaF(0.1)
+            
+            gradient.setColorAt(0, self._color_bright)
+            gradient.setColorAt(0.3 * pos, self._color_bright)
+            gradient.setColorAt(0.5 * pos, self._color_mid)
+            gradient.setColorAt(0.7 * pos, self._color_dim)
+            gradient.setColorAt(min(0.85 * pos, 0.99), self._color_dim)
+            gradient.setColorAt(1, self._color_dark)
+        
+        # 繪製圓角矩形
+        painter.setBrush(QBrush(gradient))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(0, 0, w, h, 4, 4)
+        
+        painter.end()
+
+
 class ControlPanel(QWidget):
     """下拉控制面板（類似 Android 狀態列）"""
     
@@ -6676,8 +6756,8 @@ class Dashboard(QWidget):
         left_container.setFixedWidth(480)  # 1920 * 0.25 = 480 (1/4 螢幕寬)
         left_container.setStyleSheet("background: transparent;")
         
-        # 漸層條從最邊緣到整個 1/4 區域
-        self.left_gradient_bar = QWidget(left_container)
+        # 漸層條使用 QPainter 實作的 TurnSignalBar
+        self.left_gradient_bar = TurnSignalBar("left", left_container)
         self.left_gradient_bar.setGeometry(0, 5, 480, 40)  # 整個左側 1/4 區域
         
         # 左轉燈圖標（疊在條的最左邊上方）
@@ -6729,8 +6809,8 @@ class Dashboard(QWidget):
         right_container.setFixedWidth(480)  # 1920 * 0.25 = 480 (1/4 螢幕寬)
         right_container.setStyleSheet("background: transparent;")
         
-        # 漸層條從整個 1/4 區域到最邊緣
-        self.right_gradient_bar = QWidget(right_container)
+        # 漸層條使用 QPainter 實作的 TurnSignalBar
+        self.right_gradient_bar = TurnSignalBar("right", right_container)
         self.right_gradient_bar.setGeometry(0, 5, 480, 40)  # 整個右側 1/4 區域
         
         # 右轉燈圖標（疊在條的最右邊上方）
@@ -6821,8 +6901,8 @@ class Dashboard(QWidget):
             self.update_turn_signal_style()
     
     def update_turn_signal_style(self):
-        """更新方向燈的視覺樣式"""
-        # 方向燈圖標樣式
+        """更新方向燈的視覺樣式 - 使用 QPainter 實作，避免 CSS 效能瓶頸"""
+        # 方向燈圖標樣式（圖標仍使用 CSS，因為只在狀態改變時更新一次）
         indicator_inactive = """
             QLabel {
                 color: #2a2a2a;
@@ -6845,13 +6925,6 @@ class Dashboard(QWidget):
             }
         """
         
-        # 漸層條背景樣式（關閉時）
-        gradient_inactive = """
-            QWidget {
-                background: transparent;
-            }
-        """
-        
         # === 左轉燈 ===
         # 圖標的亮滅只看 left_turn_on，不受動畫影響
         if self.left_turn_on:
@@ -6859,37 +6932,8 @@ class Dashboard(QWidget):
         else:
             self.left_turn_indicator.setStyleSheet(indicator_inactive)
         
-        # 漸層條的動畫效果
-        pos = self.left_gradient_pos
-        
-        if pos > 0:
-            # pos=1.0 時：整條均勻亮橙色
-            # pos<1.0 時：從中間向外漸暗
-            if pos >= 1.0:
-                # 完全亮起：整條均勻的亮綠色
-                left_gradient_style = """
-                    QWidget {
-                        background: rgba(177, 255, 0, 0.7);
-                        border-radius: 4px;
-                    }
-                """
-            else:
-                # 熄滅中：從中間向外漸暗
-                left_gradient_style = f"""
-                    QWidget {{
-                        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                            stop:0 rgba(177, 255, 0, {pos * 0.7:.2f}),
-                            stop:{0.3 * pos:.2f} rgba(177, 255, 0, {pos * 0.7:.2f}),
-                            stop:{0.5 * pos:.2f} rgba(177, 255, 0, {pos * 0.5:.2f}),
-                            stop:{0.7 * pos:.2f} rgba(140, 255, 0, {pos * 0.3:.2f}),
-                            stop:{0.85 * pos:.2f} rgba(120, 255, 0, {pos * 0.15:.2f}),
-                            stop:1 rgba(30, 30, 30, 0.1));
-                        border-radius: 4px;
-                    }}
-                """
-            self.left_gradient_bar.setStyleSheet(left_gradient_style)
-        else:
-            self.left_gradient_bar.setStyleSheet(gradient_inactive)
+        # 漸層條使用 QPainter 繪製，直接設定 gradient_pos
+        self.left_gradient_bar.set_gradient_pos(self.left_gradient_pos)
         
         # === 右轉燈 ===
         # 圖標的亮滅只看 right_turn_on，不受動畫影響
@@ -6898,37 +6942,8 @@ class Dashboard(QWidget):
         else:
             self.right_turn_indicator.setStyleSheet(indicator_inactive)
         
-        # 漸層條的動畫效果
-        pos = self.right_gradient_pos
-        
-        if pos > 0:
-            # pos=1.0 時：整條均勻亮橙色
-            # pos<1.0 時：從中間向外漸暗
-            if pos >= 1.0:
-                # 完全亮起：整條均勻的亮綠色
-                right_gradient_style = """
-                    QWidget {
-                        background: rgba(177, 255, 0, 0.7);
-                        border-radius: 4px;
-                    }
-                """
-            else:
-                # 熄滅中：從中間向外漸暗
-                right_gradient_style = f"""
-                    QWidget {{
-                        background: qlineargradient(x1:1, y1:0, x2:0, y2:0,
-                            stop:0 rgba(177, 255, 0, {pos * 0.7:.2f}),
-                            stop:{0.3 * pos:.2f} rgba(177, 255, 0, {pos * 0.7:.2f}),
-                            stop:{0.5 * pos:.2f} rgba(177, 255, 0, {pos * 0.5:.2f}),
-                            stop:{0.7 * pos:.2f} rgba(140, 255, 0, {pos * 0.3:.2f}),
-                            stop:{0.85 * pos:.2f} rgba(120, 255, 0, {pos * 0.15:.2f}),
-                            stop:1 rgba(30, 30, 30, 0.1));
-                        border-radius: 4px;
-                    }}
-                """
-            self.right_gradient_bar.setStyleSheet(right_gradient_style)
-        else:
-            self.right_gradient_bar.setStyleSheet(gradient_inactive)
+        # 漸層條使用 QPainter 繪製，直接設定 gradient_pos
+        self.right_gradient_bar.set_gradient_pos(self.right_gradient_pos)
 
     def init_ui(self):
         # 主垂直佈局（包含狀態欄和儀表板）
