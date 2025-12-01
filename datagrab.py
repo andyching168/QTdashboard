@@ -132,6 +132,11 @@ def unified_receiver(bus, db, signals):
     """
     統一處理所有接收到的 CAN 訊息 (包含 DBC 解碼和 OBD 解析)
     關鍵修改：使用 signals.emit() 取代 dashboard.set_xxx()
+    
+    RPI4 優化：
+    - 減少 recv timeout 以降低延遲
+    - 狀態變化偵測：只在狀態真正改變時才 emit signal
+    - 減少不必要的 logger 呼叫
     """
     global data_store
     last_can_hz_calc = time.time()
@@ -147,12 +152,22 @@ def unified_receiver(bus, db, signals):
     last_gear_str = None
     last_gear_change_time = 0
     
+    # === RPI4 優化：狀態緩存，只在變化時 emit ===
+    last_turn_signal_state = None  # 方向燈狀態緩存
+    last_door_states = {  # 門狀態緩存
+        "FL": None, "FR": None, "RL": None, "RR": None, "BK": None
+    }
+    last_cruise_state = (None, None)  # 巡航狀態緩存
+    last_fuel_int = None  # 油量緩存（整數化，避免浮點微小變化觸發更新）
+    last_speed_int = None  # 速度緩存
+    
     logger.info("CAN 訊息接收執行緒已啟動")
     
     while not stop_threads:
         try:
-            # 使用 recv() 加上 timeout，而不是 iterator，這樣可以安全退出
-            msg = bus.recv(timeout=0.1) 
+            # RPI4 優化：減少 timeout 從 0.1 到 0.01，降低延遲
+            # 在 SLCAN 上，較短的 timeout 能更快響應新訊息
+            msg = bus.recv(timeout=0.01) 
             
             if msg is None: 
                 continue # 超時沒數據，繼續下一圈
@@ -312,10 +327,12 @@ def unified_receiver(bus, db, signals):
                         fuel = float(fuel_value)
 
                     data_store["CAN"]["fuel"] = fuel
-                    logger.debug(f"油量: {fuel}%")
                     
-                    # 更新前端油量顯示 (0-100%)
-                    signals.update_fuel.emit(fuel)  # ✅ 安全發送
+                    # RPI4 優化：只在油量變化超過 1% 時才更新 UI
+                    fuel_int = int(fuel)
+                    if last_fuel_int is None or abs(fuel_int - last_fuel_int) >= 1:
+                        signals.update_fuel.emit(fuel)
+                        last_fuel_int = fuel_int
                     
                     # === 巡航狀態 ===
                     # CRUSE_ONOFF: bit 2 (開關)
@@ -334,9 +351,11 @@ def unified_receiver(bus, db, signals):
                     else:
                         cruise_enabled = bool(int(cruise_enabled_value))
                     
-                    # 發送巡航狀態到前端
-                    signals.update_cruise.emit(cruise_switch, cruise_enabled)
-                    logger.debug(f"巡航: 開關={cruise_switch} 作動={cruise_enabled}")
+                    # RPI4 優化：只在巡航狀態真正改變時才 emit signal
+                    cruise_state = (cruise_switch, cruise_enabled)
+                    if cruise_state != last_cruise_state:
+                        signals.update_cruise.emit(cruise_switch, cruise_enabled)
+                        last_cruise_state = cruise_state
                             
                 except cantools.database.errors.DecodeError as e:
                     logger.error(f"DBC 解碼錯誤 (THROTTLE_STATUS): {e}")
@@ -355,15 +374,12 @@ def unified_receiver(bus, db, signals):
                         speed = float(speed_value)
 
                     data_store["CAN"]["speed"] = speed
-                    logger.debug(f"速度: {speed} km/h")
                     
-                    # 更新前端速度顯示
-                    signals.update_speed.emit(speed)  # ✅ 安全發送
-
-                    # --- 隱藏版 RPM 解析 (針對 R/D 檔) ---
-                    # [已移除] ID 0x38A 證實為輪速訊號，轉彎時會失準，故移除此邏輯。
-                    # 改為優化 OBD 查詢頻率與多來源接收。
-                    # --------------------------------------
+                    # RPI4 優化：只在速度變化超過 1 km/h 時才更新 UI
+                    speed_int = int(speed)
+                    if last_speed_int is None or abs(speed_int - last_speed_int) >= 1:
+                        signals.update_speed.emit(speed)
+                        last_speed_int = speed_int
                             
                 except cantools.database.errors.DecodeError as e:
                     logger.error(f"DBC 解碼錯誤 (SPEED_FL): {e}")
@@ -390,18 +406,20 @@ def unified_receiver(bus, db, signals):
                     else:
                         right_signal = int(right_signal)
                     
-                    # 判斷方向燈狀態並發送
-                    # 根據 DBC 註解：R,L shows at same time means hazard (雙閃)
+                    # 判斷方向燈狀態
                     if left_signal == 1 and right_signal == 1:
-                        signals.update_turn_signal.emit("both_on")
+                        turn_state = "both_on"
                     elif left_signal == 1 and right_signal == 0:
-                        signals.update_turn_signal.emit("left_on")
+                        turn_state = "left_on"
                     elif left_signal == 0 and right_signal == 1:
-                        signals.update_turn_signal.emit("right_on")
+                        turn_state = "right_on"
                     else:
-                        signals.update_turn_signal.emit("off")
+                        turn_state = "off"
                     
-                    logger.debug(f"方向燈: L={left_signal} R={right_signal}")
+                    # RPI4 優化：只在狀態真正改變時才 emit signal
+                    if turn_state != last_turn_signal_state:
+                        signals.update_turn_signal.emit(turn_state)
+                        last_turn_signal_state = turn_state
                     
                     # === 門狀態 ===
                     # 根據 DBC: 0=關閉, 1=打開
@@ -437,14 +455,28 @@ def unified_receiver(bus, db, signals):
                     else:
                         door_bk = int(door_bk)
                     
-                    # 發送門狀態到前端 (0=關閉, 1=打開，需要轉換為 is_closed)
-                    signals.update_door_status.emit("FL", door_fl == 0)
-                    signals.update_door_status.emit("FR", door_fr == 0)
-                    signals.update_door_status.emit("RL", door_rl == 0)
-                    signals.update_door_status.emit("RR", door_rr == 0)
-                    signals.update_door_status.emit("BK", door_bk == 0)
+                    # RPI4 優化：只在門狀態真正改變時才 emit signal
+                    door_fl_closed = (door_fl == 0)
+                    door_fr_closed = (door_fr == 0)
+                    door_rl_closed = (door_rl == 0)
+                    door_rr_closed = (door_rr == 0)
+                    door_bk_closed = (door_bk == 0)
                     
-                    logger.debug(f"門狀態: FL={door_fl} FR={door_fr} RL={door_rl} RR={door_rr} BK={door_bk}")
+                    if last_door_states["FL"] != door_fl_closed:
+                        signals.update_door_status.emit("FL", door_fl_closed)
+                        last_door_states["FL"] = door_fl_closed
+                    if last_door_states["FR"] != door_fr_closed:
+                        signals.update_door_status.emit("FR", door_fr_closed)
+                        last_door_states["FR"] = door_fr_closed
+                    if last_door_states["RL"] != door_rl_closed:
+                        signals.update_door_status.emit("RL", door_rl_closed)
+                        last_door_states["RL"] = door_rl_closed
+                    if last_door_states["RR"] != door_rr_closed:
+                        signals.update_door_status.emit("RR", door_rr_closed)
+                        last_door_states["RR"] = door_rr_closed
+                    if last_door_states["BK"] != door_bk_closed:
+                        signals.update_door_status.emit("BK", door_bk_closed)
+                        last_door_states["BK"] = door_bk_closed
                     
                 except cantools.database.errors.DecodeError as e:
                     logger.error(f"DBC 解碼錯誤 (BODY_ECU_STATUS): {e}")
@@ -563,11 +595,13 @@ def main():
 
         try:
             logger.info("正在初始化 CAN Bus...")
+            # RPI4 優化：使用更小的 timeout 和設定 receive_own_messages=False
             bus = can.interface.Bus(
                 interface='slcan', 
                 channel=port, 
                 bitrate=500000,
-                timeout=0.1
+                timeout=0.01,  # 從 0.1 降低到 0.01，減少延遲
+                receive_own_messages=False  # 不接收自己發送的訊息，減少處理負擔
             )
             logger.info(f"CAN Bus 已連接: {bus}")
             
