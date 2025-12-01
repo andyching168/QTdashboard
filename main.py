@@ -22,11 +22,20 @@ os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=fa
 # 必須在 import PyQt6.QtMultimedia 之前設定
 os.environ.setdefault('QT_MEDIA_BACKEND', 'gstreamer')
 
+# === 垂直同步 (VSync) 設定 ===
+# 啟用 OpenGL VSync，避免影片播放時畫面撕裂
+os.environ.setdefault('QSG_RENDER_LOOP', 'basic')  # 使用基本渲染迴圈，更穩定
+os.environ.setdefault('QT_QPA_EGLFS_FORCE_VSYNC', '1')  # EGLFS 強制 VSync
+os.environ.setdefault('MESA_GL_VERSION_OVERRIDE', '3.3')  # Mesa OpenGL 版本
+
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton, QDialog, QGraphicsView, QGraphicsScene, QGraphicsProxyWidget, QMainWindow
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot, QUrl, QObject
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QPixmap, QMouseEvent, QTransform
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
+
+# 啟動進度視窗
+from startup_progress import StartupProgressWindow
 
 # Spotify Imports
 from spotify_integration import setup_spotify
@@ -417,7 +426,10 @@ def is_production_environment():
 
 
 class SplashScreen(QWidget):
-    """啟動畫面：全螢幕播放短版影片（約 8 秒）"""
+    """啟動畫面：全螢幕播放短版影片（約 8 秒）
+    
+    針對 480x1920 直式螢幕旋轉 90 度使用 (1920x480) 最佳化
+    """
     
     finished = pyqtSignal()  # 播放完成信號
     
@@ -430,6 +442,9 @@ class SplashScreen(QWidget):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         
+        # 啟用雙緩衝以減少畫面撕裂
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        
         # 設置黑色背景
         self.setStyleSheet("background-color: black;")
         
@@ -439,7 +454,8 @@ class SplashScreen(QWidget):
         
         # 建立影片播放器
         self.video_widget = QVideoWidget()
-        self.video_widget.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatioByExpanding)
+        # 使用 KeepAspectRatio 而不是 Expanding，確保影片不會變形
+        self.video_widget.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
         
         self.player = QMediaPlayer()
         self.player.setVideoOutput(self.video_widget)
@@ -9293,17 +9309,19 @@ class ScalableWindow(QMainWindow):
 def run_dashboard(
     on_dashboard_ready=None,
     window_title=None,
-    setup_data_source=None
+    setup_data_source=None,
+    startup_info=None
 ):
     """
     統一的儀表板啟動函數 - 所有入口點都應使用此函數
     
     這個函數處理：
     1. QApplication 初始化
-    2. Dashboard 建立
-    3. SplashScreen 播放（如果有）
-    4. 正確的啟動順序（splash 結束後才啟動 dashboard 邏輯）
-    5. 資料來源設定
+    2. 啟動進度視窗顯示（如果提供 startup_info）
+    3. Dashboard 建立
+    4. SplashScreen 播放（如果有）
+    5. 正確的啟動順序（splash 結束後才啟動 dashboard 邏輯）
+    6. 資料來源設定
     
     Args:
         on_dashboard_ready: 可選的回調函數，在 dashboard 完全準備好後呼叫
@@ -9313,6 +9331,8 @@ def run_dashboard(
         setup_data_source: 可選的資料來源設定函數
                           簽名: setup_func(dashboard) -> cleanup_func 或 None
                           這個會在 splash 結束後、start_dashboard 之前呼叫
+        startup_info: 可選的啟動資訊列表，用於顯示進度視窗
+                     格式: [(step_name, detail_text), ...]
     
     Returns:
         不返回（進入 Qt 事件循環）
@@ -9332,6 +9352,14 @@ def run_dashboard(
             window_title="Demo Mode",
             setup_data_source=setup_demo
         )
+        
+        # 帶啟動進度視窗
+        startup_steps = [
+            ("📺 設定螢幕顯示", "旋轉螢幕 90°"),
+            ("👆 校正觸控面板", "USB2IIC_CTP_CONTROL"),
+            ("🔊 初始化音訊服務", "PipeWire"),
+        ]
+        run_dashboard(startup_info=startup_steps)
     """
     app = QApplication(sys.argv)
     
@@ -9345,6 +9373,35 @@ def run_dashboard(
     if is_production:
         app.setOverrideCursor(Qt.CursorShape.BlankCursor)
         print("已隱藏滑鼠游標")
+    
+    # === 啟動進度視窗 ===
+    progress_window = None
+    if startup_info and len(startup_info) > 0:
+        progress_window = StartupProgressWindow()
+        progress_window.set_steps(startup_info)
+        
+        if is_production:
+            progress_window.showFullScreen()
+        else:
+            progress_window.resize(800, 200)
+            progress_window.show()
+        
+        # 顯示第一步
+        progress_window.show_step(0)
+        QApplication.processEvents()
+        
+        # 模擬步驟執行（每步 0.3 秒）
+        for i in range(len(startup_info)):
+            progress_window.show_step(i)
+            QApplication.processEvents()
+            time.sleep(0.3)
+        
+        # 完成並關閉進度視窗
+        progress_window.complete()
+        QApplication.processEvents()
+        time.sleep(0.5)
+        progress_window.close()
+        progress_window = None
     
     # 建立主儀表板
     dashboard = Dashboard()

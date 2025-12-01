@@ -638,6 +638,7 @@ def main():
         
         # 3. 使用統一啟動流程
         console.print("[green]啟動儀表板前端...[/green]")
+        
         run_dashboard(
             window_title="Luxgen M7 儀表板 - CAN Bus",
             setup_data_source=setup_can_data_source
