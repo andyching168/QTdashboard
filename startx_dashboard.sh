@@ -4,6 +4,7 @@
 # 
 # 使用方式:
 #   startx /home/ac/QTdashboard/startx_dashboard.sh
+#   startx /home/ac/QTdashboard/startx_dashboard.sh --perf  # 啟用效能監控
 #
 # 功能:
 #   1. 螢幕旋轉 (HDMI-1 向右旋轉 90 度)
@@ -19,6 +20,19 @@
 
 SCRIPT_DIR="/home/ac/QTdashboard"
 cd "$SCRIPT_DIR"
+
+# === 效能監控模式 ===
+# 檢查是否有 --perf 參數
+PERF_MODE=""
+for arg in "$@"; do
+    case "$arg" in
+        --perf|--performance)
+            PERF_MODE="1"
+            export PERF_MONITOR=1
+            echo "📊 效能監控模式已啟用"
+            ;;
+    esac
+done
 
 # === 垂直同步 (VSync) 設定 ===
 # 針對 480x1920 直式螢幕旋轉 90 度使用 (1920x480)
@@ -66,7 +80,18 @@ update_progress "🔋 設定電源管理" "已禁用螢幕保護" 30
 
 # --- 4. 視窗管理器 ---
 openbox &
-update_progress "🪟 啟動視窗管理器" "openbox" 40
+update_progress "🪟 啟動視窗管理器" "openbox" 35
+
+# --- 4.5 合成器 (VSync 與畫面撕裂防護) ---
+# 暫時禁用 picom，因為可能與 GStreamer 視訊播放衝突
+# 等影片播放問題解決後再啟用
+# if command -v picom >/dev/null 2>&1; then
+#     picom -b --backend xrender --vsync 2>/dev/null || true
+#     update_progress "🖼️ 啟動合成器" "picom" 40
+# else
+#     update_progress "🖼️ 合成器" "未安裝 picom" 40
+# fi
+update_progress "🖼️ 合成器" "已跳過" 40
 
 # --- 5. 音訊服務 ---
 # PipeWire 由 systemd --user 自動管理，不需要手動啟動

@@ -43,6 +43,8 @@ class WorkerSignals(QObject):
     update_fuel = pyqtSignal(float)  # 發送油量百分比 (float)
     update_gear = pyqtSignal(str)    # 發送檔位 (str)
     update_turn_signal = pyqtSignal(str)  # 發送方向燈狀態 (str: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off")
+    # 新增：撥桿狀態訊號 (用於 UI 自己產生穩定閃爍)
+    update_turn_signal_switch = pyqtSignal(str)  # "left", "right", "both", "off" - 撥桿狀態
     update_door_status = pyqtSignal(str, bool)  # 發送門狀態 (door: str, is_closed: bool)
     update_cruise = pyqtSignal(bool, bool)  # 發送巡航狀態 (cruise_switch: bool, cruise_engaged: bool)
     update_turbo = pyqtSignal(float)  # 發送渦輪增壓 (bar)
@@ -153,7 +155,10 @@ def unified_receiver(bus, db, signals):
     last_gear_change_time = 0
     
     # === RPI4 優化：狀態緩存，只在變化時 emit ===
-    last_turn_signal_state = None  # 方向燈狀態緩存
+    last_left_signal = None   # 左方向燈原始狀態 (0 或 1)
+    last_right_signal = None  # 右方向燈原始狀態 (0 或 1)
+    last_left_switch = None   # 左撥桿狀態 (0 或 1)
+    last_right_switch = None  # 右撥桿狀態 (0 或 1)
     last_door_states = {  # 門狀態緩存
         "FL": None, "FR": None, "RL": None, "RR": None, "BK": None
     }
@@ -386,7 +391,47 @@ def unified_receiver(bus, db, signals):
                 except Exception as e:
                     logger.error(f"處理速度訊息錯誤: {e}")
 
-            # 5. 處理方向燈和門狀態 BODY_ECU_STATUS (ID 0x420 / 1056)
+            # 5. 處理方向燈撥桿狀態 CONSOLE_STATUS (ID 0x410 / 1040)
+            # 撥桿狀態用於決定「應該閃爍」，UI 會自己產生穩定的閃爍動畫
+            elif msg.arbitration_id == 0x410:
+                try:
+                    decoded = db.decode_message(msg.arbitration_id, msg.data)
+                    
+                    left_switch = decoded.get('LEFT_SIGNAL_SWITCH', 0)
+                    right_switch = decoded.get('RIGHT_SIGNAL_SWITCH', 0)
+                    
+                    # 轉換為 int
+                    if hasattr(left_switch, 'value'):
+                        left_switch = int(left_switch.value)
+                    else:
+                        left_switch = int(left_switch)
+                    
+                    if hasattr(right_switch, 'value'):
+                        right_switch = int(right_switch.value)
+                    else:
+                        right_switch = int(right_switch)
+                    
+                    # 只在撥桿狀態變化時 emit
+                    if left_switch != last_left_switch or right_switch != last_right_switch:
+                        last_left_switch = left_switch
+                        last_right_switch = right_switch
+                        
+                        # 決定撥桿狀態
+                        if left_switch == 1 and right_switch == 1:
+                            signals.update_turn_signal_switch.emit("both")
+                        elif left_switch == 1:
+                            signals.update_turn_signal_switch.emit("left")
+                        elif right_switch == 1:
+                            signals.update_turn_signal_switch.emit("right")
+                        else:
+                            signals.update_turn_signal_switch.emit("off")
+                            
+                except cantools.database.errors.DecodeError as e:
+                    logger.error(f"DBC 解碼錯誤 (CONSOLE_STATUS): {e}")
+                except Exception as e:
+                    logger.error(f"處理撥桿訊息錯誤: {e}")
+
+            # 6. 處理方向燈和門狀態 BODY_ECU_STATUS (ID 0x420 / 1056)
             elif msg.arbitration_id == 0x420:
                 try:
                     decoded = db.decode_message(msg.arbitration_id, msg.data)
@@ -406,20 +451,48 @@ def unified_receiver(bus, db, signals):
                     else:
                         right_signal = int(right_signal)
                     
-                    # 判斷方向燈狀態
-                    if left_signal == 1 and right_signal == 1:
-                        turn_state = "both_on"
-                    elif left_signal == 1 and right_signal == 0:
-                        turn_state = "left_on"
-                    elif left_signal == 0 and right_signal == 1:
-                        turn_state = "right_on"
-                    else:
-                        turn_state = "off"
+                    # === 方向燈邏輯修正：追蹤每個燈的獨立狀態變化 ===
+                    # 這樣可以正確處理閃爍 (1->0->1->0)
+                    left_changed = (left_signal != last_left_signal)
+                    right_changed = (right_signal != last_right_signal)
                     
-                    # RPI4 優化：只在狀態真正改變時才 emit signal
-                    if turn_state != last_turn_signal_state:
-                        signals.update_turn_signal.emit(turn_state)
-                        last_turn_signal_state = turn_state
+                    if left_changed or right_changed:
+                        # === 偵測雙閃燈（hazard）===
+                        # 當兩燈都亮，但撥桿都沒撥動時，就是雙閃燈
+                        if left_signal == 1 and right_signal == 1:
+                            if last_left_switch == 0 and last_right_switch == 0:
+                                # 雙閃燈開啟！發送 "both" 給 UI 產生穩定閃爍
+                                signals.update_turn_signal_switch.emit("both")
+                            signals.update_turn_signal.emit("both_on")
+                        elif left_signal == 0 and right_signal == 0:
+                            # 兩燈都熄滅
+                            if last_left_signal == 1 and last_right_signal == 1:
+                                # 之前是雙閃燈 - 如果撥桿都沒撥，關閉雙閃
+                                if last_left_switch == 0 and last_right_switch == 0:
+                                    signals.update_turn_signal_switch.emit("off")
+                                signals.update_turn_signal.emit("both_off")
+                            elif last_left_signal == 1:
+                                # 之前是左轉燈
+                                signals.update_turn_signal.emit("left_off")
+                            elif last_right_signal == 1:
+                                # 之前是右轉燈
+                                signals.update_turn_signal.emit("right_off")
+                        elif left_signal == 1 and right_signal == 0:
+                            # 只有左燈亮
+                            if left_changed:
+                                signals.update_turn_signal.emit("left_on")
+                            if right_changed and last_right_signal == 1:
+                                signals.update_turn_signal.emit("right_off")
+                        elif left_signal == 0 and right_signal == 1:
+                            # 只有右燈亮
+                            if right_changed:
+                                signals.update_turn_signal.emit("right_on")
+                            if left_changed and last_left_signal == 1:
+                                signals.update_turn_signal.emit("left_off")
+                        
+                        # 更新狀態緩存
+                        last_left_signal = left_signal
+                        last_right_signal = right_signal
                     
                     # === 門狀態 ===
                     # 根據 DBC: 0=關閉, 1=打開
@@ -631,6 +704,7 @@ def main():
             signals.update_fuel.connect(dashboard.set_fuel)
             signals.update_gear.connect(dashboard.set_gear)
             signals.update_turn_signal.connect(dashboard.set_turn_signal)
+            signals.update_turn_signal_switch.connect(dashboard.set_turn_signal_switch)  # 撥桿狀態
             signals.update_door_status.connect(dashboard.set_door_status)
             signals.update_cruise.connect(dashboard.set_cruise)
             signals.update_turbo.connect(dashboard.set_turbo)

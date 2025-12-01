@@ -15395,242 +15395,753 @@ cantools.database.errors.UnsupportedDatabaseFormatError: DBC: "The signals TRANS
 2025-12-01 16:06:18,508 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
 2025-12-01 16:06:18,509 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
 2025-12-01 16:06:18,510 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
-2025-12-01 16:06:29,592 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
-2025-12-01 16:06:29,593 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:06:29,594 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:06:29,594 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
-2025-12-01 16:06:29,599 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
-2025-12-01 16:06:29,798 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
-2025-12-01 16:06:29,798 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
-2025-12-01 16:06:29,799 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
-2025-12-01 16:06:29,800 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
-2025-12-01 16:06:29,888 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ã‚¸ãƒ£ã‚¹ãƒˆã‚¢ãƒ¢ãƒ¼ãƒ¡ãƒ³ãƒˆï¼
-2025-12-01 16:06:29,888 - spotify_integration - INFO - ğŸµ ã‚¸ãƒ£ã‚¹ãƒˆã‚¢ãƒ¢ãƒ¼ãƒ¡ãƒ³ãƒˆï¼ - ãƒã‚¾ãƒŸ (CV: æ—¥ç¬ é™½å­), ãƒã‚« (CV: ç¦åŸç¶¾é¦™), ãƒ„ãƒ ã‚® (CV: æœ¨æˆ¸è¡£å¹) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 23'
-2025-12-01 16:08:45,265 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Seize The Day!
-2025-12-01 16:08:45,265 - spotify_integration - INFO - ğŸµ Seize The Day! - ã‚«ãƒ¤ (CV: å°å¸‚çœç´), ãƒ›ãƒãƒ¬ (CV: å¤§è¥¿æ²™ç¹”), ã‚¤ãƒãƒª (CV: è—¤ç”° èŒœ) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 22'
-2025-12-01 16:12:53,430 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: æœ¨ã‚‚ã‚Œã³ãƒ¢ãƒ³ã‚¿ãƒ¼ã‚¸ãƒ¥
-2025-12-01 16:12:53,431 - spotify_integration - INFO - ğŸµ æœ¨ã‚‚ã‚Œã³ãƒ¢ãƒ³ã‚¿ãƒ¼ã‚¸ãƒ¥ - ã‚«ã‚¹ãƒŸ (CV: æ°´ç€¬ã„ã®ã‚Š), ã‚·ã‚ªãƒª (CV: å°æ¸…æ°´äºœç¾) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 15'
-2025-12-01 16:14:33,895 - __main__ - INFO - ==================================================
-2025-12-01 16:14:33,896 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
-2025-12-01 16:14:33,896 - __main__ - INFO - ==================================================
-2025-12-01 16:14:33,905 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
-2025-12-01 16:14:33,923 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
-2025-12-01 16:14:33,924 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
-2025-12-01 16:14:35,930 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
-2025-12-01 16:14:35,931 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
-2025-12-01 16:14:35,961 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:14:35,962 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:14:35,962 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:14:35,963 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:14:35,965 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
-2025-12-01 16:14:47,159 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
-2025-12-01 16:14:47,160 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:14:47,161 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:14:47,162 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
-2025-12-01 16:14:47,168 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
-2025-12-01 16:14:47,353 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
-2025-12-01 16:14:47,354 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
-2025-12-01 16:14:47,355 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
-2025-12-01 16:14:47,357 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
-2025-12-01 16:14:47,450 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: æœ¨ã‚‚ã‚Œã³ãƒ¢ãƒ³ã‚¿ãƒ¼ã‚¸ãƒ¥
-2025-12-01 16:14:47,451 - spotify_integration - INFO - ğŸµ æœ¨ã‚‚ã‚Œã³ãƒ¢ãƒ³ã‚¿ãƒ¼ã‚¸ãƒ¥ - ã‚«ã‚¹ãƒŸ (CV: æ°´ç€¬ã„ã®ã‚Š), ã‚·ã‚ªãƒª (CV: å°æ¸…æ°´äºœç¾) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 15'
-2025-12-01 16:15:45,105 - __main__ - INFO - ==================================================
-2025-12-01 16:15:45,105 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
-2025-12-01 16:15:45,106 - __main__ - INFO - ==================================================
-2025-12-01 16:15:45,115 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
-2025-12-01 16:15:45,133 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
-2025-12-01 16:15:45,133 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
-2025-12-01 16:15:47,141 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
-2025-12-01 16:15:47,142 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
-2025-12-01 16:15:47,189 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:15:47,190 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:15:47,190 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:15:47,191 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:15:47,192 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
-2025-12-01 16:15:58,331 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
-2025-12-01 16:15:58,332 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:15:58,332 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:15:58,332 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
-2025-12-01 16:15:58,338 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
-2025-12-01 16:15:58,548 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
-2025-12-01 16:15:58,549 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
-2025-12-01 16:15:58,550 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
-2025-12-01 16:15:58,552 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
-2025-12-01 16:15:58,676 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: æœ¨ã‚‚ã‚Œã³ãƒ¢ãƒ³ã‚¿ãƒ¼ã‚¸ãƒ¥
-2025-12-01 16:15:58,677 - spotify_integration - INFO - ğŸµ æœ¨ã‚‚ã‚Œã³ãƒ¢ãƒ³ã‚¿ãƒ¼ã‚¸ãƒ¥ - ã‚«ã‚¹ãƒŸ (CV: æ°´ç€¬ã„ã®ã‚Š), ã‚·ã‚ªãƒª (CV: å°æ¸…æ°´äºœç¾) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 15'
-2025-12-01 16:17:09,231 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ãƒ„ãƒã‚µã®ãƒ—ãƒ­ãƒ­ãƒ¼ã‚°
-2025-12-01 16:17:09,232 - spotify_integration - INFO - ğŸµ ãƒ„ãƒã‚µã®ãƒ—ãƒ­ãƒ­ãƒ¼ã‚° - ã‚¸ãƒ¼ã‚¿ (CV: é‡‘å…ƒå¯¿å­) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆ! Re:Dive PRICONNE CHARACTER SONG 34'
-2025-12-01 16:20:13,381 - __main__ - INFO - ==================================================
-2025-12-01 16:20:13,381 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
-2025-12-01 16:20:13,597 - __main__ - INFO - ==================================================
-2025-12-01 16:20:13,607 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
-2025-12-01 16:20:13,626 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
-2025-12-01 16:20:13,627 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
-2025-12-01 16:20:15,634 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
-2025-12-01 16:20:15,634 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
-2025-12-01 16:20:15,661 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:20:15,662 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:20:15,662 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:20:15,663 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:20:15,664 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
-2025-12-01 16:20:26,720 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
-2025-12-01 16:20:26,720 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:20:26,721 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:20:26,722 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
-2025-12-01 16:20:26,726 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
-2025-12-01 16:20:26,899 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
-2025-12-01 16:20:26,899 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
-2025-12-01 16:20:26,901 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
-2025-12-01 16:20:26,901 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
-2025-12-01 16:20:26,982 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ãƒ„ãƒã‚µã®ãƒ—ãƒ­ãƒ­ãƒ¼ã‚°
-2025-12-01 16:20:26,982 - spotify_integration - INFO - ğŸµ ãƒ„ãƒã‚µã®ãƒ—ãƒ­ãƒ­ãƒ¼ã‚° - ã‚¸ãƒ¼ã‚¿ (CV: é‡‘å…ƒå¯¿å­) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆ! Re:Dive PRICONNE CHARACTER SONG 34'
-2025-12-01 16:21:35,622 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ãƒªãƒˆãƒ«ã‚¢ãƒ‰ãƒ™ãƒ³ãƒãƒ£ãƒ¼
-2025-12-01 16:21:35,624 - spotify_integration - INFO - ğŸµ ãƒªãƒˆãƒ«ã‚¢ãƒ‰ãƒ™ãƒ³ãƒãƒ£ãƒ¼ - ãƒŸãƒŸ (CV: æ—¥é«˜é‡Œèœ), ãƒŸã‚½ã‚® (CV: è«¸æ˜Ÿã™ã¿ã‚Œ), ã‚­ãƒ§ã‚¦ã‚« (CV: å°å€‰ å”¯) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 05'
-2025-12-01 16:25:41,954 - __main__ - INFO - ==================================================
-2025-12-01 16:25:41,954 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
-2025-12-01 16:25:41,954 - __main__ - INFO - ==================================================
-2025-12-01 16:25:41,963 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
-2025-12-01 16:25:41,978 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
-2025-12-01 16:25:41,978 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
-2025-12-01 16:25:43,990 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
-2025-12-01 16:25:43,991 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
-2025-12-01 16:25:44,025 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:25:44,026 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:25:44,027 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:25:44,028 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:25:44,029 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
-2025-12-01 16:25:58,657 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
-2025-12-01 16:25:58,658 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:25:58,659 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:25:58,660 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
-2025-12-01 16:25:58,665 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
-2025-12-01 16:25:58,852 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
-2025-12-01 16:25:58,852 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
-2025-12-01 16:25:58,854 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
-2025-12-01 16:25:58,854 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
-2025-12-01 16:25:58,958 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: BackÃ—Back
-2025-12-01 16:25:58,958 - spotify_integration - INFO - ğŸµ BackÃ—Back - ã‚«ãƒãƒ³ (CV: å¹¸æ‘æµç†), ãƒ„ãƒ ã‚® (CV: æœ¨æˆ¸è¡£å¹) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 50 BackÃ—Back'
-2025-12-01 16:34:06,194 - __main__ - INFO - ==================================================
-2025-12-01 16:34:06,194 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
-2025-12-01 16:34:06,195 - __main__ - INFO - ==================================================
-2025-12-01 16:34:06,204 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
-2025-12-01 16:34:06,221 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
-2025-12-01 16:34:06,221 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
-2025-12-01 16:34:08,229 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
-2025-12-01 16:34:08,229 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
-2025-12-01 16:34:08,256 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:34:08,257 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:34:08,257 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:34:08,258 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:34:08,259 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
-2025-12-01 16:34:21,158 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
-2025-12-01 16:34:21,159 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:34:21,160 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:34:21,160 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
-2025-12-01 16:34:21,165 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
-2025-12-01 16:34:21,350 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
-2025-12-01 16:34:21,350 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
-2025-12-01 16:34:21,352 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
-2025-12-01 16:34:21,352 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
-2025-12-01 16:34:21,448 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ã‚­ãƒ³ã‚­ãƒ©â˜†ãƒãƒ”ãƒã‚¹ï¼
-2025-12-01 16:34:21,449 - spotify_integration - INFO - ğŸµ ã‚­ãƒ³ã‚­ãƒ©â˜†ãƒãƒ”ãƒã‚¹ï¼ - ã‚¢ã‚­ãƒ (CV: æ¾åµœ éº—), ãƒŸãƒ•ãƒ¦ (CV: ç”°æ‰€ã‚ãšã•), ãƒ¦ã‚«ãƒª (CV: ä»Šäº•éº»ç¾), ã‚¿ãƒã‚­ (CV: æ²¼å€‰æ„›ç¾) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 06'
-2025-12-01 16:35:36,493 - __main__ - INFO - ==================================================
-2025-12-01 16:35:36,494 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
-2025-12-01 16:35:36,494 - __main__ - INFO - ==================================================
-2025-12-01 16:35:36,506 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
-2025-12-01 16:35:36,524 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
-2025-12-01 16:35:36,524 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
-2025-12-01 16:35:38,532 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
-2025-12-01 16:35:38,532 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
-2025-12-01 16:35:38,559 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:35:38,560 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:35:38,560 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:35:38,561 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:35:38,562 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
-2025-12-01 16:35:49,645 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
-2025-12-01 16:35:49,646 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:35:49,647 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:35:49,648 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
-2025-12-01 16:35:49,653 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
-2025-12-01 16:35:49,841 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
-2025-12-01 16:35:49,841 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
-2025-12-01 16:35:49,843 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
-2025-12-01 16:35:49,845 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
-2025-12-01 16:35:49,939 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ã‚­ãƒ³ã‚­ãƒ©â˜†ãƒãƒ”ãƒã‚¹ï¼
-2025-12-01 16:35:49,940 - spotify_integration - INFO - ğŸµ ã‚­ãƒ³ã‚­ãƒ©â˜†ãƒãƒ”ãƒã‚¹ï¼ - ã‚¢ã‚­ãƒ (CV: æ¾åµœ éº—), ãƒŸãƒ•ãƒ¦ (CV: ç”°æ‰€ã‚ãšã•), ãƒ¦ã‚«ãƒª (CV: ä»Šäº•éº»ç¾), ã‚¿ãƒã‚­ (CV: æ²¼å€‰æ„›ç¾) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 06'
-2025-12-01 16:36:43,618 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Christmas Blessing
-2025-12-01 16:36:43,619 - spotify_integration - INFO - ğŸµ Christmas Blessing - ãƒšã‚³ãƒªãƒ¼ãƒŒ (CV: Mãƒ»Aãƒ»O), ã‚¯ãƒ¬ã‚¸ãƒƒã‚¿ (CV: Lynn) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 38'
-2025-12-01 16:38:57,335 - __main__ - INFO - ==================================================
-2025-12-01 16:38:57,336 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
-2025-12-01 16:38:57,336 - __main__ - INFO - ==================================================
-2025-12-01 16:38:57,345 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
-2025-12-01 16:38:57,362 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
-2025-12-01 16:38:57,363 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
-2025-12-01 16:38:59,371 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
-2025-12-01 16:38:59,372 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
-2025-12-01 16:38:59,414 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:38:59,415 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:38:59,416 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:38:59,417 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:38:59,418 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
-2025-12-01 16:39:10,613 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
-2025-12-01 16:39:10,614 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:39:10,615 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:39:10,615 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
-2025-12-01 16:39:10,620 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
-2025-12-01 16:39:10,789 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
-2025-12-01 16:39:10,789 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
-2025-12-01 16:39:10,790 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
-2025-12-01 16:39:10,791 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
-2025-12-01 16:39:10,874 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Christmas Blessing
-2025-12-01 16:39:10,874 - spotify_integration - INFO - ğŸµ Christmas Blessing - ãƒšã‚³ãƒªãƒ¼ãƒŒ (CV: Mãƒ»Aãƒ»O), ã‚¯ãƒ¬ã‚¸ãƒƒã‚¿ (CV: Lynn) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 38'
-2025-12-01 16:42:41,264 - __main__ - INFO - ==================================================
-2025-12-01 16:42:41,265 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
-2025-12-01 16:42:41,265 - __main__ - INFO - ==================================================
-2025-12-01 16:42:41,273 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
-2025-12-01 16:42:41,286 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
-2025-12-01 16:42:41,286 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
-2025-12-01 16:42:43,294 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
-2025-12-01 16:42:43,294 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
-2025-12-01 16:42:43,321 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:42:43,322 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:42:43,322 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:42:43,323 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:42:43,323 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
-2025-12-01 16:42:57,044 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
-2025-12-01 16:42:57,045 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:42:57,046 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:42:57,046 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
-2025-12-01 16:42:57,051 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
-2025-12-01 16:42:57,234 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
-2025-12-01 16:42:57,234 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
-2025-12-01 16:42:57,235 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
-2025-12-01 16:42:57,236 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
-2025-12-01 16:42:57,343 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ãˆãŒãŠã®ãƒã‚¤ãƒ›ãƒ¼ãƒ 
-2025-12-01 16:42:57,344 - spotify_integration - INFO - ğŸµ ãˆãŒãŠã®ãƒã‚¤ãƒ›ãƒ¼ãƒ  - ã‚µãƒ¬ãƒ³ (CV: å €æ±Ÿç”±è¡£), ã‚¹ã‚ºãƒ¡ (CV: æ‚ æœ¨ ç¢§) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 02'
-2025-12-01 16:45:39,189 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ãƒãƒãƒ¼ãƒ«ãƒ¼ã‚ºã‚¢ã‚²ã‚¤ãƒ³
-2025-12-01 16:45:39,190 - spotify_integration - INFO - ğŸµ ãƒãƒãƒ¼ãƒ«ãƒ¼ã‚ºã‚¢ã‚²ã‚¤ãƒ³ - ãƒ ã‚¤ãƒŸ (CV: æ½˜ ã‚ãã¿) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆ! Re:Dive PRICONNE CHARACTER SONG 32'
-2025-12-01 16:50:38,519 - __main__ - INFO - ==================================================
-2025-12-01 16:50:38,520 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
-2025-12-01 16:50:38,520 - __main__ - INFO - ==================================================
-2025-12-01 16:50:38,528 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
-2025-12-01 16:50:38,541 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
-2025-12-01 16:50:38,541 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
-2025-12-01 16:50:40,549 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
-2025-12-01 16:50:40,550 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
-2025-12-01 16:50:40,577 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:50:40,577 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:50:40,577 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:50:40,578 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
-2025-12-01 16:50:40,579 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
-2025-12-01 16:50:48,126 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
-2025-12-01 16:50:48,127 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:50:48,128 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
-2025-12-01 16:50:48,128 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
-2025-12-01 16:50:48,133 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
-2025-12-01 16:50:48,320 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
-2025-12-01 16:50:48,320 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
-2025-12-01 16:50:48,321 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
-2025-12-01 16:50:48,322 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
-2025-12-01 16:50:48,412 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ç³ã«æ˜ ã‚‹ã‚·ãƒ«ã‚¨ãƒƒãƒˆ
-2025-12-01 16:50:48,412 - spotify_integration - INFO - ğŸµ ç³ã«æ˜ ã‚‹ã‚·ãƒ«ã‚¨ãƒƒãƒˆ - ã‚¹ã‚ºãƒ¡ (CV: æ‚ æœ¨ ç¢§), ã‚­ãƒ§ã‚¦ã‚« (CV: å°å€‰ å”¯) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆ! Re:Dive PRICONNE CHARACTER SONG 40'
+2025-12-01 16:06:29,592 - __main__ - INFO wÜ^êËr¤-Ã¥ğ&
+3êZ™%€çœùÀ¶²^ğNÙînïO=Åw¤GÉhÊ-ÑP’bVş¨FİK[#×y¼³Ó¦Å“':äÑåô¹˜û	à
+Ä·”~uŒæGÉOŠU::{öÄoŸß¿bI<±I–®G­¹?,åÄ¦üŸş¿­æº1'eüIÁ:ëÜEÄp¸	™1Ş‘Ş"ÒX|Ó 8Ö™2AegÕAÏrº.|W—2Åß”ƒÕ¿˜¼Ó½ıÙ¶ÁõûHUÔOR$â†@ô
+¾OµâDF{Ç’–´!”ß÷LpÇ8'Íq )@æ^4ƒÒôöÄÏW2Û|CØíÅà÷\îxCïº§5 ö6‡çß'SãÂ#\n
+f‘+ìBÇİÔ«Ú<€‚0ïV1s.ãÅiÅ±&øïv«Î™\¥.¯p¬}¼\İ£«ÿ_Ü#SÄIË›GÅ
+ú3CåFu$J0é®zß«aj€ŠãÛ*tÔSbs¡Ä©6ô¿Nc¥ù·+=×¼î9ÃĞ|L¯¼öêY¸û)ò Éñùı+ûYşådÏi'T=Ï?õbÅæŸÊCÓu.k^È46Ièqû Y¥Í•té)†Fo	â#({Ù«éÆ’ê.cù!ÌrnQ%ŠNË@e+|µ~†‹èbˆVŠ'5†ü&=l„Ú¥8Ü\çoÎ§„
+¢ÓìüUc¶m—Ma&Õù$AhXsa”}r'¯)WÀÃ*w,Ru=j•óæhĞ#Ld¯ä·¢>E¼¥šïòPÙ}5ìŞ)j÷°,‘pı´ÚSĞ¸ ™‰>Y¸1fã¾Kè88#%H¶Pîz'°ÚJšo”63ûs_dV=ñ7Ç5C‘F¯œÃ	ÚÜü&‡cÄUDz·RÓïpşÅØxªA$Pùà5Œ¿›*ÀugVVZÌªöUTj²¤‚t8ÆøÿA*vCÓ \šÜKHJéJ7ÿ¬—]IĞã5š~(¾Ì˜O‹28y’cêÌm›–ÊDsÏçM%x†–É.äGûğ1]ó²Æé˜ÿ&œ¢/÷Ij8İ{ÄÿS3I“–7ıZ­ÏŠr63}ç¤ƒå¸u5×MœÍ•mJ¨#dí+ÛãÏš• îs­DÍåïúîßú¾¾Éü†™Y%5àï?îû¸Ë:y eÜ8ü¹¤?AHÀÇ¹¬ wzMXW¼Ã_HPÒ,åœºæ5E33óá¼ßt†¸r4»m^½Éq(uƒ UÙ+tø¨İ:ZS®†âşnQóÙÆÁÏÈ[€FCËBÈV¡ (~Úûs<áùZ¦ÇLÚ8ÚT¥×F<ä;m ğÏŒšº*âßºvŸWˆG™Ã7|8›¼ûö@ŠX­µLÃ^şB^v?ø*ÔiáJ¸ÇKÓGßÔ¶-æ{Œhİ)lAl@3ÍJ/iw\ûş“(3&6Cbîèâ÷¹D³Ú!#¸Hc_¹ÑÖ…ÓĞV¶½§%ï¤J|˜óİE_É‡94F¹¦‡¡9KO÷ØZuíµ¨RŸ|u{($ı‹çHÍùX_ëĞÇÍ˜}¦¬—¼`é©ÿ-˜¯Û8,	WrØ·_îêäî±¯Z3òWíl‡´Í.AßÜ©Égº¼fÎàj)Ç16Ì $ä¾šn„Õ«%<°ghqPÆd{‚¡/T¢ÍÓL¾Úp:… ä…è,èp²¡šykÜ¢yè2uƒÊmƒ´,b-µ³_d’µˆÆOH¢Œÿ„íÂÆQyV’‘Ô&¿¨ï\/Œ²8šHx.±4Ÿi­Êº¯`ÖêYå€mİAÁÀd‡Ğ$ ¯ª#fü½†L:…¶zÈ€(d§\*"1,.c«ËF{Gm¹¯Ã!Sâ.€4E?t¡úòWÚQñ””"ƒgQêÀ†d¹`9®²WVS—™l8‡3ÏĞCÄ‹ v|°ÚkTê“KBYnLE!‹g+ôÏõ…6²Ç˜ômås¸ºX­PÎ… Ğ5±v ÷™G›°˜Å"VÅj"ofVdÚÂoò?Äö½U~n÷v%º¸Ô¿¯’7<qœH°¨):ª	Şé±‹ÿ±*‚<˜~ÉôÜ£Í_»ÇüÔã¥:2Î7ö2TC¦ûÀ)ş¹He÷œLPÛlúúŠ
+3™àí*Û¢º2^Ÿ a^Æ¼Æ"Ã¬£Ş7û•g{Í‡½£×¾¶u¦lŒë5qÉW Ù8}s#ÔºMIg	l]¦œÕ°¹ëÂ_9*g—ˆ,°¤Îî9Ğe#;Ë¨—`æØ9Fs/h¼5‘ôa³lAà:òÈ
+‰³ßPœ2x‘©;nÉo«Øª²&ä	Íg)”GÎJÿ }z…_W—îÌtab\bIÄmî5)I¤N˜C>[ºüóÊ&Ì³ØU«–!µaxd]÷+“.q'™½|±fÕGé Ó±Iî1ç´áBjºc÷~¹MèPw_	İ‰¿7a¶¸7^Ç­mö¼9Í†O4¥ÄY%®ót½tw‡ÃÎp¢Ihj…”-;‹P;S¼óéê¯šö½8\ˆşìûí²ESÓûî7]‘tJ}Æa;`Ö¥%…míBğµ#ZÒ³óûÏÒ(hı8Íè!¢T¶–Âç„ü»‘×èH
+f1ÿ?A·O cÿK:›.6¡aÄSï0ô)d?¥)N‘{ Iê0G3ÒTæËÕ#'@÷HYå!§nµY0ˆfÙe¢XhĞútS=8Ù¬§]{M×Á¦u· ÷Ä!?Î'oQn?™º×sd©AË“¿05…U{vÙô”XÕ‘ÉŠÅ£¥Şçrò:
+]Ğaf fŞDÓ´³‚¶áˆ££+zú™ûˆsÅhªüÈÜyàÈz÷'¤èi/úÃşZqvò4…É½ÔÃ}åÕ¤µ¤Kã™œ¸ôÎ.š¦îgxe ıı®#;Ä˜¸šŠ(®£¾^¦y²_&çÔr+–n“»H™ëQ	û
+KÜÆ©#ô™>>¶³‘Š–m(F™UÆ˜¿Û¯—DÑñ°èÓÃB±sôñ^`gwõ¡O®ÿ@îÿ‘Fú³tÿ˜ÿí¶äQc6ÓOnŸÒ$Ş|rd-ÉÊjD>Ä7ÄÁT4Ê‰YN6€p÷ø=;* 7şiTİ__"ÿõA‘îe~5
+É×£œl‹éL9SB×^ôwNîo~ş¢¿ó·ªEÿuò½÷Öú×ÖĞ¨ú”	µ!AšéÜNa ôI×‚»‘hm™jX²0ı:½éÏvœ÷µBvŸ(kRSóÌl4ãú`˜#Oàw’':ö#¼îg?Âµ›®.½³€µQ¿ûpC˜”«MşŞ€%¢['ÎÈ9éÏ&[±JEâ2|³@Å1‘ğ¯ÃPp
+/®d/Âsş4¨é@ 3ÂM$°óU:5 ğ ÜšàKÙnx˜Ü¹ı¬ÅÅ}‹…Uù©´‚J&dşÿhwwÍ(³‡‚æûüåf˜ã§ÀÉ—™ğ“'z±v äíª?ûˆföfYÀûc>HÁÚ–—g5ëstiÂ1xÉÈ¶´6z_ÑÆ•B©Œ.áÄf}L©’2Gµè}gecHÏ ‹TñÌ‡ó¬-=½UŠp"êà"G‡¥À/ú7m¨&¤¯¬Û…®ˆPÎ–Œâ	ß‡³,§zSIãŒ<ÏÔÔFUÔ¡ÿÊôı¦š9è¸öXÙ5ˆXÉ« qi"W™3i–€N	eè“óîIaúN)%Ä=êÅ=i
+Zã]İ·°mvŸ”éXî™BÍÙ‹p«ñXNRõG_—Hï«ªrn¹-œø!&iÊ'eTè|KT¤ü3WªNz»¹ó8ÉrvŠË††í×„3+O¶b†®R†	²ãì¬¯Kº+Tt3ì]ã«4Œ†Z<­¢dä`ş¿IŸt®yÙ{îê)Æíèç ô‚)ñ´Ü´¥-!ÅßÔ_·4"J?-Ûß=®œ7º\YšMŒ>–	ÈntwÔÔ¤¾ Û–6B'İ1lb¡0Ú_Ÿ=ÂV¿£/~ßòQ'};•šËİUD¯3šç š­üvÁç/k%‘m©ğko]úE=Ú¥k% Ø	[@øM#ëŞS"ûØ(ºòÙ‘Zˆ)ù-U¶>g¢ ¶0ãÿ-³"
+•9¡®‡­¾!cĞ˜°ıX´wû#¬#5gêo6àr‰­z*&XBr“»(]ÃÌg¬g#?`Æ¬óÃÍpÂHa«‰ö›·İØÇ'$&[Ö$IÅX¬§zhÆÃm€Êß¢GúÙ¦„ó=•Ø•Æ°Ë¤ËCú9~ÏÜÁ²3¼H±íÃLı!}M£Gâï!íj=¥İØ“Šëyò×Üú@lıÎ ~¾œ›}vG2|6rÛ¿6†Xß[TÈc´Ûƒ*w \ÑãÏ—ØÎÛx@Ëş‡ü@X#YÒ|ò¡J B8„^:´ğóbE ?`fÀ’åŒh÷,kßAOóÔšåóW,¨dq£.ô3˜fêæÒÊSÿ`å$ŒÃ­&0ŸØ„ûøıJ!–M‘3Ôy€•àrõU‹2m2@‰]–æõÔ¢¿îcfs*ökº"´'DÛVRÕ£¿ğÛ|>¿Ñ‹xË’6µµù·(ŠÍˆIDª¢Æ¼(*ÅÃC¯¼*TóE™¯…ğ¶_
+ö€_@ú¢T6Kh4Ï3È	˜6(
+Kt	¤¹	‘7·{3Ñ¡ÁÉÌèjFT¢'Ázèj ÅÄj¢Ëì»EE…Ì¨›c´THK®ª÷1Â±¨ËÅñ÷ü#Ê*ír9(ë½ãdé%ö™’Ûö¬±9 ˆDªÎ+Ê£*ö[¸~Ó™5ô„‘¯ Š\ë(³jRĞycÈÉî?fïÓ
+FíÇ‰`LéùÄõì<#À1²$€²¨ò%]—e§?	˜)m€´cê•óÁ<'¿ÏÜÜ7
+ØqßÆŸ$Yê˜©5;Z¼…‰~­zùº%íN0[İ1ê¿ÍúĞ_lJü£L“–?YX¾Ğ¸FÂ&ş¼Ó´·ZØÖ<¿	cÉÛ·ÀPq˜¢ÿ“é/ßyÔJºnu_[é
+Æô¸>Èsy[Aº¹À…PeÎB©ê÷€kyÑ$ékæèC>¾ñnç:Pïh­`i.rèÃØfW›7M„ÖŒÎ‡ø¼?o'YTV1M>üë†•NXÉÇ®K ø†j¯“@í»Ú¢]è³Wé@år|‡½j„ópxT(#xgvõjè6·ÈAÿœ= Ó_fÂ†ÂÕPï·Mz”ôlBøÛúBPÚu#1¬~ç9Ş…pA±¹‰¸æÒmÖˆñwB!;o¹nPÎ;mioÈx2™sà÷ÃBèÕ¸H—ä„ã`yò©Î'/`ÀwL8ıòÉ¦fËnîÄúQlınL†…¿µx¡q|S‘3Ë¥ø\
+°‹ÏY¯ëT§0¨òÿ®v³?œYˆ:
+’`íâ°~}¯›ª[aR nNOöõ(±qœİƒŞšl×¡„{{JèØªY±€+Ë0hQQ—?UàN´ëZ)\yW~|íÊn2+Ú3·á¥wyqo¨ƒàÎiu¨@OHşÓu"C¿öÂÔÅ,aÔ¤‚¿~†Ğë?µ_ö´*DmšÑ”.9{Á¨÷»ÿ]â¬.µÿ^ÏJHÊÛ<ñˆB4æ_Äj‰`–Š—n$Ç¹·Õ|O}Vq œxzÚj¡XîHÔ[æñMWHf«6Ÿ3iÚÛ÷ğİ#£¬–wJkqĞ³O¥Û¼²™7Š¡ßT½ÎsJXfZ1SV¨JÉñ7Ó¼¨Æşa<åÇcÌnß&ã2WİéRË¬û®|À`Ï<åËe±Çyg´½µ™ô‹¡ê™/Î…ÿBAœÍÒÍİ.öÇzó±2±åé.Üz…º“­½}íá,|œê§Ïx0s¾J*ÖûÉîp tD»´Dz¦| ¿ùˆQÜÀ<É¶eŸ‚WÊØ~GO–6ı¨ÜÓ}ÊÁèŠãWÚÄx…ƒIW/Ê‰§Áû#•Kï’‹òİ¾Y-›c:w\4
+ˆ60°ï_Enùş£÷öurùc¿v¹zs…jQàÔâÅ©ŞÕ4ÑöÏø	;¶³üª…ÜoR*û@7;Ş—ĞäpÓñüXñacGaËZ€ví"¶$ŸZ3DŞÏöÑD|^õ
+ú»¯ãpáòÖ•µÙ¸E>‚æ±E{Ä,%š¯<éºE[…U­Càğ+—k”ãù æq™Ô¹[:J¿ªµí¡³4[»E=óIÖXr¸¤æAmƒÕ÷È6í÷L×Y¾{¹£8,1ÏsÄ¯,h¥_FŠĞh±Dáô2$7	v!¬Œ,Ò6Pı´á§ÈaÚcÙ3•lk_Ø}iÃ;ƒ‘:¨Ô-r3n±ˆi:«ze»bü?	€ÍÕõQjÊ•5I‰¨í>RÄ>Q³e¼3gÙ\q;ş®ÈG]Ê„7*ÎœfUñØU—24/qM‰Afñ-<ç]øÌËFAûÿ“Tôã^1&‹Y¾€Ğ®Côp Á:í¾Ô-o.háÁ Ô`	m˜ÀÿÆó'Œ¾r«"¹	i(7‰YúöeùÅ>ücOS¬ô°Äó ,…$£ü¹p ü”»Ø•½¡×ÛA›?Å§æ²³h	£¬ xÒQƒê[é'8!_yû"úÄÈB‹‘_-†¢ †½®®®Ë+ÓÍ!=x•oÌJæ÷1´£LmO+™—íI/cÀ‡î¢È|¤2©€âöè[ê£FÉò‰µXëïÃ2]g‰_8rˆG±ÙÃL¦Ïo )_Y÷]´ ­ÔAy	Më]şç)Âg‘/«Ş/ØsÎ	øªÅôC}40ª:Ø˜T×‡“££°Uù,o]!p”’¹z,0^Ãîô
+úk ª­ñ‡`Şş:ÏTœøcyT¤Zé„±’^ğ¿a²Ùì7šA9—0¹%®ÄM2 DL ¥ñ1EßªªU.óáß—Ñ~(qœ¤ÖDêÈ@&fáÌë^.ÁÊŸ,
+Ró=(ónj…’3åò¹ÈTaó+Ízv7ÌÀÇ
+éèy”ˆ²jS\gè½ädËÔÁxÔÆÌ½‘áEÙMµ ïºr+ĞrDËŒ¤8`?Ğ(2—Ÿ,"Éÿ’à¸°TŒî„æ©V	ÈÈøm:â³’"Iâ¹/ÒŞcËŸ–}
+vGÇˆ…ìÔ@0™2Uşâ:Ié¯v™PuìÎĞì*ÎÚí”ÿÈøcNHuÆl·§e‚v.P0Ë#2¯ÃÈâBk‰âÏ)Ù@Ÿù/“„D•=%ı&UQÄDø²Öå@SEXn¬/E3KA9*yT¼o•«ÂÙc…‘\T«¹öüCÓ$~·Ï`œrØ’§(HÕì1>ŞÚkAöW;*ÔÊòÿÛöğZõpë»WÏ˜ÈYÇfÉò9eÙnÄ& &I7$bÃióYª*K@À†…“ç1g´«.‚^ÑKa–«(™ñÁ¥Ï@2 ‘ÀÌ’ÅWÚŒwX¥"ÏÓipå(×­@	¯ş¾p™Œ¶ÁÒ‡Ó«“’`´7<À…ã¼?úÕè±äO•G	“¦CÑç‚aÁh³rOå
+Î’¥:÷´ş)¯ƒ'=†‘·CY•™0š¼0!Z]70¨02ø›ÈÈ²Òì2f±Ó¸r-SÉ’c:y[=1Î·†fò—®órù–­u41JvüåF/± 4'
+NÍœ’ ‚ìaIæâ?<NÑŸ^#ßü›°z¬«DEÑÒ°ÌÑåD¬–ØÎ¶„™âó`B)²"şU]Ö¡@O dO™dşôSt¯ø8ïGÊ“‹ÈUD`âù±‹´K®Óà#UŸ*ën‰ù.?=Ğ›0ùfcZ„§1Ö] xFÅ[“9§™ÍÑÔy¼Âèe‹i©„‰Ú.šİÜW!B¸œ·‰lS„ÂŸGÔMq!{ú[¿@JÙ®Jv{.´Pçš¤qŞ
+šËgO5~„\¢s-çõÕ
+¿íÌ¸üpE3{¬«óü?šÁC´À©ä~Êõ!L‚/	uë³:5r¿yÕèm0^³¯º)sM°¨°şñëpZôæú<¨X‹çVY¼ëyhıİÀ[)Û	Ë%Â-Û¥WC|ı±!‡îud»Ğx6ODİÕëRE¼dí6ÿN+?ºp„~Ù.eÌ³kÈL£®CuaaQÍÃtÍàI8çH@Ö¬óÍ-ò‹ƒ"¥dY.V¦ˆİi;Q ª‚–@O.K@¸:vÿa¼èT“-M¦İí#¦ô‚+úÁjºÕôTn<%Ènê2¬®(1šĞ`øg«å¿ºÜÍßa¤§g<Û6å`SO´™‚Xæ=os–Á¸TÒğšu‹t\Î1 ÏF
+ÏŸªÄº´ôÒN®9“Àµ–‚(…cEº4®Jo<ÄÁê›±‘C"ÒŒæî¶Š·¦×
+T…ÉBàÙarÅo6ã[«À Ú—9¦£}úï¥q,nu+üa]vŒ¾\â¢7OÒ]ÿ1SÖéÇ®d[2ÿÂEèã¹õ~¾‡,ö8£wš… sÏ®qß~^±QÁŞõíµ‡Ì x`"X:)Ië6›|ä	W«Á?ë`O-BŒP'yUûÇ|tñÅ³¥™ S ßÇ2˜¶ CÑW€ãT[ˆqMº­>s\c
+Ì*8/	m•DZ=§…`N3V!‡¶ìØpÆ÷Ô8&BŒğZ”ß0kô¨“Ûîé×@÷ÊnQ(Ó‡ò8/Æ•­¶:¬êŒàDÆ‡»]XCU_M˜ìW€:x§(´OàES«ºQ§ªüo 3çÁK_dŞ¼.vDg{âUsŠ*T(˜2œñW
+'Öïj'©{b›Òº ºoÃ°	iˆ2ôÒ"'Kí'ãCb@ ac<ÿ÷¾OÕ;hİŠáeò–)xÕ›§Ú³ÖËünŸ¨³¯¬yÇkBoD†–ÍÙ ƒ]ËºÓéop
+ä€Ö·ı&YÀhQ6š¨¯xqÜ¢
+m%4IŠöÎè¢	£`V\ó@†í/¢¸ı|Š©Ğ+ÆåâŒüT<•o°™
+»1ú;`ä§}ß/åàêÅD¹üèE6ë•}Â=j°ı‡QE0ÚŒ&‘üj»’a¶×áöl¯Ayuš,nı}r¸Èc5œ§TvÔÌÓ>*º¼XÉ(¦OĞxóvİ<ü!Òî„i¨ß!?_áeoW,À{Õ ı–hø‘ä¨G€ rLæÍ4¶æ.`ÄkMÛÇgß¶‚Ëmhk"kÓŠ6ğä‘Î"ë}zãñ×©5dñîÍš´Ùå@Åv¦¢á²qH„ÇÃÖ±y‹Mz¹9ƒÕ¿@4û¤Ô“Å+zób%d9îcV˜Ä¢µÏå€ÚAff´K£¬óô—C´—6Zå:óMô˜`ÇH¡f4hQñú'm	€¬%~%u/D*ÿ!ñPÏçÁ7ü¨ûÊ~ÅÖŞÛ…õ*ş»!š¢¯GĞz[›	§ˆı€ÅûêH‹Û;ıÚŸBl' ˆ5Œ½k’Tc&õÜI˜«"cl»|R³—ì’ƒ.1?Ò; #Î«_q£şÛÎ²oV’î=‘wı¯vğuŒµ²°8÷¥ejœ"D-Wºªú€dÒô€×¿©e2ÅÂş8g6î-Hê§BP+9YKÏ–`}qÌ–Á•»×ß°Cç=4]*S­bçÜ¶Å$ç-zÇd?’ó37SÎq½ËfP¿ò–† s‹5ZVHÆa£Œr¤"~"±íÊöİùº{%¡ãÛ[Qç!äTjåˆŒ`o` -bü0·<¢³„,—÷¡àX¬“qõ¶e»G¦áÿ|z¯’%êõ\³ûk˜|İÈ
+.Íô²±<»YÊ!SÎøZ!®Òr¤)b¤›M—Ú -)·4w„(‰¦%u#~†ÊÃ\´RMÃ’Q%TCÑK(ÑÉMzğ´Ò6âÁû·/C×NÌ¦Îšåz\ÀW¬¿(Âš¦ä¦×­Á§5CEw1Êïcöa‹ã¿ìa ÿÛ°šù•ø˜”¨ˆßeñ{h·°_—`İ—ü-–ñ¹yıì°e‹"¼À›hÃı³sÜÅ*Ijşe	ˆÇ™İY%¿w&(ÌXt„=±ÎbV`ùíd³pÙ6×x	ÃT‘·,ıÌ›y„y]â Ò†?¹× ĞŞF+ûıI¶7¢:¬¢­È€Iu¤ŞÏ²SÂaişxñª¯8/ ı¬…v‡§IIÅ’^T‘ñºW›Ü3¥ó8æõLû­9äRL)ÙÖNÊSÁ€&VIk£µ¯ƒfÀÃÕ9Õ®Y|›ı_BG0óÓT)ù{ ‹Ñ÷¶K¦²&>‡KĞ3°2Šº gÙÂÛ¹ÄñĞk‘‹g‘A3VˆM°ª^\3R6ÁbçèÍëyûZIÎ€ä5üÖ"Ö†ü¸³º¶?ãzI‰
+\Æº‚)mY8!EógØiÒÌW:P'x“™£à¹dVÈéÅ?^Šh33bWğ5pxCøÜõaÏ‰6*³Â‰–­guê‰DKvU	ô°í‘ç=)DnU,§oj½qÑ«aç“ywØåÑ{–:ê}K€}É¥J³øVé«ştÇ6ĞÂcú@(7ÄÈ šVpõ••¯Á1CLæŞ$ıBpûÉ?èı§Œ@öÃukššÔHt™ä¤WóûÏ¹~Ñ‹`JlÔ K¡ÏıÄï“qĞ’æ
+Öä›»•£5—m”Mû1òÄO‘5‹f×[˜º+w3‹ºågW¼>ŠÅÿVûÌ°,‰'¿İõŞÌI.Õ”áà,
+På¹ùÑ»|ózks‚ ˜¦Áƒ%/ÇQ¶UïyÁ8ÔJ–‹İDÏDH®‚È¯Å~xB£‡n‘U÷Z$5‚½|Ô±scÃ}úôy^ÕÍ)v• ÁœŠLBl^ô qG“p
+²“éõd4E.œW÷”g5ñ˜5œÃ|Ğ¶t&°‹È6µKbòVªRg…YTäÓIaø6íğ~ÃKôS¾‹” U8·%¿™Ó€ÿš”¾Yôù\7ê-&üV^|g99Õ»LùîG¹	õ#ÿ£jšt~ô$cÛQ"ĞókÂ^ÌÈ¥\Ã‘QûdY¸¨)Äñ9Ş‘œÃm¾Ï9áß¬÷‡àÏJ¯ò QWÚ
+ó5}N Úê‘½kaçGŸ|~é’--µÒ54É7®s:c¥êMSÖg{!I^€õ½ì>U*ìG"A¦ñ-•çøFªÃîE©ş±Â¬‹±˜Ãµ¥ôÀ~mÊÀ)å(©İãS•@_Ñ·åı&ÎOÒ>óc›Üï¡cµ‹TuU,òŞ¿VSÕš4«ë’aKßX\Õ©!ê\ÚNğ°†Èì„RşÊ&ğ›ıõ*i~½‚)ŞîÏçòO(ër•ä´GŞı«»h7Ü!ôËŸ8Âºvq(¾Æ°>°TĞ/,$YÌl¿ØÅwÄÌK«åĞ›u¦e—FPMÒ®¨nûà3çØ¾ÿÛı sKL·¬H´[Ùûø‡øt½±/' % „ EêÏúl·øY{×k\É  ¤JÙ@¤ Áâ¨y¹ı]"àÌP›s»[
+Ë–zE½­]"òàã•RdS °ä¼ÆÉ ZÅÅ‚µd“² ˆ®¦úÉ¡ÖÚx¿Õ¬Ù»m™23,Ğ·» ƒ`—,/…szàQ#¤4~Ìp	Õ|áèŠË!"Ód˜¬8òÿ‰é$XÛãbà…ÜFmD$Fæ°ˆ†I9sï±	Ä­pšİíÚ°®Ò–‹’Zß—~¦¦C-9Bz6ôøÎBÔIm„ÏÎb¬2ÆŒñ>mºÇQ÷_¨BiPZÛ¸CP­SªD.í~uo`KõÂÜåkÖE»µ’™}}®–ò70•zCŞYËèü3=¯Š—è ìØñ£ÀWXÏ›-VˆteÒ7â	/Èøé”gŸ{ÃfH£Wİ°Ibï‚BõÚ¡JÈ¿Ÿb¥Sƒ_H¶W(*„Ã—@•ÿÜZx4è¯ï ¤X‡ÙMï¬j¥=V°÷Şy‡ÃXI=¦İúé)îØT —Gc\ômrÁ.³j’â«›T”+‹6hªÕÇIŠÈL¤µ:¤”óG*<¢‹–û›¾¢+ñl]/¦fı‚Èô9ü.` ·!pö@~6q-¡……Å‚¯È‡t“9E³[ı!Qvû‘¬]óhkãêb`ú ñŞ
+ŞôèÆ­0‚à¤7Ö9z"©ô”œS–Ş˜Q™¬;T;ï¬®VÇ‹OêŞı7Ï×ÃÅïJÑÚü¢ïò“çĞf}r‘.Qb7·UÑ¶½e¢¡óèÍJºPË‹Á ”B•~=Çs¯~÷oŠ‹óŞ‰,İÉ¸ tÌy.4`zr´á,ïÄ²ÈY4j°.Oë§£¦–	œÒ…¤Wá*{x ë·[»í™L>‚¤†oÍ)¬c¡daªwàÚtú¸Ê#TÃ„’§µRÑ%r¬Ôq†K@}õ„qòn”£Ùº™É^#FÛ5«‘2†ïÚá–hĞ¹æjøÁ]Ÿù¯£	ÍÒƒç×V]ò–ØÛbŞ•“ªF¿n|_ÓÂ@È3RÚVi¸À÷¤mMG|'©{7‹¿ıeæö|&7I æaNâ£À‰ûÍ%üQº–c!h¨32¶Ó’¥ô#¯>úo mr5Ü¾·>0ä»wôA-x²’Ìeİ¹d†˜ô9 übü™Ô¾®¦ûÍËzNDÀ¡Ş,]Ú–Bw	ÆD+­ ú@şq¥şì…x^±h_ù¤˜’Qƒ×T'Ní4+“>UHªÒ‡´ÄXg¥5‰-íë4A™tØX$q8ùM÷Krd0‘ÅªokÇiucj¾³Öâw¯·WoÉ¯2¹Ô·İ·…‘&ÔÿbûÈ0Š”zĞª%œJY=ºsÚÎGrçrŒ@¦~,#ã÷ö5>WõéŞq®f<îAúËƒÍ°]ä:NÖBøéHÏ@kù¢Ç¿¦Dáâíûş€|ñ&ìt¯¨ø7„j	®³Ù'¬héóÜú6a·¾@
+#?‘– p¨°×“ÎÃEB•`Ô×gÙò‰éº¥ƒ£Ğ…}ëúô#sİ]ë•?[…#˜Ê§J®›?½´Ë!¨[\õâr‹é[Û3›æ=8z^ÁEú–¾\Pàö8û¨Í3­^õ@†ªÄ’šn ‰y—(½Hop•9@t¬¦¾ >8¶… `êŒÕ±ö\®¤£¼†¤Ák<líõî¿à¿tHh|ƒ!0ÁA•QDÆ|•¹Q¡èw.|ç~)÷j„yªvõµPæ„«ÓP]kÊô'¬:×àÀ¾òıQ»ew¤¶–ÿöûU¢N‹Ücö\ád>ğpwy¯ï‚»”C7mÔ299¼«&•PùëH­³vİÉ!˜ØÕj¬…"ƒ³óäÛàûœä
+ï-~Ñey?}ûOæ9†ªV
+Å]¯Ö³yT&jcRßh=ó„6’,o?EDi§~e"»Êå–½’*PMáAÇÃw{˜:$é ˆĞšr pÏP3åˆ§¥2çï-U”ƒù¨FlÆ¡WdjR¹˜¾Ñ¶ €ŠEJ[5ı¦5Zî¸j@&É$­Uê¹«*‹&áIÀå7+Ü=} à‹	¨ß*Ìí°YhC„VÄ÷3G
+“p!´gıÛDƒóÙ,ä4l}ÍR~©–§…©tßhzX¦ØtÅÃËãaå¬˜+òù‰¸¨
+Vıÿ^4H9Òq‚Ô+6§Q!Œ:ë1\°Ú÷úƒÊËÛ"`äyFª±É©#ûN~q9Ùş-ËŸràa§äô–Ê°½ränJbé¶J´Kk«`šùG‰{ˆE?¨cKŒøšmT=À\šw'l'éÔ’ŞÈ	D
+›ƒ»nÂÛ6‚.O7k´˜H`@iìÇŸ£ºõà)-ÁŠßI'ˆ³©r¨‹lÿœ·©ûıæ¸ìšx$…-Û-WşÁ¹Gäí\ÜZ)S"Óoµ¡€Ğ9ÍÒ‰^Ì¡W/¢^ÇR9Œ9sNÿiñ?½ ¿§©—qÕ«]š¼¯WŸïDt– ‘èóZP£»Òìœ°ŞÛ®m¼Ñ4’óƒ*†‡N°{¡‘üG¾;µ,Ãfõç¿H*wÌ<«µKjèÃöÓWÚš0‹ë —}	úÍô)ı şßE¥˜ıhrlW¸ñ3lc
+ƒÓExì*O‡$QyòAh!rD?å	.·KÕ)&6ß¨¼&Y‹AãkOe_®;Û”¾àO7ú§èM3íş:>"²²Œi¾Šë JuAÎ”x|g)ÒR$)â>Ş û¬ƒç#Y&ÒØÅÕ™zœyRœOûE!ÇX>+`ß'u?µ›ÂGï¥!;”
+D%İw#®dæÃÃ¾O«È•~E~Û‘ã22£5¿gª·ÕbèYÿ¸_Ğn^6´N…ÿ¡?\ÙÌ0Ëídîª½±/ÇòjtºCı*dÜ‰‚6oÛ<òöÄ<ğî—¦¬\½Ç Næ”£‘î’ª€j~hYj?¦o£Syƒ¢ét ì¢RÚÛ²³ÂfR(L{”JV*ğæ¯cPiÊËş(šiåx3„ƒNiÉ1ÁG®x€-(Í€+34ùÄ8ê¶¹ãª9³e 3FE¨á¸Ç?ÊPyb«n,ŠŸ@¹®»©‘Â`;ywÜ4¥ĞÇüMÛPÀÂ-¥Xó1ê¯e>¦m›Ús¸,ÿù”0céz{†QmìAç%/8?dÕªœ¶+¾k×,Áìü1$İÜämù¦‰KÛíY¹|«†Ûv=lßºú´îÜÑÍ¢ğnêUTÚC»G*Kv‘ôRµêádÈ[Õİ¹(4äîvïÚ¸Iä_€!¯Ÿ×³ŒTRŞ|W.éß_)%^+vÎ»B¢½‚"\bY³~UGDdÜaİ|ëAáÙvX®€ÅóÅäôá8~tfI‰ˆeÇ>ÈÈTÌÁR“b×Ğ¥?å•”Ş1#™R	5Îİ¥ÂQ+^Õ5w‚’Ä]ÚØ¬™i›ø_~™tª¾GRsÅ›”§qğ­i×HÛ—`ÏL^/‹¹n¯nf×&;£22HÛ«úSŞöŠÉ®	XâAÙ¯"{&¢ßŞé0ğ*z{ÅôÏR`ù(`EJ%ßô—M¡¶ÒXEU3]gÎgĞFÔÊïÒås£»Òğ÷B¥õĞüvğ„‚q£3\A‘TÚÅŒR—ô£˜Ù’KĞ¨/RF|P=öG÷	û>vÑé.	”/q*0gj¶ñ~ÿN—6róB:@ù„«Ó3œOov0¾ïX5hºI¤”³–Çd<q±NßWÄYútôæ—1¶pF8ü(i‘AÏ7R9ÔÎ‰Ö’v³{›ç“‰|SÓæì`d¡Ÿ¢×"8ìí Sµ”n`´;ƒ+ë¡½mğŸ™Ä4ûQqt¤yÂBp]	ŒpF—ß¶DTF8øHx½ÁÌ7ìFóP‡ß™åØÏH=½µM±Ş£CMïœùk.‡ã¥vÃbT@4qFºCÖniõ)¼±RaÍ›\1—+½Ö%%¨D^juë„>ëw	—©ÁVIÓD
+L8‡JWÀía„Á÷@‘då £9®Ùß·û•C\JT›°›fµ¤ÍlŠ©EA‘¿]ş¼Ğ-Ü9¿ÉÅåY•ÙŠs:™'_AÁÛr´R–)ˆ|æÓôiıÆ–<Í¡$ñ¹aÙ¨ÿSâÓÒU§Wêª0W |İ&Å‚«¦Q@PÍ@èB÷ZÕÌâ5*!"…¢ùÇØ¹Şí<pÄÇišT%öbk÷>Š0†1÷8>¥Fl9†esüÔE‡*¡c]`{CßéÓ÷›$1OåÔ­¼I9¾õóò™ÆMt	0f¸íéS¡7ÌBMÊ&ì¬Z‰-š‹b`ÑÉxt—'R{_WBÿäbÊ1&æá²;oVßR×öv‘âêhÁ€¸X…†øˆ/M9Â#NïÉX·®;{È]±ƒñ^J¾cëÏù(’_9ßæÆd@®;rfÖ2œrmB€Ş3$‰ÇêÔ°~¼Ìüdì2?²Ãa®y‚¬ºc	Ìl&A¸·˜Òß
+˜Õ9ñÇ<´H.8µ4 (ÛĞGì8[ìÚÄ¬ãmçÍ6KÓ\ Iµû€™E#æˆÛ®kuNŒÈ'"62/ºAR4´Ø¨\#T†dTÑ†mC/¦‡ÜPÕ×®Ë_ì$¦ƒ.>s0Tx¹5z×Â¨,Ç;‹'pjºjBù•¹ç9Tºörr?5!y˜èƒÆë#¢R›†Ï­ÇSI™÷[Ã¼ô%µqRQ6ƒè»kÚÉ)K#‡^cØ*v.YLÁlˆŞay#¥‰·h¢U}SàÎÅÜÕ¨4Årx˜){íFaÂğEÉ|7¢Õ]·7%cÅ†2 àÛêGXß±²4˜SNpæN=z™…ü+ïèß§?RÈ‰£ÕyrµFjÜ<ÎOWÂ,ã6‚÷„e?BQ£_Ïâ\à˜ğ èTèÔ‚M2/9	+ñ±>4ó—Q®>.% ÁŞxšéÑ<‡[T~cPî¢{‘¥M ™”ôS:÷ûı êûP5Æp3“/Ò‰LÆ¦,‹}Løc¡ĞA¡p€‚¼1î)tÁñº9èvN’åŒıCÅP¯Ød²¨Sp‡wF=vãa;šm\kre¶®cï\r,^¾~*G$µ¥>bßÙâFIöÑ¥ÿ0Aä5Ú9nˆgãXzªNı©¢‹›¦&Îã._¬³kÙ`ºà(5jæko°üO¦ºÑSQcî„bÒ©Ò ã­ 9Yˆxıvİ²ÓÁ	«Ÿ¿ü\½.¸šêOAâñ£‹qÈ$ì)õ:)ånâ*K½F¡á— ÎêíWÃæ:şŒ77}Ô‡!®ÓY-ÄÅ#®¿#ÚÁ+ÛIİØŠúqù_ã/‹
+]y¯ŒaT[;(Ä…(j›L 5›+áµgä§±¸ÛÑ²½ı†"*m2ƒ4KÙvnpxlğ,ƒyí&ŞšÆ0'¥t³vÛû[Ï4~Ûw¥Û±™`P ±oFi‹1Vo¿Î,¢°g²aà”
+w„t_éØYãetLGŠÚ9}‹İL‚8+ùe¾…-°Mµ×Õã;Ûº^ìúzhW>±™H"Ç¯@uÖîîÁ|m1ò¢õ,7.vËwãÜ`Ğ*Ó!Aˆ=²R„¡<{~©%-·‘ ˆ(cB¨LÒ/ö#e³ÍüqÅÂD¤gMÊq0KıjRw¦/L¿^Û$ˆwÒØÆœWû2#ƒ7`Ù‚¯¨ÙŞïH–hŞºÖsİQ<áÎ§'PO`¨Ú‚¯EmµèyrtÄì4÷ 1&}“«år?µ-RïtJ”˜»:J•ËY†™"ªÁ½éú;4Œ±ÎUBœ³Ø×õ•GS‘p´©ÓİÙÍ¸~/|ë4¾ôª’İP>Æ–&¾8eHÒ$mµë¨]#…nïÆL¹’z—,°é>q œ_Œ|‡UOöÙ­‹bEŠçİêN[]SÌ#èĞ7‹B,ùÃC$øI¦sÂhØä„ÈcÇå	¿x‡2Ÿ?-–É}*ÿˆdÒ"qPçÎ™¨•SY1Ï´
+uvË	QÆ?U›€o¤|ç\ÜêigúèÖ´Áéæ®ó#QªÕœ­.Íæ¼Ï2¹ÀÇÃ#Pøæİpîq 'Tecer(ÒÅÏÖo8‚|=JìÅ4Rı›·'r
+/¨®qô‹hT¯V-‚ø6ÿ9õa4¡úVootšş¸…9 _bBK>œôx¶s!+$Ğl<³q&d…¼Ît`ÍßX¾s%rÒ5@YÄ†F»ŸNĞ«€WDF3"üö¼ŞPš%Ïa…çàğí˜ê.7Mú!÷­6‹ÈMúqÁPóÁB#«,.•uú®BŸšsïw¯Qq}c(45 q·c×^.4´h]İ¿–Êø’–£‘:BÒE)?ÊHwKÑajXA¹pè0¤n'Á´å‰Õ5±ù·àÌúaWàwJÉ —„Äğ÷)~ºIªÈ¶©ê‹üùi>hî¿YÙó±¥óŠÅ¹U(Û©-9]>°$bHjs_½Nıñ"nÌ99ÄË%Wr’f…*õù'+–ÏĞv`½¼ñÕZu÷í«)ë "¿]›ìá¾ÿGrÉ¾_ÜP¢İx†à(°ãúÖ}Xz_ª
+I6¾ÎÔşŒšÿ2'şÉÍ2ŞûØ†9%¼n©òs‰|DR™Pã2Æe>hCÀN&ææĞz…`áfıƒnÁëø!q×$Üluh)pñƒİ†I].ïŞòªô?ïØ9—ÎO„åš:cÁ½ƒáêjÙÙMM‚F×¿1êÅv\ÏeCvJ…m€~KôŸ÷&„â ±: ] ¾²-šö}¡®ÌGl“C,¿ÄGÂ6['Áëí*JLù¢Q·#Ø~ç­€K˜k4ö¶à.¯ôßµıdÇÃÊúçßï%¶R	-^»ªı„n Yq@‘ì¸×¾Ê«¶—S×A¶µ‡‡Ÿ2ëlıÌ¡/EìŞK&îgwÌÅC”Ca‘… ü%¢²b_h²UV`"3G¥ ¢"â$fYÍ* Ş"/ «T‚—d°iå5r-]Ş.¬SbKïâ#5³È;;´¦ù>ï%Ão™ï!’|”"éÄ¯rhSÓıÁêsâL±u¨«ª)‹œ€Ç U—	3‘ç
+‰¤Õ‘-|zß~×)u›)Hù€óq${>Ø!ğD?å—*İÒQˆœÿDÎ|_á½ô ¢b%TÀeöƒŒxôm‡.û–¦Íón°¼ÜC°È23rOŸKiÓîÖœI¯ß=Ïæt¥`¾¢~p»Ó{0¦:]YßÎÓ ™7‚İV˜-KsLÀ‹õUÙÿi5è]­Áµ´‡+{®¨M#ã ŞY¯ÁàBè#f^ì}²¬
+‰´Œ˜Ù³ìÉİ5<â/øÆIù‘_¦ã¾}?¨H©Ê1v{E1\£Up†§ÅØ"t¨"ÄªYÎXÁZò±÷`¾W$y¹šº#
+¸yÿƒ.a~^d±¹£ÛÁ@×¬i‡›ñŒPäq™%y6ïøÇè”«ÇáÎ{ù¹Kû<1Måp3çCZBëTÕu¹vQã‚}W~dÜš}Ë”¨İ
+hê]÷‹GnXNS&o`óÏxy!¬‰ÿ Šq‡EëëX÷DqVß½ùÍ@{€İ£İPâÑÍDAÆÑ…[9.<=_òÁ•œTÖÁjÀı`Ÿnu_õÜµåå(—lAåRùXŞ4>õöúÔQ'Ôñ9İ_2BC£òOòùcQåŸó84ïÖ¸¡éw!Şur £¨/À®®İ»'AÜƒâ>BêÆ¦¾Zê.p¸«»Øb&c[ÉÿòyhìS>ÆŞ’lÖ½ã+å+¢¶ºa>÷Iıügù"§¥éêà££‚j¥Cg¿$ø§vüFô	èD-Û¶ÕÚVíì¶ÜãÉÿ$·bÃ(
+¢ö ÁX¢i}`ª0&+öê£ô>íá¯‡Í¢ªŞUİh½œ °Åš3lò#EÊ†0ØÅYÃò—ø°!1€å£í¬‰TNt„,{>v èô9˜.-¹hÊ¯>\<c€šrºwBí‚—ñû
+vâßß×oü_ët×Vv(>å@Z±'H û2<İE½{)‚VéZËdeWëgóÿøñÉ½c¤…’ŠÏ’Ió"S æ¹¶·Šë¤õ†‹!G‰É³àY?
+“K¹d¥|åªè†G#Ğ¬Xc»u1Y#åVO`hıŠÇJÎ’ü¥<¥diÛ˜:8 …¤•©Ê1¾»“7ºQ
+¦Ó¢í•g|¶\ä°›]tRO°zÇë7Í”İ$]ï”)p_§‘ßgAn.§ğöN€Õ'v'rM*>§Ö!½‰éï> `©È!bÄ›ˆiK»O¶µ`€Ög±(ÆßğôÆÄºüShÆÅ	ûKUá^°]5ï2`ğ¾<ÎP’w+>Éºj={š«uk¹}fØM(]ñt&cÚ‡äA“KÜ»ÿFÉ„ªçæòO´XV
+v © á)¾9 œ"Êô§Š¢ĞßOK#±< ø‰ˆa³ĞoEa³lÌaoÒÏ¶q^ÄE|yw4^ëâPÕ‚’Ù1Š7Ò-éYx˜Z…Ìp,zøa÷‰zTÿÍ—¤õ`m&\¥Z@­Û9íá¸ªì†ÓÃXêUjÍ¶dŠ½nêÄùöŠ!àå,î0%–ú;BÊÔÍæĞáy°¨ı_ Á/CQŠv3	Ş£÷>5wDÊ$ªÄa¹ÏîyPNMEÌ•ñ;F.ûUÊĞHÈ¦xÇihÔø°˜À3ğİ©Sÿ`?)¸å?¤ÉĞ¯¶ ¾$L&mSÌo&RFYb£°I~¦]-‚ß\	 aÇNø‡;‰qú\ß¼ü^4¡¥ZˆÀ^æ“Ä0IåË‡ƒrğÛmŞmAZ"€ŠôÎ¥ÃÉŠ(SH Ó!‡j½¡S ÏÛì—«ó¸5›?\LöYšE¯–…™àxY/’<Ëg×:_‚©ßÏ9İ+hÎ„¬šô»ˆ.@€ÊÂ¥ælBŒ˜’ÇÌŸ5Z’±yó©H/|5Kú™³Øÿµí5K	ĞŸM/’ˆHf˜¹Ÿñi­!Ày”‹¦ÂGÓG^ttiì»$ı›KNò†H~O:RHP5œg—Ñ“÷èE~,¡O÷“¸~÷(ßõğ0‡ŠíÄ=k—¢xì^,r+²êŠØå+cuÇïÈX`Ô Ø×¢¯|hfiOS³‰Ñ’F	å¬ƒZAkmÑ™ånùDĞF;…²x¬ä»÷11üzålâ9½VÖÓqgH@UğHUåÆÀ´M4U»&1Lk¸¿B½5?‚Ÿ˜`:?nHozş#ü>ÆÛ@A€W‘ë»&*Ñ”äòÓâë%»¶óß¦`ît>øÏDD4”Åş¤ÕKæ"£ívÍzw*¹qkÂ~]8¹ºöl¸îÓ0…L!KarÕqgÉ´N
+6»Í¶¡]WÄtƒÏ^0Œ¶ğúmr?}6ÛœNK3ÌÅÃcY4§uU¿Oq®´®Z9-f½ù“½á8³ã&ÈR÷—ÊŸ‚høë—Bµ·2!S4ì÷SÍç³3 9ò
+é3œ)ğ˜Q[„n“*Î¢Ãeİ>ÜC-ÄTŒ@Ãê‘yÎ”R­M&q••	£Ó°°Š*çŞÊvƒÍUUÍíç	Ášào“t»Ví‘:n(™˜`mu?hğ; .O])o‡¤6çíïUUl€/ØOò2ªÕêÈå¨têWÃ*ßUxò‹'Xş*ï¼ùc84vû4ŸRƒ³üK4á¨¾s?ó•ßŞƒiŠ›5ï@:Gm—¬8‚„kg»]ùE.ˆ#Í·Ú,êÃ­Oñ@+VÔšèjz ³`¼Ë¹àÉÄœ+.J~£­¾&¼Ô
+ÛAüw¡YZa®Z°6MnÖY$¯éüã7`åjtÅ¹P7*è{³ã¬û<ª‡¼Eü¹-+ÚÂ¾üÔ¦Œ ÅÉu°öƒ¼dØåDúÉäÎ"”õ†7íê#7dœãƒ¶ÙáµúÅx–!8ßÖ¥w Øè~Ll±7^ÊÂ @¢N‰Ø»»eT6#Ê’Kş˜ãÚÇk\_/–˜(Ä´"”Í§eÄy(Upeğ|(œ,›aşêAíıi¸C¬ÊÏUÆ0JA»QD¤=[TAiòöw …tPîS—SÍùD|Ô» <B9ıšª»™tÎv¿0+µRÂoõ©+J‰¿v	ººbÿE~ÎH™×ÏF_­t¨ê2¥‰.:`¢LB”ªD_‘-Ò£ù)ğ6=&Ø¡3mF¥LÁ-òR·e8îqdéÙ¬?tŠ0‹7¶@%¡{ıTûğ™GÍM]ÎFı“ó‹æŠÂšéVêÎÈZtlx+D:m ,jz»Éâm‚11iT¬"Ş—^™ê%™¶¤àû§İ¤¾Bİç™û8yÿìÜºñá°qhµÄÓ´Ş Õp\XCqÿkØ÷ùŠz[²«Ù/Û›,ãM¸dR»ƒSûÏ¤Ş`íö"5õĞTM3ÁşÙz'ÙBÀÓâNÀİ¾\È$œ®æ(Ë’2Ì<TwÕJ³ìäyyeMšŸîÕİ…ÙSÇ°LV5Di÷I˜ø-Ó±ÆğÃì—±÷› !ÿ±ÄÊÀw
+Á~k½ª:[«F%€‚Gk²ÄJœŸ¢‡.vğ~zò(oÄ•Ë†zºº½çI.Á †óvÇ¦¦¸mXºõ¨Í»ñó”c!”ZŠšìã‹j.su¼0Ÿò¥âE-?›!ñ_HÔ–’Š`ÂAf×F™0fé³äYf,6×%šØÔzïû	 ñÅ/XÉØ¸$qhÕ—ñ`ë˜lŸR†ç;U÷A>x0÷1œÛu™¬Èû¬åLÿkèEâœS¿Ù-r’0+Ã„!>¸š”>¯§Wâ5lw£cûg.±T¬µ…tWrı<wƒ<öê}Ô5á	9F±–“mh¬ßÛ+ oq	‰v
+T'c¸a—:å¥ì_¸»êóÕ|ÈÏ{øj YøYåÿ;´ØüÑÎ\DH
+©?÷€Å¨O‹Û™Q|
+äİÈ‹è,XX8çş©)ÚzLªòPB‡œa³¸c’uvZ¡Ó¼¸ää#æ5x7âÒ.ôÒ~¤¡%êÖÃ÷şH¿qMHrÁ:dL5Õœu#1Ü½P:÷lúC,2Ø ­?µß*§ã¸šğ¸È„[;Š¸?ô(¦‘x{r»¢±RÉãoâ‰®¹‘¦ë)#LtÏ¥ò4‚Ö•ˆàsãUEV™ãšJAQô_ÌšA5Èkÿˆœz	±¥3·“ Ç~+		ÑÖCßÎ'!ÅßËÎU™G*ÑãøÈ°RZ¶w»gÀø<ãªò%¬§4?:Vzûï®H«!6~+g]Îù½lD«7©‘‚‡¬#J›Gˆ±Ópš=ûvb2tıl³Ê0¸ıœ×)‚¿Düo0ó{L¿n«©È›;8Ç¥6­WÂÿ´Â?¸¸]d”Ynå¡ù÷§íÿE–¤V“{óÅf¬W'ˆ:h™œ,G"ğB–5
+Ÿ8ŞYÃ$üAIá‹&ÛŠ9ø€[íåLx@!Ş¸‘„êÊ}©¬?†Õ1 ½ğñë¯>Ê§¨¥¸ê¾Ój(˜ñ®ÆŠºŠµó›ıù~³d$NíøpO¦’%#^{ªJ@€}‚.ÿüT¯qMÍ¬†õ+$ƒ»¶dè­V{}úÕTÛ‹&ö¨|Wz<Û£ÙÅ®„.hêêÅ³hPÎ°¢-GØŞ
+½»»ù¢˜”ygd‚ÿüN£2ÖÂÌHÜ¥˜(6…äI:ƒ¯¶Ø©i('ŠRŠcÍ±SÁ´5¥	iOpR£…ƒW·B"Üî/u-'1ŞíuEÃ”{rAŠÏkáW¸cQqĞé,úÜTèía¨¤bÊ§(hš"ñ=snûÛa¼g”±cûÅì¦\Œõùà„Lñ¤ÕóÚåc˜ŸcrXô%uªqå–oîÿ3ê1Äê0¥MßÖ‡_‹ÊH{–ªTE<œàÍ¶‚„Ö¸mMè’+(rğ€¼{¤È1”GµÉ¥Ü½/‰Àİæƒ€cÑ¾\•	¬8h'Ëœo\ÿk¡ÄL˜{,À„µZëZî8_š2‰KHÉšD>¬c¾No#[ßP„ßÒUÔrEÅU
+9ÿr¥ô`Şğj²ÏQnKtåÏÃ3xsm4<©æà°ï›‡‹ .Îü+)Ò7|©óè,Û·W·~æzöÆ‚†ToÈ›.ãnQ–ÇQ3ÔÃŸÜÂ–•/dî‘´®ü}N›o¹oò#%ò¤:8f˜Ó3b$	1æ7¼­à$˜)¼ŞşPÅn9¢*
+«ßdºŠtÁ›¸9bì} •{¿ûÍ ·1sS!|õ~Òø)Ç_Npn	›ƒ:’5•œš†›Ÿ*!/ÿc#Òó‘_DŞ€ô~%1`- ¯®·w< eB0±ÆñøøşŸpGA´!5©'õÓ·VüÄÀTºY)mìî…—jï@Épi
+¸(Ì< RgW³¢Jâéó'oz@¤ö„ğ´û˜j†mÓÒ³Gæ×|¤ëø®[uü"`'0ü.?é+¤á1ÑYxŒ™®%†O2ÄQx„'r Ä„‡´ÏuŒ¬9pımY9Ğyí À”÷X–±§¢šõåv¶»½÷ã@Âaqã»aËƒ8*ŸCVùÂ­·3b±ê¿¡†½ĞdÊ¢0IØ7õŞ{ôÆ)c›•=s<Ü»RbÏ8ÍĞ‘D3ûc¬¶Zô‹Ï'|
+Ùz½f
+°9ÇsqrÙg"4z^€7k˜!foóXN?¶½Òó•N±¹Õ J,,q§Ûÿ;…¯ÃÔ]Vm9ŞäœÄÁµñSüg ¦°€÷5’p)Š}´Ú©ÅÛqŸ®Üë/.Óç‘îXÇkR.km¾Boy÷6‹ì,Ër²“}¦ØòÃ†èè”’]¢æğ2PËsH)Fñ»2½M`EğBP÷:ZêÎx¾Ã_kÜŒ^Üu¢UşÊÍ;.fá1“gL°Oã•zœ-Éë:wØ,0#ìè½ö
+JN	ö>”äQí­¿¥Ñú8†TîÉ×‰&˜˜¤1úSŞÔ±§µøˆ5ájµ¦£,	ûŸĞ’+ÜcäñwGaq&Ã:õrönçEŒ-=Õ%,Ålûj’mf¸c<=îdíœÁMı}C¾â	ûsÜ<·çú]vœ,áàJ­ÙÚƒ“ ƒç:
+Õ lŸgÇx®»´ê„~#An4ÀwŠ:ú_›:Sğğ:‘¢‘ckÀ
+xd!¿ÒãÒ U{U	Ú~{ ƒŠ "cKî+Ø˜‡Îwvì[<B¯,T{ÅQ'µ•±™Áùµ×•L:iz"guÍ…¼æoİª¤Ì¥ãm2Ö^xI„`­ŒÚµ!ÃXy§™h>¼´	ÏÔ%ôq_«ätÖè½ú¿OßüƒEô¬eE–[¡ÿ’ºy8‡ñâdBé•ªK9h™XC-G-•Oşş,äş%<Ôñøn¹·ûq¶š§cÏ:ò´·+ì‡K3*
+òöÍ:V–T "Ñ,ºÔr‘;”@ˆwf42—Íyµ®W¯D–Öêáw•¥ëûÈßò!&’
+~Ìæ?(‡%Ãˆçk†k=…ÿ\´âÛé¡eÇˆâûFÉñV—ÏšÏÖ™™÷Şéïms±Iã=Up½ş…Í½1Ş:°:fö_Ï"ÜÜĞhÄ»ë{:%7 º'§f›öˆå$™9­øßËú
+Yù0C ßjBi“c…¼bbÓø«‚]9”=$’j ùè|%¼Uóƒ[Õ½çqâ¸k½ñ³T	øq@®(²¥.5`2¥ìğºoå È¨Ät]±‰¸•+¢·5¨.rBFYµ4Ä v'[]Õvw-Ş7›|ëqQpKÃW´‹®N›j/-™åaÆİ]8o{y ·„ è_¯˜ózTÂ»úl©ÌKÂB„ıõY1c˜’ZÜ^Í~9à$ï'Ú½‡MİB#2ù±»P!æÃã’³w>ø|zñh2a–,´™_Ã…YYHzÏ…¬D€H "Œ‘’£­AW)A:¾ÒÖ´Ö+íÈ^±Îm¢›q\Ò@‚´ÕAıñ“ğ ïİªa’©}z°w #ˆ'WÙşXR2DS”˜¥øMÜ’:*ÔqÌH}1lzû’ef%¿ÿş†¤€^¶×^†H¿pÈÎHJ„¬ÚéD´·K]6Yú)6RÄnƒ.÷¸OÂ?‡¶ÃîÖ˜íè”kC M¦\fÕÿöë×û"ùÒìLá)Ÿu±„G&j·Ái×¬ÿp §Ø	j‰¾ÿmÌ2ŒkZ”bONtA××¡ú$léîz	fŒÒåuìØÎ‘¯›µ	IÈ¿VlˆóP¨ıA²uöx¾hĞ1Òt~RH;î£Od‰JõÏKìã^>`3Qü6Lì øC„r…sŠ\Äj3™8ı˜Õ3Mİp'ÂáF%—¥ ù"ÖKÎyI²ØÍ‡œ[.nGåé»?ïÒ2î“ÃÜ~—h"“hÓ[A å>4ù¬Ğ™~@õ§0&ËÑdME!äYR¥¶ÍìIÑıÚ1¥”ÆØ™¥ŠRŒHçôûA rûn|ê<ßÃF>óÜòöÓ˜m+ã¨Á ãí“0 -:üá=s]Üöæùæ¼O»wDW&>ÂaÿÈ Ï€®CZñ.ŒƒBkÂi™å„_ıËş{‹‹‹_Ò;”İ¿£¾œ¥\ó)F6šJÔ÷àÇÊ}/'¢`ìô‚Ì®óh>k %8Á§Â&£pŞÕ¼Ä‡Ê¬,áÄç)bñåKmGÈ¤¾:ªìÕÚº¬§YÚ¾¤Sèvã“@ÊñóîzsøâÜœ°j×csåm_l[¥…/Â["B63¹¼ößÓ<-¤ÄÉ»ƒÔ_Ú‹ù)Æá’z4æcœ.g³UCÛh:3ÆÃ\ßYØ™ª+¯M©XÈÑ¢¨•Wßğw]FÃX8/îx#uó5ı¿ëh<ëxjæwuÛ¥÷IVºËÎQC}7Z×tèSIM}Ùî*µJú‘½İğ@÷÷x,]pË<ÆÕÚd»Æe:šØy¾*y·ª9Ó†,ëº¹ƒÔ‡bYú¹47_å(aA(0/†Õà˜r
+eœÃ-ñUİ;A-ÍV7†Şp {Än\Iö|ªQ–X[ºX`?4ÇşÛ(‚Lq*.5^Yg£ªÿ—2ğƒÀcŸ  şPwŠ1œŠn•=)’grÀŞğŸ¢d›Í"pÄGúJCcdË³½—«§¢Êvô6ğ«”×xò¾§Ä›{›°õ¤blª`ÎÕPë«Ş“î¤; ôıZ:ËHë¿ƒ½ƒÊ)©°Û‰.8[­à[4´¸0¬<d¤ ç¿ÏGe•“RV‚YÑüYCï® ¶¦[ëçtŞ; Øó7³|	ÒÑ¥?¶øÕ&R›?RäŞõ«m±óß5³’¢"Ÿí1èt¿{±¼ÓYæ¶ÁÙ7şH™ì_ålvĞ%¹¤vêôİ–ñ.ñŠ·Œ) ˜*~ñ#GÑ³œz¿$°Éë4c©x_OÖM~ÆRƒ¦ı“Jˆ¹á«¡Z(¥W^Š›#q#­íªCª—ÁcéB³hOm¨CĞíBn•æ!šÆ%"î]•DMQæ·Ôzº—‚P‡ ÿ¢õ	÷HáË½fjèg1–C ¡‚ÜK—ª^,ç«S•	!&t˜˜Q©\}	/É)}ÏÍ£kœ «ğ/:óXK39Fğ*Œñ½÷HPªÄŒHEÍ‘¶Ç±¾d^m¤²8Ë6,şs<ÇæUÎ>$m¢vÀÈ(³r"€=[ÆÏ›M5(Šâ¢&Fsa™˜ˆæ<\Pa,x¢bFg“$Ù	Õ¼½MI–JÀ©¶:%6]ŠNUëV&\æ…¯¸©ÅÏá8Ã¥Pî”¯!ü|IPOøª’‹ŠÑñ£:òzXà%‚—qğÇ´ä(±½e+v:åYËï–m±u•nJ:Y2”TJ¬*N3,+ó˜İù äEQiõvv1-A<h†ÿá#ÄËt?j^qtÍ§T0ËS9QçFiYG¤ÉFMÑÕÜ|Qşèd¢]œ“2ÎdàxT®hˆ%²¸Ú^/Ïs6AM®Éû5eÏàém§6z9Bÿ‹0Â{ a¯ÊŸ£’`”ˆTK‘ĞKŠ£´F¾/“´Ù5PR±,Ÿ:ÜõÜ­Fª=j b;zV’äFGiî¾ëwEŠõwÃòrqì‡VI ¯SVCÖÔ­Çp™?W¡K…:A˜T¦•t´.·ğ½ÔüÚ“2;,ye´°äe«bÉ¼Vƒ$lÚÊ£
+áHåˆøeÆoŞ¡§³p0c“ÿì_¯I0ßû"ÉíÛÀÚïûÁõçHË|:HÈ™Mr¿Ú>á/‘»ûØ¬÷ŠÁôíò>CŸ»>èº—	¼w•ß„rÜ‡3Ú<ğÿ’õåm°ÏFÃqÔ„¼ôòå“á|ôSw’úÍÖjÛ®ñ	û —§í—&KÏçÏL®™]Fß.·a€·pV¦Î¤„ d„B bH_ÍJïöÔ©Ôa—[’˜UQ6­‘Ç’s8ù&0úEv¢°ôv¤šsëØV5bw¬(ŒÀIQSĞ.kÜ’†ËYœWÉ«”ÔŒ¿&Û¥QÉÈìÛê›O•Nvd’ÉÍ0UâùühÔLÊñ‰Cxu²C¡/lLëåcR…j£qĞ×—ïùá­Jæ;ñDæ¨‘ĞFùšàOÈVp8öãNÌOòÒå“AÌ‰ƒİFIê{‰É—²‚;fê$B¤¨"ë»Y2Uı*+o¶ÍXk~b­ıµ´¶ïYĞÄ‚ìö–„%x¨•—TáÓu
+iĞ8nÍ.æ&?ğƒ0EûÊ~d*:İ¿G7\Vºã;p_ÖÌç=<IÒY‡@1d¤‡ŠDÃ¢7ÃÜ¿®¨´ÈÎBÊõDÙÙh©uá7íş÷Ô4Š>’æD.°d?(9b½²gZßBO uä
+#«jô-ÍÀdh¢6ÿQV%V÷E»8-Õÿ&ûüBH~Ø'M#‚ú÷=0o!Å–üdÁhÛHÙ÷ô§™¾úÆcı°ı‰³šÁ¹s–î©ev¶´d´JBÃX}Tös2§J"—¿"’Hfy¶²‘’™öÙ¸µ}"
+t¡&í?Íê1.ÛoñeÍA÷$ëJ¸ğ™®Ãá\ÃJÿï…>,¦bc	g X£XëS=ZjÇêˆÕêœ­˜k ùŒnÖ°‚¿†8g¶†æy¦Ú¹¾`D¯¹õø¦F”Êµ«#Pôiˆò§ôš¦KÇ|	D2%q±|!CCò¥È²gÏ¦ğ$—Ms^ß7ybšbnŞ©zæï›ô:7Ryœs¤’i¥¢H­ÜŞŸ€û­Á²óCcQ_LºÁCoDúÎ­‘N5çóáÊ"’‰”6ı¥­—õëàXºÚfú‡òfÑBŸN;H^\ûiÒÄÄx0y¥;Ğ0İKr,oõPÓĞLfE ºµ^ 'nä¢U»® Ÿ<q(ıÿ´?4gòNÕ§aaP˜CÄ§qc¦[N’ñâgŠLÏ“U„õÃ» 7gÓ’Qn½A9¦–âÙoğï&Ö€xù^Î=…wA¢¿ëvÉò‘
+ó¡1}9¸°VGá"›µLdã>ÓEáÃÒ ^Hh–I•Ÿx”†ú˜iÑòZÌ€§ş—¬"=_ñø¸Bó‡}¯±%îYëCĞ9,ÜæV>ÇÈÔT!º:J¬šL¥vó‰ñŠL—!ÓòŞn¢Ôîç[lí'}û¨säÏn5r@8…zbhè¯ÜíZ
+®bŒŸ!DÓ¬‹ˆXÏ©eXï‡Ä†Oú4kö{b/Ô“MôódZªÕÓ¤²OÏÆd»ß|¢ËZoMpèÖNòz\fû=Ì<E~"qr/×|Š8[Ay0¤o 	,¹)ÖARòy¹Ÿ[Ç 3˜-.¿\¸©ªR‚Ü
+4¨`9Úc‚…Ãè—ó¯‰ƒÉÇ±ÔË*jü@'@şº÷•ôg[Á„%´yæ¢Û?û,²?-òúíƒ@pÜP SXNÓár¸L»J&Ê’:•\!a©n•¥ˆ¥à¶µ; çÜQ&kúÂŸ‹º÷¶41®+ÃÛ˜åKÔ2Ñ¸‘°Ş¢–ÂrŠÇ»ÛCµz³ns¹¦‡&è„ ê .‚GÃw–?µÂšŒ¹&0÷“êÍ¢£ú4ş5ı;æ•½‡¢ĞtA_Ù/†¿úôûÅÍd÷4´”[ë32¦ ÎQiœÔû;¡îŸôt‰)ç°÷60jÊ6ö§®8P,”W C`VjfÀ£g)KR}*ë¬íKe@g ²”ÿğ––GW­Æõ~ U–ug1š”¸Ã[J$WÁ>‹®¨å0Äæ¨XÀÇäÀ‚n¹õÛ_˜Àe¦oºä*éss›Ë_öüécC~¯ôi@&Èô÷€–ÈÎÆ–‹¸tVC¤Ñˆ§%:‡ñ¢´!“~lùÉM#°’J=²|æ¸¹öãeÊ6İK‡ÁĞ¥æÖüûÎ±šcy%£!0‡rd\úw'e5Î õŠÁä$]ëTÕ2cŠ‰••öœ×¨dœ'ˆÛ€E€Š¨|
+‡z”Zİ”*<pj³t:8ÃÌhg¿ËÉì½…¼GÀ´†ù·ã£ã/¹ÏFä<
+AÁÊ8>ù¯ÜÜ>ì·µNpA¤-İ%))®á™• P¿lÿq/3cÖOitøMFQWÛ^£¢{ˆNÇÓŒs£XôNb”=k+ü«Ë@S@T3#òĞ†áó¨¡–3]ªü$ROÁ°Zí9šbÈ®aPÂªãÉ§_hZægèBÖ;x¥"_?ÇİğVÃ·I×1¥gD”œFNçe·
+ñV•¨eòdƒV4óû"µ(¢eÍsÓåˆ÷Ç?/Ó0© hÀP½ƒ³0¥¼LG@‰Ï‡K–
+¯K ‰2:vİ¹PSUÓ¿ÂßùÚ0f^aˆÒÓªŞ¢–6…ÀôíãÃ€û×®[Ù£V>7ò_†º˜İm[0ôÃKà–Èe<œT%ëã -¶vbUCƒ¥Ç8EY°cwÉWaÔQŞ·‘\-bÄûPÕÅu„¸¯ÇU±n'”é¶ÇßäQôSrÔ6”f$ıkOLr/U‚JaºM^JtD·Q›xŸ	ƒgeà4£7+‚øÀPÙ)‚LÊ„qO:ºªW*úd6b¸e©Áğ©³‘”Îª™u§·.œµ^í¦ğEØ±<æ³ÛÁ<%ÖÿGîêËì´U»²*qbùÌ¬x†T
+ˆÉ û"µ²9®>é‡Ï
+eúÒ#Ÿ*ªÃå‹ÂÂ™WwD8>¦¤5`çq¶‚¶ºÇy¶j¾:–sF’1õçbòø˜èà4Â9“§‡î v>²Õª½¼Ÿ¾ÃU`øfßeZN°ôëmQy1·éŠ$ùÃÇ”rÆêT‡ûˆäÀ^efò»oX\Ôñ—w—VÅB­¼@5ÆÌğœúj÷ËG™6ä
+9<% ¹$Ù¹¢pór98'šêÌú9½f»LDúNd9bˆö@¹Õa(İ(ö)B÷4ş)UY£	=fœ6Q¡ÿİ©ïÖã•*“XT=Y‚!µå5%~üÚ)ÊÎ°2•CŞ§Æ¢yrAõ±íØUšAÑğ¸(‹bz¶èÎÅçª˜u`É  Á¢øVY‰'Ïôˆ8ÂÏr"ıÀ‡uÿ˜²Ú«Ìî³#eí¶õÇì<kÖ”Q*¢ÈÁ~HÂ‡áJAp¨	N,n¼Ê+ê‘ĞÇ=#¨±Í`é³è°İja–Ædª¸C2õ†Úî9È|Bd}(^$çøğ8Ê˜=<f²¼ó®ÔQq5Ö1M}T¨5ÎV p‰ß›dê˜o`:ƒas×Sˆ¢2†R[±ç*=º êÙ^‚îCàQ T“$£áœÛé4†‚£à…\Ãªg€œURš!ñàİ];Yœ_9"sÎ`Âcø8J{ƒNOk×¾¾z>;6[$!®:ß4Q6ªˆğáa÷·6ŒcÊ¿±ù©c$>ıs÷Õ­0;<¤fwä©“Á{E²2€cQù‚x:N†¹Ä¥I›^¨$òØŸİ<U¦Ì’­›«Q$™áÊ©´Ğ p…ˆ?š1ó¿sº;\W£¤Ğ™ıñÿ¨¢'–_İHzö¢æV¬×èÅ ÜQå£	çØ,9õi­`º`/®4ŒZ–¡Sønjg¾<¦r€PÏ2¸ø 6åÂcö]¯Bõç…ZwòáŒïy†ˆš@qãq©²¸Üûò©ªIZKŒC…#½¾ßÇÃß,°(<BTJKåø=¢6 <_É­ñò ›„ü²^ QzOdjİV×~3Ä§£„ğtbXc3uôBN”ô
+´êîO3.Æ¯¤ÙÜòµ7qöıà%™ÄˆŒ.†sV€™<™pe2ÄÏğ¸p‡‡!`(¾O(ßÖÒì°® Ò.vJAƒôú+NÏtš"ÂÔŠ‚øg¤úx¹· <Ÿ²È–Ûáz×¬Uİ÷¦çwĞPÄ$ô5ZqØù¿8øM"ë”äÿ :ãÄÀŸõs~ÄÍÆ_Ü|œ"ùşIÁZdë;E!±MZl“ IöÆ…­ØòĞ¹ÖøÙ ’•¢ôÃ9eº—Çj*Ysä¥3‚E0 ¾Tšo#ŒiÀmïìÂšÉuÍ-Qú~‚¥#²V'ê„!D Æa”×ôÕ›Å} V=Ş_Ü$·råt1–ÒbZÓ‘-UP1º8 Œeİ¾%ÃfØ,EW0üeÏ'ÃûG¶Mñ ®8„QHWËÇæ¤‚§	IÖO'õ®‚_|“ıcØZËµáSL…î¸o«ûà®û@fÌMÈŒ¡Íéñÿk§ó¡s«Gm\²{¦›Ùñ2uñ§ B-+uë’Ö¬şpÚ¯>“û‘æ—ÉV@ÒèÔ‰¿Zdõ-¥çşş¿®˜Î³ÓŞN0æGúÊ7ò¾Èû®ğØÙİÓçqÃY‰[ÑÔáÀ2kMÈ*ÚË-3çÉ?l` ’Í¼±:ı:™6rÏ®±e­k"f„e›läÛş_ú|Iynİ²]ÚücrS‘]Øzî3IĞ¬‰©_quoîqKt#{'j6ôÒñæĞ½p‡
+Š”Ê‰ñânÈ_y°øÕ%áÜà¢`	¦ÆmØîc, d­çDä,E( UŠ§jx+“»¯ğYI ÅÅv¨Ù*ÜöØ»;)µNa ,¤yŸH·œï·ò{~µÃTaşˆº^+iÖ“y¢ß;aSxŸ,¤v]ğ)ûŠ¦„1˜ğëWà‚Ñngt›¾Ñè¬M;³[Ôe@˜Ô77å¥ÔYOÃœÄí‹^ºOş?$¨e÷jŒŸ>Mµ±>Íam`îª‰˜¾ÆBï[$888¾ˆÿ£cŞÑc‰QÖ¾¹Có»k¶ÕZ¾l·]üòÚÕì]Íì6§q%^&B6¬²lªêÍRÁ&H›	íø±…â~Cä‰•óƒ’*9–0s¾·&±#qEºÚ¿|5yµıáÖ½í{Y,H0¥0ı«K¸+K[ó]ºû?3ŠTYä¨aN%€æœ¹Mî‚ô:a#½)#Åâªş§ŠŒ0ÖÜÛÎvï|‚E T,òMRºP-_ƒÇ«)ß¯Féüµ;óİ7c'Œk“ À½ÊóQ”ÊØã¤Bõµ#àfkGÚå$›î_”kb?÷âsÕÆ+Âú›¦úl[)EÏ0È„²¡`$>'{ûnë¯¥Ñoê•t{ÀqsŸsCÒ©yçfÌÅê'ş°Y˜.wæ\¨v¨9˜¤{ß·ù¾½Y4s+ÌØ=ËµÎ'Ú¿‰˜Ã½§GÜÁÊ?+.E|jS[íbbÀŞ5ò?ªóÛØKãù$û>æ£Àì&«Xèc«$ˆü³ŸDµ“«•ÌÆM@IÈ@(É|3Îlô[á=#úeô•ë=¡ó6Â$ZĞpd·»Ç×£6»æq‡+ƒõáŒ ,…5¤vÅêŞ´º…4,üzîD×ÃÛí®åÌQ	…²ÎÒÆ€éå`pN,§Ø€¼k[nG+r©Õ±?Eç‡ŠZùgM²¢Ç%kdwœƒãïÄ¼61,Œ'Ó™[L°Ñ!yÂO‡øˆß6¸·¨ åŸÏ>g¤j5ÊÌŒSÅhÓ`2è‹_çåÎÓıV³çáT‡x.ÂíL$†»ãáß§%zOÑöYĞBï)ë\Ms»LªŒîİ”¦‡òØDÄ£6h-Üb@17]·®—U_…‘çJÆù0Ó;b’s–ãI>düä	2…Ö'OgXsÒ6O÷3ĞœÅ¬“’Üwús;A¯¨Ü«2A1Ú~¥·ğùŠ+&«ÿ8J¿]ø\d‡±]ûÍ¸úÃíØÔN)ñ­a/ĞC»Å	A¬ÕGÖz~Š˜õŸÉËÆÿÔ&jè‘[¯6ÃÖş›Í&ÂéÍY	ÊŸ'…ı-¡i‚¢ÎhÛ+ˆ±&xDõIgU Égç¦ƒİºu·Á›ù V„eòp71Œ¡qk~úÑö‚­f¸&S4É—ƒOÈiÕúÖÅ	jòW!Ä‡ÒéÏ0»7+-—2ËÆ+—Í­MºÈ94À‡!¯¥OÄÜğ*^?Hd;Š‹]Cı8l¤&l~– «¶µŞy2P{÷_Ršøü}JñìbM‹FR£CNQ·Ó¿;KhLüx¢
+—HRiİ-ã›A ı/¤rßêøo¤'$>¯,‡ì¸®‡WÊşxE ï4À2bŞ[Y@z#©å$NØ…o'¯Éæ&ìÎÆ-PÑ4»P¹Ş!ÇÍÚ©—øã.°ë‡EpCO/‘{”Ø$÷~F_\õ¶~_µA<ÕjÔ –~ÉÌæ,HÕ-¼¤×Øìëp)²D¾VNÈ7åÊ~±[ä‹'Qp,@±~	Æ‘”íÙú
+ê¾µ~ØF±r3ğ_»
+¯€?Øg·¸Ys*N¢×MÔ–jºÔLtæépË¾î¯¾=-@Kq¦<÷‡Ú®™	?{À/E5Åì`p,V*ŞC×Ú}“1luÚG‡¤‰¨Óó9ºd­,yM—Üc®!Ÿ=¨ú×8şŞr%ÆpáeòÛfëyK W¼´8š ’@ÇE^ñxêHDĞTZk‹¡]µ	Q~Ò™d_SiøBSe·Û,å,^@[”ûQïº¹¬€ŞÒ<[rRŞè•øV95!li§¹PÆZßsÅêlÍªİøO?ÔçDLy`$<0`‰U‰¤›;s¬ä±æÂ¼]V°Ë&Cç\šÃ0;€‘é÷›8¹®½<§ß¡VæÔ´´ú„«ØR7Ï ŠêSl`g€CNtÌûP¢ĞşÈU‰IL¡\l]eß™HëzMì¹ÒÄŞşŒ)¼DŸÜ¤VàêÀ¾b—Kuİ$H6ŒÈ~¾Zõ¦C›%>=*¾£:yÆ˜tÄm£®òì©Ò_	‹¯DG;&¬Ñ™f\±:Ê_gËóã0ü²OŒ1éù=ª]ñ˜F Ur»xß`gĞø?âÄmFD—¿û»±Çq}¡ 0/–e[L³9¶w"hE¯0i©:¸İÃ¢¹ü:ºSF7(ûLÚò‘8¼ËÅØ9èÑûZLCs6[yb@ä\K)ÀÉM	>#‘ŠXnD¨Gøtm-ÆĞ,/Œé×©Ë³‹m±BzVvšp£`5şÁ…½\òš0[WŒÅ|”(K&Šüœ©jŸ›*\AV9i¿%O¶éŠg€	şå%JŸÆ—€Ğc©LVÒ?Õíi"¹·Ç|BlÖ£¯¿‘ıLÆI 
+r›÷4”uhÌsëŸ©UM«´=ox†˜Rj¬3C£Ü8Ö•èúC(P½x“eÄp=J,òÀZ€$·^r}Ğ…­?k:aı¸ÛãÃÏ	+áGí*Ù€œv³ÛÍ¸Ãô
+äpdÁWp“VÛ¤{|oØI2Şf‰‡’¯s!^÷ÒÖÙÜêü~†\W×lVàæL/&˜’gé%­
+üä7œ×W½™i„jÑŸ˜Ç|·õ/Ìe@Èİ_4eØï€hÜY2 ›9?"cn·¯&’¥5yşNæ+eïJL¸FX:fxuVÁe|¿G4¹zo§~n(dg\1\8Å$ùdì,Œö¨iK2¶—ÇÇ&ÂŒŠÛö¿î,ÙWy¶Š{†5¨/–zÒmœ™t#È† ğ*.›A8Óás¢e®Ë°«}#/Óõ]Ò‡|‘G+P\{iUl¢¹oÍË:®Í¢’@ƒ™{“ù‰à=–ªĞ‚ş§uû»s(ë¿F#!õg]Ëe¹Ñx÷b†²Ôoª¶¢0xÄ[N…×ß¨( lV¨Ö¢DŸAú¡E¤DPBÁà8û€‡CAV­YvG¡û7Á}[ä(‚Dm`ƒ¶ÓÍdZOMmÉîúá6–Û€k0¶V$23Y6°‘WîôÒbFí6"Gœ÷»a¤;M_9ôÛSKCWGŸÙÓ¬ê*b »±ö´b9À"•l`îû`¨’‘/!ÀS„¿ Ã
+Ï¼NşãöŒÔÖu >m`r©.Ò”Jq|Eëåâ‰w³õõ§5¼öı Æˆw,>¬°ÁÀÿ;¨u„ÆDK«İ1İí–"3(*CUo´œğCÒFÀGã­Phè”ênÊ­gæ$¶eÓİ@}ê³€‘Ğñ•Š[ÿÆ°%´ †f$ŞyÊ2ê°„ Ú&ğZàÕĞ† îG–kïö¥ø&ìŞŠ—åE¤€za &P :BŸe¼íYf«Í²ë¥(\¸sŸ™±ˆ—xjš^¾¤TG*—rˆ­­Å©Ú"–Zb@[l@ÃCû¦¯×Dó‡ÈæÔ£y¥ò=À›?¬®;ÕëkµãF¢A6R%cõÍ[e³†Æ&^­Rò±¶ëíëÆÌ‹ÖæÚÿ]şjî<qm‚˜ˆ6¬°8­õä½5Jß·…ßŒÑÇ|¾]NµTÿ'»£Áï¯•H´‡á,ïâ	©­É¯ƒa‡bèï7}ù.a„”h.ÀÃgWI¬ÕûMÑT¹aéƒ®÷ÄÛ”1­WL¨ Æ©;€Ş§ E¤û;K–œ¥HbïE)-C¸£D^+™ÁD{ŠÒÅÏËïßhOÎbÛm„¶56tæ	¡õÓ<xççu:-¥ÄVüé“Bp&`ª’UwtH¹¡y@Ÿä’0‡Ó–ÓŒıøA6oU¡zõ”ö\úÈç
+’ÇØ½×•Â)æÕâÖÉş©ğºŠaÆ~Qı±%™–Óq­ïËß¨B’NŸÚÅ}¹ ƒ¥ÒßjJ—èqïàµPa7B‡ÙàÉKl§˜WšÔñÚÖl[PŒ‰¢<ßâ¬=Te#œ8±æ–j‰*,kğIµ¶sÒãİ’›õØGm4üûRÏ¹Ö¯š'[W!¸I¡@&BU¨V´_êã‹®'Ÿaÿµƒy¢½x9ãsá?¥ 6?cØkä¡’[jß5pEKb/ë¬ÿ8K’Ş™<c•x±
+÷p†º¤Xkb¾*«ærÅFûıù­oª>K>“íA¯›]ƒ_;›{†üó—D¶-P·l]ÚfTâ ‰Q	{¥?àAìä¢+k(ˆPoi~É¼-ºvPaª€m>DD¦y%$‹ƒ~¤¨m€y3™±vŠ9¡)t¾Øi«n+§7Æzèì‹qßåÿ¼<YRëÂ²®±WYô—„¿¼®#ÿ3Ø´õ;Eôíx‹»¥¨cƒˆ/]ò8×Î ıÕ1Ì„.ØäÇŞº¸ 1¸`Âúæ¶üb0jlUqpLR%f)r@2>E–Ë0·øböœÆ„yf '{µT,·Y!¤oß<äæpÁQ¤^=A_s²rİ§OÉhä”Y) ó¥‰©^WlŒ4‚’¢(HÍöúv1Úí4Òµ~ È¸8–ôgõLm}Èİ±üÀ¨¬`Ëşu`1–sğDW Ág¯ŸÂúèË·™êí¬×€6eë¸ `ÕÈf|&WßflP“{PÿT¬ë 1T°ü+Üì ç]Zl)¼d3ÂXSçE›Ìÿ9ü2'qr
+~M£cd‰e’"ùÁº‘pI¼%'‹ÈÕ.Ô¨¯æÙÏù1xbŞU(¬¯ì`t°tä®/Xö¡šñE0Œ‹Õïwv‹#ÖFb#~µ-?9—¿ìÍw`©ª¾FÉAAì2Æe«“Õ¾Ñ ËÜB4`î—Ææ;-z²Şañôœ.(`ƒÏbÊq5{Ôõ¶ğ>­OtŠçgòK{|.¿Û0ğ“³…¾Wo)[Ñ¨RGh¿â×KQš²Œ£•ğ6Íhzã
+ÖÉ#B¦Åx<¯”Ê¼áP‚¨‚°3PIô„b¡‘ìÖ­2¡ağrÅhÃÎh@^‡Ş'=µªíøh±©vÂÉ³4kÆf×‰8×…‡Ab¯«Uÿ—tÃó%QÇ_ÅğªTØTåå‘¾£ÄíöFÜ¸¦Ã¸„I’Éº(ºJ¼†%)ıèâÅ›ëPåvX’¥BôØqüÜ‚~’ÃWËgÿb
+.­ú}]à›|DX±W£iÜ÷@w›b¸7
+J†~DÃÌ§{ò»©âı¹F°x#Ck\dp~	¨¢2…h/•7{ø³	aõw˜ôpU$¹ÔØ–
+N„jXhÓß§aÈ’¾çú|˜U•Ó¶-²À=óÎÚeñë¢xßW_&i2ìÏchAQsjm®ê«Ò,8H½î54â>xG¢©Œv†á¯n–ÊÇäĞä˜Fa®m‚«òaè•i·Í!Ğ3¶‘pé>=ĞS¦ô	à¬¤§é…<n4@mo°.´?›Wèî/Há~k4o	ÂUç@wû53}ŠzİÛ8{é¹„×«•qR›9 ¿´N;!şÒ&.Èı3Ğo®…wëíU•y@Å¿}¾Ÿ·ë•¦	*2Eå(ß‘K÷®ô;×é‹7…Óñ§Õº©Q9=	€VaYÇåu(Vz•ò½Ö‡<gIç®¬rR>¶Zà¸)NoÛ/x%Â‚­ÎHˆãUõè+5-jAÃWc³ÊšçŒ´5ºÕmóc"÷RMÎU.*ß­Çé[ä¢îW@ïduS}.¦<©ˆÀĞ¨>b§>£ˆŒv"WÇ/µH‘‰Îd&PŠ{,lÄH;g“5QŞû¬ËMs;ö¡NÅ2«GÕq`¡uùf¾†–oHŒSé' Æ!¢@îYÄTÍÏìËòÂ öµ@ó&Â…kßqG²eáJÎ›•R‰Ê¤¹ÍááÆdñÿ
+I7
+b‚ÿîIXü·Rvßi?Hpšü*ãbæ.g² LjæœT|Ÿ5ï™(/ÄÎ¯‰ÓˆèæÆ°ÍËš©ídaŠ!ÔR3öçá‘ÿ?30…:_K)JwlMfËW¢!44 MóßpƒÎ™—Bİæ']Òÿ Õº¼»¯¼–¸%=f)ê\Ôîºã¬¼ñ‡zï“S<â¸”fbŒohScOÌjÔÓàİˆ\ù~ÿ¹ G×Ë¶ÅZgÈéˆÑ¿À¢4ßƒ6Šv÷|{®F˜B|¡ıïë<n¦¯m?›üÃxĞtODkğ;´nO7ìî6-Ñı³èùÚRjbc4/¾~¯ªó;1h¾MR­‚3˜BÙ1b_x[ÈéA7™èM$Ï¼;ÑT:[v_š	Êı vÏôG,±ƒ?Ì&ù¬¡¬é¬„ H°ut°xsÇ·ğ¨"ò¸¿qq™ü
+x÷v›|Ã)«%æ7{n-æ  @~Mgñ‚!ËÂÍŸ-9Ğ7~ãùÕ&à>ÀÄ $´à>CGG„"–Uü#3;.CKvÈËDs¤?^¯zË1é¦·{î[‰¤š‚2ê^-ZÉCKMhü4‘/f¹œ/ÉÃ+ìÿ“ùÑàŸÓ.Ïç“E·µXBÕwC.iªÜ"ış80-<Qõ'däA#IÃ:ÇáZ`?Ml­· ‡Ûˆ9,Å…è“ sèß©§x€¨©Üşî¥¡‹$3õ³BQÚ++Æñ\_£"átRRr.¬ÍµRà¾V¤ûÑBÊÜ=–öû¨—ğØSùTÑU…!ÁÀ.Ê”:Aq»Ãcÿ5?˜å[¡‘P£¡Vm5) ¸¤ñÖ8I¿á”ma¬¥›Ù®#¸˜¬ é˜¤áe}{QÛñ¥-•W]º¢òÓ‚œ›Àgâ8Éèvü®ÚÓkshæë†š!êÑ65&¹I®„˜êfH<ûÅJ!.ÀÎãCÁ®åÜ¶Éğ‘1ê¬˜÷3SY#š~W~’®,Ê _ Ùiv)œ"Ú§üóÃšUÿ#ÄÈZPTÖD³k†ìn;ôxzo~ÁNíBÖ¾ÊY‚¤ÒËÓú‘Ôµ1ºf„Ê3d“Ö:*aú÷7¸p@+ ÓØªå
+•×{¸Ï¶›ï6~²³ô-Íµ1ñ*ºçœÌhÊİäj¶dåDvhQPÕ]í^ÛÈ¨.ŠlÄÿu àØ‰‡:%Óç`àÚÎKõ	°d9òëßHQíahåy…Ğ˜Q/«‡Ò`Å9 OoM7å
+/šî`,ƒ6¾eÓÜgúuƒ±ø­[L«—©ÓtT[³å&ƒjHZ÷ş-®ÿÀhîò4Q±"şúÄzDBµ¡h	WÆ– xMõ‘ÊÓèÔôö“\[©ûôC}£%@F•÷ôÒš 5È(7ÿ‹ı}}º^E½.å—FC…±Ú²>ï»Oº’ Õ9G—·ŸNÓ	xØïõğĞ>å¼Ãk4Ò¿ßäMù#…öq¡0”k”auÄÄeÖÎr
+râÖdÏ+`Î°®-¦(P“ro2éNÜó$åş†–Z4VünSmŸ]lå,QĞo~¨¸¼òs}¦Õ.ş‡#„ñÛWçşÊOŞ_ò'¿‰ºúyÔ¿J9°ªWÏ¯ŞZh8“ã¨Ê~‰¶É0,”h·6FÑĞU%EeòÁu6T—ĞŠíÆë¯i…§Xº…rŞ¸W' º{DÌ|Ö-‘¢óOD>nÅL[‹;B]şîİÿş>†ú/tOU¸[‚®åí³-xA5L÷ŞãNo^¿ ı> †8"J9	Œêf4-×6ÛÉb ä8b¿WEFxãè®y<ƒjŒÀ…ñ@³F³wş3òÃ„ˆ­OÌÆsNíé«É¸£ÂbdgP/Uÿ£sÃ|•c–b\ä¯SÂå!Šò×¢/¬NcøËü:ßŠ@.%¦ ÎÚR=ÃÁ#ş-Éş’â^ƒÓ<¨šHÄî#C—Œ¯9¸şÙ¤Cª!×«¨®¼ ëÄxÑ_­¦’\¼UQê+0.¹&‚Y/¥1}EMw%„É¨ÕÙ~c.ã5@_UM91ø
+©z×m^mœo½CÒ¤àu¨w;á‡Ü9ê|×êi"íQ+J®…à…]óë@Dsztşó‚4Šİıe¨®@ ‘a.Æ§ãx"dĞ§†
+ÎÓAô/V],¢±-?$ı°ÅK5‹Š?q!M™;ÆÆ*/¬Øu,Ö6[{Ã¶‚]¨âi1ûPå	¦‡dM7Ú[v‚Áép7mË0
+Kl?ÏÜg)¶ÜŞÇ7–¬Ÿ§Ú@]ü5[îàñQCÌÔôºıTç«’L?\aÓlÜß2GàîóÏª±H~õU´ŞÑªÎƒäñ›ÓÓ
+À3RlÒ[Óv=½(p–Z ©Ú*ÜœPW~WµıO•·©v}2š“æèlŒö‚…¿YÜÍÖà“ºù•x±ú“ã*~A5P¸Vñşù•&8ôBÄ‡P«Ö¨†ö*ÜwWT]¹%pºı†»	Gœš¼kuåLÓ9
+“_.Hqq§jQökÙÀ¿€²ßì´ïlNÒÁ!Øø¸N±ßœ,XÖÛÄ:Ş¥?©Şúå ×¬F)z;\/­‹}û˜Ñí¬Çd4~Ó{Ş‚™0nvÑĞƒå¶ÜÆ	"$ ı'jfBQ‚f…×YÀ#iö²ğ€ø«®q	“ƒlÉ®yàÒyWë˜ÔÚËQ¯¼ÏÈ“£'jQmù¥Ó¼™Qm’e¼›]¦ƒ·İßîŠX€Im5çÿ_²"¨ÛË¨ïB°+ïwë8òUE‰¯¡±zÎĞl	¦‡iPcµ_TMnºâeô,±(Xì´´¢êbØöèP
+QäZSÕ"X[À2›ÆÌ8à‘±œMÜw!—m]~øI;P®Æ[°ƒ·ôâ$BnÔreC®D»ç6ªÁ”Ûeø;‰ÃY¦r¥p½UTåtş@Ü	!ì¨%“A°O7ÿ=¦¤ùª°ş~˜Yğ|JÊô P t?ÎbUë³çDP8lyst…Åz•%„vgZŠ‹/ÄÓGˆlM`"O¬s/x8Äæ4#Š¨LßÇ–·¥#˜«·RÙS6]Îm®Bà™,2ÄaÛG¸ ş	¤»ïÃtá³ŒÈdÎDı5Ğ¬š¦KB}+æFæC§â-wìQ.C‚—ày»+ü€/û	M“ v¦c´v~ó;¸Í–»­_°Ó]ÑåCUÁÒ‘/¯—¯šh Û:Mmq°s¼*î„
+-¥e¾AYrXØÿíÔ|GMî¤I»İ–N0™ò›Ê»R!h Ù›Ÿæ¾œ°Í 5—YöR#çx”¸ş›˜¿­’¶,Bê4çF©`W€j¼…_–µCƒÿ3¯Ÿ]Ç®üX[•>áäm‰ÉÛ´ÑHyâ\¿Õ=Â·æ-éí7&}Aü›CÌ¸ÕéíÊ¸›	ÿ´}·N¢M¤8@6©»xz½&£6(«N^SXr™å+ÂÚ}™¯ºÙæ 	Š@¢—½C3nÊÁ®]f§m–u©y ‘/„ø%I,[öşAQ_D+%‰ºÕ„¯Å:`ıF™ğ´/äèÚh"÷§†îgFZşßu‹
+ÕÇê_É¦±ëÜ2¼ÔQ5	õæ³A‹l!™hXfB0 m:èù‡?aÀ§œ]ai'"İÎhù‚,a4‘»Çé’´ÎR ;à‚˜AQ	¿\D_|¼é×·âä—µ#“Ø»¨{€ŒeDñ£ÌÆC¼“ÔØÃç^K‚h³]°ÉüP©"7o„·Äå
+rZìÂ¯ûÕ‹íA¶t–pošMëéN¾9Ø:ú@ZL “4ûZÏ‰/¬\äe€kNÜÒ#Åë(¤dn=J,FÜ°îKBÉ–·%MËÊÏ‹]˜1ˆ„Ä&’ã›;¿Ä™å3i)ûÓ‘ÒÆ¾uQb†€³höp‘æL£—GÀ‰RQN°ú«+d“>ÿ¡„QÎšQ;ÒLM?8¦ A+§¢……Ş%rÎbŠe±¥¨ b¹IßÕ½î¾/Çèš"5[Ÿošî.°1äÍğP§FÜĞÑxIi«2¸Ş‚}úÇè¥İSÇôå]²‰ßÕ=Ÿ,?ÚĞÖĞ6Aüœ‘¿÷^Q àWÀ½çÔÛ–ŸÆ—®IhÑ 'ğu;™À¬p!àÏ×Š.qšB³ñÛ[Û]ÿ÷Á´Q˜Ü{†Şw[‚¡;¦(+2cNÒViêĞ…r‚¤ÓEJO¿Xf–İ¡?æÚXÁ± xZT„1íÎ”T}‘2òwø5…åş™©“Z;ÔXOûÊ
+ÊKo«ğk¶PöÚ8«+Ò9ı$¾yRâ&ïïÛ€Á
+:¥ qóœ(©»íêv íhÊà2J¸¤B*;6«ÁdŸâS:V£îIÀk•åƒ"ud,/‹·!•JÖÂqg—r3=€²)
+YõQÏûelõ‘>ÒcÓ7×­3X]©C}Ì)§ÇÍi-ë¸¯Ç`²
+k(_î4³ŞH\a‹/'íÌJÈ\N”S'naÆQ¬C¨#?ÒÌ€º¾-íıá'&\eP‡H9””P|Vt…é(kQ)ñğF\ô’Ÿ¢5!§tÉB³áŞ82UÆmkhñöqtn–Zv,c{À{
+‘EÏçÇËjv¹
+ŸzÆ>1Ü!”»·U>Å¸ïcá f¬éÕ¢˜)–×š<î1¼ìş·ëYpdòitJ v_7LO¾ÂÈª‰ĞGŸ!"¼Ò˜%Ù^^†0Ğ,fUBk>±N¦à>(–¯²Í®çp¬	:´IG+>óşËõ­$5“êÂ<ï®ŸWüuaUIEuªf»ˆñ– -åO½-Xú]=¬ŞQD ¡}rò+OY’äÁ|³ÌµÊãœt…HL#½*?o]“÷×2µ{;†³~y ¬çrlˆÊ¸QI¸¢0dÕÕˆÿ¸¶N1]uÔWp{Í&”wÂ”-Êivğş@h¶@+Hrd¦Ó{‡={ıKÜi öè3[£Aş;¨X¼ÕÀ«ğ¨ùàŠJ“wUC¸K0:Şveb×câÍ°Ğ>ıÌëoÄü€`ûÑ+VhW¢)L5ÍÊ 8ßõ‹Õ!µ$Ÿ~oEÂu›r‰Å®ªË,xŸÍ³àje¼¬¢Ï±‡²ğKÅ~JmÛ¡69‚À^·vFà¦Ÿú%±8—;ò£7˜5°»zpJå’¾şW¦-ZFœ˜©¸ Ğp¤œlB¶ìZ¹©È(î 
+ƒp²Eê¡üÖ‚6/tÎøe‘!?²£z×(æsrù ÆîsuÎ‹Ñ—qá4a¬>6f}>ÜÖámÕ¾YòBkT‹&ãÒ“¡yøÙìÕ%£’şz¾>óÇ½.UËçùóªÇZ.coÀ¬“hdvøâ@Ä‘†qîn`îÛçœËòeeÙjªHÛdı·ÏÇ«ÂO3÷Bg!)„kÖ<ª¸^ßØısÕXÆ¹9C‡Æë¤T!dâ‰»¥İzõäª=‘<düŞåU˜ªó=Ğ2|dÉ‘“
+¢åÂÅ<	ß|9‹èãF[¦bÖ$Œ%É†+‘i³Ü´pÑ”El]\¥e•`N}G Æ›rX¥3à)^¿>ÿÎ­	İnĞß?‡6ÒœéË^àã£H%ºq¯ï×3ße ½ìºí[¤#î.©=Ìù¹hè¤o”(dœÒî™Ä…ô½,ô>b $)˜wlb Sl *ïÓVÊòçMÃim|ÊÇã~½Ëù9´8h¸5Ülì "i‡AO+Â>» v¨«°‚Š-rú	öÇßŸ?åâ;?HrT=¼ Cıüşö”×¡òT°Z4›ôBï{lÉ rÈ)82­Kì¶Âøz«äı ’ˆÿÏ[S'ÿ-SûVsØñ“š[¯êŠZEgHÏA)(z§–4Ê“%­ü’¢qĞ(«ÊN<ãh©„;QU¢AqrcôuÉ{“F¯£j²Í‘úŞ–o!Wô²í<kL‡¼¡b­Xö3ìS¯îÛ¬ZJ—û¦œ3æO) W‰]<Zß´µµÙØ›W ù°©ÎyÄìÑÃØÿ#àœ§½_ª¥Å§bşVdÑÖ`ûAÇ“Âs»õé¤g¤ÚO0Z=V8kÙ"—î!æ8Âøen#›XrB=ÊàF«øq½•h.*£¡«I›FÕúèêy®·$@:;§GÊ
+Ùk‚M}rw€½û§ÿi—q2lçe€\tÏ®Æ7/¤îw1t!«ÊÇúrÊhV(¡–”º:\Š›n÷*²
+˜öĞ¾Ü5h‹/Îfômğ4(pĞÊ×•wÛô7ÆDÃn‹š9¦èËw®'!ÍM:…y!3·ø…*À³Ü)€b°Œ­£î—¿29ö¾¤‡ôªÚÒ¼7²½Šw$où,²Jé6á†g¶ëæVÙäÕ%­ïêE> !/:*ò(OŒÁO4™÷ı;¹ó•B4
+ÎUjÕ¶·é@}Ik`j_WœÏ«ÌgËOÅi$Å¢c¾&ğAšæŞç9ª6ÿÊŞr‰¨ï2w,…¸ÎLQamób7dmò*Šø@€§òô&¢ŠŸ¸ºÔĞÉ…©õ‡aùşßgrkºôØ`yÓ+‡8mk"$‰÷ür?œ0ÎŒµèíõˆ¢|ˆŠqÁ,K¦—Ì‰æ"hÈ©µRM+ºï§^›N°k¹Æñ£ÌHZ­œ•• ¡3­][ÇÙÎÔÀ‘Pq„È¼]…}ı‡ÎÓ©ÓË"ï‘²l—nÇb¹·	•¯z_oôë`uÅ¸ğCÖ‚å|£í¡¶|’öRX}œ=Uâÿ£¤¼(cÁ}—ˆX|åçş˜zŒ L&àŒy8¶ Ü"H]Š[—¾#8W»™0kîf#mWÌ|¥çèMÑ§ÖÀ¾Cz…ià­)=€,óü$SíÏJİEmC‘14Í7p ÿm–ús&l•}¼HÍ¤^}‹.bFªŠO…Iy
+‡™V›}Œw½{}[ãŞÀuBJ«¦³ñòğãx0‚Š‹y³åp6‡‚%|­ú=Õ")óÃnU&8úãòc‰1ùEÓñ/8E¸¶6ÄĞŒXxå¡`èw&ãÚÛÛÏ:í¦£Iò£C2X÷È­xÃ×YÏA)yÇmcÅp¹)ú¦Şîâ´´=¤À§ˆ•‘Š¡l^_ÿ°mŸË\)\Út;ı_>I!c
+'on¾•«´Wn¾¡ƒª¿ún–òìœmÕo€·$˜ÿ÷^ADéí2ë#’ÂÎ¸rf«E6œÉfg¯ı©TRxí>öåØ\HH÷hW¿²Ş7o“#·X‰·d|g£5Ác’³m Ø€ç–!5ÎT¨ êş:°‰ø½wòGOW·ß  ò	Şêf€ÿúOôù7
+7'ş¿¬ .¬;0š_*ÑTÆWÏYÏƒ |Heæ]ræx]NßêîãÁÂ.ş,¯òë0ÆÈş)–g]Js!hÜ½ØŸÌ)ı÷â¡˜PÎ+âSì×³ÄìÓ‚@ÛÒÉ¥Ü1„#uœ_Òf®‰´ßp|„„£76'V×áofZ-1ó†k»&ŞYKƒŒT¢ÎL¼5÷DdfdFç€àøùi¾a4şpÁè}Â‚fßhŒ›ƒ;[­ ™Šî|æp_E!~ÈÛ!îÖ}$ù^àÈš~qQ;)ÂĞİ÷ØnŒZ¼biìcº0¼†i0/h–“'"¶‰Èd:qVF÷ÏÀ¿}ß˜.&YºAÄ¤ˆÔ-­Z]¹Lœ!)]‡³ı^¼ù<˜©TôÆAŒ|?Ì¿³¡L[	‹+F àf×ŒyaB4ÓZ¢AâÍéS3ïËPŒwÕ¯ÜnÁpd¦ä¡Ê°ĞÜ~`“iû¨@¨3÷É9'^*î•Œ©‰K¥¹´smÚ×¿ÓÔ*Ëû+£äª²Üø<î0vSÙÚİh@´Ú\#H?'LÁáL1TŸ%™Û¤µ }XrµŠ»p•Ş…zu«â›É‡Í§XUH^ÁÚğµ†…N’pÆÓBn3„Ï; {‚sñ$bh-ÁÖÖ`ã¥š.ı€_=i7ğ4'úg—Ä˜ñiÈĞÁY§mBí?Ã½*ñÜaé*ÿp '3g.™ä—ã °ˆ3d–•S©Z‹áØ^ÔP‡eøolE\³1@©ê”c”ÿËöŠÿI­Ê_³o×İØÙÉQbIefè0ö”fÛpÕ3Ip@!ÂÓ_ñf,@4ä>Ñ†IŸ–º;„5· òĞG;m¿oÕè‹4ÇX2çææŒD}a’‹Ì£àL“J	-Ğ4Š§˜"ñŠÒ²1Ë•Ó¥¸áQb&–è0P)R×.¡¯ª¦xrºƒôñc‚â¸qÍkå)wË;ã*®ªrPÊW¦	ŠİG @šJ†}ĞC*äißZ@õ*nNø“bI¨t]†ep€´%¤QÑYO_åÉÍ•^¤zË`®‹A@…Ö©<"¯^4KéÒÕ™09¹gŞë7ıîğ1ÍÇuEyBœŠ÷u´].XõXDÁ¨ÆuıRGñc@j’`ª£>@vÆ ö¦Çb•Š›¨”·/x¬ù{RÜ¥Œ¾ÚŒ5ÌW¢ĞªŒÄ‹$®İ¯ğŞÈ±yÑÅ›|ÇõÂùˆÄz€¢‡É“Ö»E©Ø“t3² ·ŒæÂzœÏß©„áı\Ñ‡N¦³¢^yğ~3 Ï’ZãBõ›ÆŸ¶ÎñqÚÛg®«Ş²SR9ÓP>IùOæy¨¤m;[ıÈdjx‘5Ÿp‚ëÆ>Şïãùàd™æ¸†\,,ğD¾àÂô…ÄeWt([°-²4ÖİÔğÜ¢áç%mLkˆšÜ´¿¢w8!ë@qùá°©G•o$LÑ{ª?É`È‚9Lìeı~
+x/¾=wÃ)DÀÍà}?¶	%|ê»å¹ë‰4û´cn|³¶¹ÄÇC½›íÃ±$ùœ¼['JUİ°Gµ^uOİõº.·à%Ø·­èP¼x"9Ù~óöÕ#ÖÁ;÷âtÚãß× ¢6ÎÜŞ }_  ’Ñí¥DşGWìgœÕ·”yŞõ¢B£m;ş…CŒ–¥ãæa“)w¸„®ŠŸÂM†²ÇÎJ-},;ò,ëĞmªÂf¾Æ”ôv½¸[s¿¤­­,ô¾¤"µh<` {‘Y¯²¢ÈÖÓsşa“|lŒ°1s³›6”/ì3¢MĞŠ û4	éRş?˜NPª×3µp“¹Rû]@up`^¯ÅLöt¯\¶Uå&£"Eô œf?ºy"1:w¿Ÿ4¯ë¨‚w3^¦«4)M¦¢ğ
+âÑ¦—.’4¢•F‡ÿCHvŠni“§¡ìº|‰h/r€CLa4ÀÓ)ö¨{ÇcÃå»»(tîşLMøE<‚1`e²V©å
+ú1K¶ÓÀÖbÂS¯#iÑúk 0Š©ÍÎØOÑĞpšıcÙ­¥ÜşbÃùıš¼‚¦ğÍ®—%0Ç!èÖøT1qŸäˆğä˜ú
+Ü2¨
+Îo×(2ÑœwƒîğCà¸Æ/Ò1)HbœSÿ\Â…7ğs„uôKYğª/ªè¢,ÛÚ‹Ã#ğÅ&ì_wß€$ç-Hå,<Ds]MSÉBNf8æp­ël(P±Ğ¿î¥+Mê`ÇApÉ8ßqa°=2çÜ?÷Z%=}D«[íÛŒÅÄqûE¿äŒ‰e¬Ly}fÂÌxgw„H\ÙĞdc G´–‚†ƒMç…·oÕ:~@s+±e”¸Ønôêµj!óÅ;S‹Cš‰ÕÓE	‰©ˆxÁ ‚e³"ydH0ŸŞU/Yr2\bÈë†ø -ƒú9Ôˆ|0«W½`íÄª7Õ<-r ëşWÁÛÜ`âlÙ`p+ş|ä÷Bc>(¦}ş¥LÅj›ñdIå±uÁCµ÷\ô¾¬>gP~ZÃ.$RB_ãBÑq„û7]®Æ6ÒÆ78n|&·_®×^Ùñ©`ß‰’ÎnU‹¾Â‚4 >I	Ù\µvB˜Û,J×ö  èVÓÚ­óŞMM²†Çè:ä…o-”—.îr•èÕgCCJ³w„½PäáaÆ7XPécü@z›ÉDú‘‰üP9ŠúwºCåöYäºÖ)‚ò=]6%ù»à½»H7GÑ¾uL*ÍaĞÜ<¹ª_ä ¤ÇCçĞä8nìH}Ó‹{OÏ|j¹4”š]§­5í`Şba@AzªÀ¡Î[ŒÚ“)áºĞÌCŞ·ÁWíy§ØÌ‰¬Íá6öÉÚÓbÎ…€â¡+bq­^ïã±˜ÕÀÑŠš¾¾_våW*›)Ó–ÚÑW¨ÙÛ¨Ò¯@(Ü¤NúH0öÖ@…kôÉËåNœzvèç‘Ğ¸+KB¦ ï:,Ğç¹i=q÷s”WÕ;¡3á¹yµÿaÕ¿§œøë¥KÚW#üñœÉkM))Ø9 $AE„ôÔMg¡• g@¡ş?6?vJ*›‡ıBoÚA¬Š?ƒ’4~
+(d²²Wäî‰Ïˆç¸ÌHVkBÏ@¥Ô oeF¹,ä^—ÄW± .¬èÇ3«9Ø[}Z^u¦Æïˆ”|à™‘§ıÑ‡ğ8üÄ%÷s1MÆæBwjuàwU³j?Iot²Å©Òù%"ÏÕk@Ì
+ß|#¼öq?»¦2ÃŠ›ÖÓ©e¹^Åø§LGT°£úáóp&‘²"ç­pí«bEŒ™Èì0MÂYà›QåkèÁŸ3ğ¦­Ÿ 	é{?ÉêùÙçge³ ÛJ75)ŠÛ(¿SºÀÑ0ÌRÚöx<ªû×ŠGªº9ä'¸¦•å}<HÙøĞ¡*ÉÿpñÒ˜4á|o¼"&Ùü4|š+°ÔŠÛ½È8ZäßÈ}Ä´¶zÆ'aEk«‘Ğ»½ü±)cP{:ˆğ÷q·ä,*æ\Fl2O-öÃx4±ñ”Iiö„0xW\@ê -!¹ğâøÍ‘Äò*˜‘šïEÙÊ%íßz*FR??¤4‡0ñpË²Â¥¨ÃT 	Ú©Ğçˆx º…Ó“O>NYd Ï='=ú‘µ»ö™ lªƒÄ	µÓbà|L¢$«{®Cnc®õ<Ñ»yœ^Ñ8àaö°GcæÂu­‡æív´€ØŒ?fKüG²iÿÍèÀèë7‰^˜ÑZ0¹‹q
+mÑÓ\ÌÎ‘Æ™`¢ó"ºL8p‚¿Låg{¡Â+)iÜ…£IvZ$=ãÃèQŒşµÌ`Í™)\‰ã¶{³Ïê¼õÛŸxåëÍ#”Æ°Ñ$šZ8Ú‰y+Òè[fN!±™"uª*Ú@i2¾ 0[D#BÒGÀµ<ëQèÈg…e—ÃHé"ê=jÅRQ¼›~ñOe=İÒJµº¦÷Á@‹hSÛøÈÅ‚ÁVÒĞïz* lõÿÇn<©j±ú=„ƒåÅŠÉûT¢ºªCcXp5VCkb1œ¦-XM¬zï)ì©äâËKâ"Ä_ÉõÆÛ‘'¡òÛœ¸¯Ú˜&‡1GŞ†^Ú(ğSæ‘>VY=#+ƒqñßn	D³6)èÕû“øÎªĞÉ´İoR™[œœ5€>¢idİª©	ÆYù;4`7uü³Ö[ëdO@œ/%¤_†„Ÿ}KCè_^ÌlÎFIà‚õ]ZÅ˜C¾1]lÏxüY\ÄXí(kæ}\Ç•=‹UÆÂ7N<gªô½ê3ÀüŒó™U‰è¾ä…Ğ±É‡íßÕİ­Æ“úg•#F¿ãjAMVxjÂÔu æÊ±Â¾›'OW<M'ìÛ¤ŸÚ?~Lhh—Ü3ÅX¾^ÿ‰ôFœ1x|·i,‹Æ¦ IüµÁ¶ü	@ó³²«&¤¥tèç—‘IÒ¾Ğ^f6ô+÷çz"%Ï¨ÚÕ³œÜ,mËõuüŒ	{v¤7¶…›4˜\Š¬Ï·kbÃæ·oó+oÙDšöš½O1]rlkÀßïİëß´™é'IXCş‹ĞLBÏ•’çï(,e£pı’JËlO3$lL4½
+b	¤œ‡=\`ğê,ÇHGËZrá4ªÎa¿qp±+—YTâ;à9öŞ¢¾pÆQ‘²z.1]ãoü°NEK’-dÿ,> =­tiÂÙw!0Ÿı{œ(;öşâûË6ƒõÆò¦™^*kM:gƒt$Ú¢ò42{®VG±ŞÏK	’7‡iœ{`¿¸•YQÇõÇEK	‚7¦°ĞCûW†0á³¯–|Ä7lIİìtœ ¼K½¼§é’İæÔòÃcOí·táç4¸œhã†¢ê1©ñRBb§„Í…óø5¶Ìm“•´UM:e*õ€=	Ş3¯Ò:2ÿ±âÔm/®~œšüUÍ€8Ğäâìm“7ş9.	0ˆãI°®ÇLDQ*Ye-¿%…^QÛ^„:Wü{¥º÷	±yKù+Ÿ±Û–AGÜòN[õ@Dó-İl¯œ÷eQ”âmÚ°ßsRJcD³^#óG¼¬!g­x‹€À¢ß"–ˆü4û ³•ç@Z;CC~‹ß™ì‡c¡2!•x"ŞŠA+Û¶òé9x¹jÖ·õxå†Eòüƒ+ù<İ^ú2.-…¡i­„¥D^*EãnÛ¯‹Q†¤:‚2-uÖGKüN\ÿ#¸µï7ŠTÚª²bmÒÏÊÌÀÍaP¨(J†&;Å.0V¼–Ë¨Y Æ»ÓS5‰eô!
+Ë‡…o°	‡½s8rÅ¡ÊJŸ‰ã6^Å™«4Óò4áèŠÔÈìO¤Å…ÿÚğåÇI®á î¬Uu÷‰«óÒÕÃ^Tãö«æWÂİãğÁÇJ‚³+*{fV“LmclÈ'ôf®œ\Ä·ó'±Nh“z‚Ë˜RN\¤|·ü“¥Àx€÷ÉÉvúeñ5Èw‡‰zFÇKz€g4go™aEEBöqª-ˆeHØ}ªí	gş¹Z¨Cä­È+2¤Ï2´²ÇV÷]£SOiPÄ¶¬…eC›Ğ .¬Šr¤’RHÖÒVŠª)·ÒFmñš®q¢“şœ ¸ ª¢:4n}º}XàûÒ±‰Jƒ•âƒä“ú	Ô1\v›Ş@Òª;0 ¤cNˆø!|ÖïÇ2ÚÁ¶ñğS¢À	ÀİÃFìiW4 ¶ı€€`ìÁ	ÆeçRÃ¸€%A§+Ğ l5r5“;¦õĞ 9µ·ãcÜi.üj³|{4úõ™ˆà"ÕÚ§È#HµCñYŠqM2ÂnjØåT1EÀÀ‹BîBQœ=[ ¤–Ç%’ëdÛ#°ùP¯ó 0B{¶ÎŞ¬y[[/¡î¤ø¿À Î v™˜¾nöù#ÒÅ–å»¦ÁĞ•¸öúJ!İBñ‰¤6ÜÑA-Ş`”¡Y‹àßEfî°°,Jû@^œï@øD=¤Zœû$¼/‘u½ËÖ‹…>wœR'2»6ÓõŞ±°Q@ÎÍ–¢ú×àè"hËV%¿¥ªF¦ò–¥UJş8ûq›Á·päû“«M±˜ì²Ã÷ÎS R5#F‘Âh’cƒÌ¥ß}â½Ş’kuXÍœ‡×Ç–%Ù¿»³÷7K¹DMŞ:ñø4ÃÊg’°å)uÁ^ê¿Ñvf›´¿læş÷Q?UILQ Æ/¹á¸+‡ª¨8¦üÂ§o$UfCy†ú~ÛÕj#‡¼B·ıÚ ™ı†TNIı°”*´øê²”ä•	J5ì.pÁşd¡£˜?ÓÜR:@ÅÀQT±z½º±ĞÑÑxK§øÄdUf û
+œìj—À÷õ,|g‡ş‹²$T6áp'¿Â»l¤Ìšm®PX5—ÕÕ]ÖéÔQ	mâ‡ëRl²És{$Ùe’­HË›iÅ±øªïê†‡mgVc¡‡i–ëN›µ“+¤ñÎ¬ÛÔ­øÎ%×Ú1¡e	{ú˜‡’Ÿ™†2àV4C£5($BªÒ!4×tú´·|áàÓ%Õ?-° Ãı	TE·Kbª[¤Ÿ«ÁÆÄº2öÙã±yk8^…’ï”›8×0E'1ñ4R¥ª¬PDw|›~{£Çİ—ùÄùº”¹¢›p¯»Üßbx OíC‚3©¬KT’8ƒ <]s±* Æ YôVâ®¢™\øPhÏJÚö‰n÷·«úœ¤ªî¤DTÈ>îR@	Ó¹oì1/ÏÚàM1n ¼8°·79øvŞúÙ¹f!wİm¥Êş„†Ú&›Q/“yîÔÜ(sç³@¸F¢V7áSW§Inâ°&˜VŠÛyÒÎ'âc=Èël‰
+ÉFàüOàgâ‡À&}Æ3;êÌqNŞÖËùàŒ8nrĞû_3:§9Vœ<	)ø)À¿}â€ÏøÚW¶¸“Ñ‹;Ø“‰j;"—åè‹'m¿yµw¤J·cô¸]oBÑäZy‚íÁ(¬<ï²ÎÙNKÔ,YPPÏğ2u–å¸#¿'‹•
+jIh‘µ~Ø›óew |ÿ=ó!Âìÿö7«5h”9Ss©ØPmdqU9Ğ…«@õZµP¹‡b#ÛG”Û*ÉÑzŒWşO·\“tø2M
+P
+~Óº„"^é×MO€ ©SòÊ>‚J<J¥…ï&eÜ‡İwãÃÃ’Ãá£ĞÚ»Aˆ)¶R¡fÍêëá‘}&bG¤”™˜Æ¡}qBñmÓ¹»M%+1¡#sB|ÖE›yuéÅŠ.'¥*QÊ|°0?À6g!ãcd~'Ü3yoÑÃÖ‹ìÕ f\bŞä¹fAÒ¥NÀç÷K6ÁùÇÕ*„bY†B½‹ÌßËŞô]ÉÆ
+I*Õ =òfj£>tß«6Ñ¯zÑtE»êénDŸÃ€;²uŸlWOÎï-ã˜ÁßÚ_\Â’x”‡ŒV'ÆcÊ]á¼€ÆI@7\*ûqı2"$…UşØéPZäŞúûbÀ¹Á”ŞÇ©4ÚšQË­ ¢1yºî=ŠJO£GiU6íöÉ¢:‡0èzˆzÀ‘Ê'²‡R»’İ\ı+0Í³qÉS®Zi«öİ>Ñøå¶À‚€E³ğÊEéßö"ÖõZmyªÀ<Â \€Èäuèê¡RÒc5ÊœÂ·Ä Ä8 XË¬;‡n›Ë99eV³Wk-Éé§°$aõû¥4ãÖæ¨5Âïx?LÄ#ÙİÜhÁ/7{a©1›ï§fªÿ¤HšËnÙ¯ùSÒñÑ£UG~ÖëÓ‹ÙóX{´•5d;µrêQ*¶:Ü¾£¡”?pÇy¯U4ÖÚK(¡‡»*²:Ešá?0Osıß‰­±í$lîÎ]"{LÍm‡!^Ë}c².nts]›^kâ½;°öEÇ—w«ÌÑ`s~’´\Ka3Uêx$)Sä–)(£Ã!ãjÍ¦ø‡B–
+€§³c]èB(Ü‡ZÕšú·€,l”
+ww{¥ST±~ÖOuª!…{QK@Õ{ÊëL' qàÓšĞ—6ÊîÊ÷¾Á·\´’ihİ[
+VQeG›Zfîğ©®qöyp–,t=8ÍNH.¢¢ÌPşp£ó¤äuH®hÔ®.*0Áß—ØöY0º¥V{<EĞ´×—™GA=Şv8¤Î¹Ø@â×í;ß=İ]ÂÜ2ƒÄ£nMf•¾EŞÚ©,ø»äÍnG»ÇØfÎ¤õ$\JäÉ	İD×ªB™wŠ&ZÈ…8èÜ¶pğÌ½}û«)¸‰%5M(¿ÃGï®­u*sb1Y<c#hÖ¿C©<!„,p%VŸpL£h«šÙ2tbÏ-Ñ y}ı¤ì¦	n¨‚ëH–8µÑEd®E–¨ÜÇÙKÚõ]Ë¶®§H¤`ÀA#·<¶”¾¶‰¬A¬1Î®0ËÒõRú¤'`ÌÇVh-6ı©‰¦ 0©3ëÓ[›÷ç!Ù÷³"»I#yMÄ'RH2ç-qÜëåó«•¡‹ŸµïYÛ‡úT·I™c1÷oEé­rªÁª÷øy~+BÕzÅ-]	™ÆGàèVÂÚÙmÆ(UßâI÷O@jâ™™-H%àöNnÙ“$úÑ'.Ag»xÎÎÀmZ3IË·¹#r¯ÚÁaœ·ñÜ;lùö€$'òAï¬Ú{ô@IÁñ;qıqº
+S­ú%Ô;“z…ü˜ñjØyé‚%öZë.OÊì?¡>Pf}b7ûKÒºë,êµÇ¿éğèPNu‹ŞèôPˆó‚óëş†»ãıÄ‹|+·VKšÆ¡ö:ê£‹=Û¶8ı¿ˆDê{.Í,P½ÆØªĞ—ßUıØOåY•d3“ÕA;ÁéÓ¤b¬a¸±{d6suÔ´1çÄ&~^sr¿à•®¼§ÉÇº\ikémjb6á}„8@bÆºªóB·ëãW×#Ü¼ÙkAö¾z¬bêÆx„‹UÀõTèœÄÆùÄòëa´>¸Å(0½ºYÙ¹Æ†/8ßÄ`0`$m.‰³”@/Ogà|l¥»®×–…’|^±G‡™†Gmãi€.u>mäy:CÙ[ò%…ği¶}“p â3’TßÆ´àŞ@úÛº¤×ºçÄ)Pºz=ÄnZa0ˆEï"ÅëbôÇè-Œ/OLÄRõ˜5ÀñÌ`îí¿7
+Kµ”j°åi2%H{-=SàÔ¸Á
+ÉEdø¼`Ò‚ƒá+¨Å,sêy*…murİ:KmXÂÎë3`ıkÈĞ—÷c$FëëƒĞjL1€0¦ˆ¢[’•€æCØu­ç5*gÅ G'wË¸ÊŠ¥÷Aß°£YˆÉøXªc¶ğ.¾ğ<Ú¦kñzØMˆèhÌ¸'˜Yš1AúaÃ§şİÛB0ô)ú"—¯—õKÍÕ÷–{s[r³»>Î ‰)Jp·æA¸K>í„ŒÍ¹=%Æ_’Øşµu!ÅÃ°ÿ/2ªï¯„àŒæÙu›éU6Èÿ%Û7“Š†Ú_ÖôÔ')å{P±è‘€ñ]xìQ»/Êæ¿	»5°ú©QW¬!"öV'˜°\8WJ[ªLUma$‰e6(gEø<sFÌ&ÿh¦ÿ«´{-ê’2NØõ„ùO&±¾°¸üMp^z
+á’Æ´»7Io0¹ÒO§{hàÕr'›¥³¦u”6ÑIæ/g=›IKzÇíæš[D
+çÚ.ZsúŒıüq§¨{Ó#æ<qì.><…™WÄ’(GJ–t®°C~®–Æ½Ï¡ëñjå³#ˆ»­OÎü¶%îr!K…ÛöÈ_Ü‘º[Æ·9Üku{İ¾·ÉJm?üwˆê›®Êç#ì×¥e$åíi@ÂíE&lUáür¬ã"å>âe?&l}÷»Û€`½¬šLá4gÛƒù şšä½Ì
+y,ónoXø×¢­8S][Ò‘&Ä
+-†R´ÓˆÚ_IÎª·õÁJœ´kÚf% „a<ykƒ`~»¸j~øè¥ŸÆšÚ¶ìq¢
+ÿ[¥ÛM.bı¬¬`à>	¢#‹ş !µMf&Ëª­€ò²ÂÑZ™å¾Î8ÅIzó¶š ëkäADsÅcÖğd^	Kn÷™WSâ!‚Ê_Åô%aË^w‹zeÊIõÇH!­j"«¦ÌqÒ†§­~/	>:õşÙ»õt‚a™d]ª1z˜êoÅŠqD„1šaøfòmõªA4ÑWï§Yó9À®œ„#z}¾•Jó¸.6=Ù±÷¯l›ïæ<Üÿn¾ñxjÒw´]™Uš¥d…É+h|,ñÁ«$LâÂşdD^Ë$ÛğÜŸB„9ö’¹©†‹\õ#óûNlÚlÇ8(?–Ğ¼„@Edö•CW˜è	²²ÂrÎñçı†0x;„‡“(Kçş–À VjoI#PÅ
+pÑÍœ
+“åÈVı@Ò3œc¼¢Ø°¹ğÀ´sµ|´v˜ıIsg¿ºí.®hDüì¦[*ycÖS{D™Â—N×r’¥µhZ!7hÒFKô|YËÀÂ0¦B.ƒÛ§6@ş¼¸\Qä‡œj°J"Wï+4&š¥ŸP»ô©*¤šÇá%Bıñ©t‰…[·l¸“Œ‚›"lGÎÙ¥>×b¥³{©“™nŒ`´>^)]Ÿ	x½ñ/Ò õùâı«2{ÑÇZUœ†òrKìY ¼59-Kæ.P¿á	©ß4T"¬b]&áŒÏYÌIÖâC2CìÂú
+éSıø•pC,Fh»“îi›áå-¸“Á ¹ÏÏ'ñ4ÊäÑÃ©÷mº"×[ŠbÊ¬WıH-,aó ¡¥wñëâFMñ«Ò¾
+øi2h\‚FßÄÖòInï.®¹acS›Yã`ÙÖĞ¥Õª{‰ÿÇûúÌ¹½&tp"÷0é¹S@ÛT¤ã¡İP%c…ˆd¢Û(Tÿƒ>İÑÆÿHaP\ÑŒc9NO<é0rñ«õı–	œÆ©²r(^† ._Šj×Ë!¶á±Hqx¢¸^­Ht˜¢;å'€ÈÅ)ù´	ÇÓ¿O“rëš¦ÊvºĞÏ$kïª šC¨e®"0ÔQ¸NfÎªíÇùÏf˜\˜ÿ¾68™8fÄ~?”<oÔzÛš‰Ì1--SBæ¹úèÿ"a…W4\ ŒÔ 5v43„?±¯¿ªÈf
+è§¾Ï¸2²YÈöÚ³âí±ÚÆ8Ê)ÇmX KÀ¾²&#· Şf¿iODëÖnÎøÿ98´Øbñ½¨ÃS¶ïí(Š¦8ÂK.+W>ŸÅ?I+Ê9‹ÀSUè<ïÆ—±ë¬HÈ-šÆ¶«Ğñ§•nxH¬
+@
+Õ|›>Gv·~>ˆ4g/ÏÚ¥(ç%œp±şy€bL¦M´)ÆoÀ°•Î¯€’a‘;N,ÉŞ	ïx•Ê<pc € ÅšdnHWOº9V(ÔVùnic	ôÃ$Ê16³h»¤GÕ·­Ç•lÚ¤[Ifês˜æ ¹é•¸"IÑ(™j]Ö­\0Î·{”Ãâ÷l¶_Ê”ıT3‡¶¸Ø"M=fq C2c)*µ[dšíbN´h1M8Îµ§óA	0å<s"}ç[hsù}s=˜Ô\›.ßÏF•-ŞÛò66ÁV ˜¢U'ƒçş¨´$«şãÌsƒ L‡â*“cÇÊ+4‰#SÆLuRiÉİ¢ÓD³›¦‹j!W&ÿaÃ†÷K¿ú
+o£ãg3z~]…şNY¶AB2ÉKÔÈ¹YÛ'Ä0$÷fù˜É{Åå4KiÒ§ÎU¤ã£~3 š•³Dd9dµI.!ı(0‹‚JåãÀàç–]¶åøÊÜ¹eZùØñÇuˆC'ÓÃ<ê®#*Ú­EÕ†É:ı˜ÛÅöuÖÿ«AGÃ,÷qkşcÄ»[c]Ğ:Iê²ÛnÁØÀg–ÚVšµŠ§šÖ™û¼Ï ‚€e¡©ÁxéU¢à+Æ/Ù1…úƒ¿ïKù¾]M™Kƒßc½»JTñ1 .:Ìá|ŸôX±ô‡¼ŞXÊ‚ıc2¥J€}¦ÖäÁn­DcHÃ­tzôÃèPŸÂoı?·wc-'ã(re„)”‚Bò½ğDé"7$¾mB)sº'0˜š<øÂ?¾œ}eÍEå‚mJÄ:ÿ ªYw‘
+8M,—ÊõL¹Q“æŸQiº?ÙS‰ 1¦j)í÷~cóI±Pt•øÃÄó£®öÊ1h’qß;Î?İTÓ“\ÊM &ĞÉˆÀj_.Sì®Ë¿L%¾¾šñ«2c‘—]Å-és”#î;Óâ#®q(P¤UÒÂÔùÍf&%ªô9Ğg$±E¥5g #Hâ&åSæ†ºVÁ“OM÷“UGËy»¨6ã‹°Æ¦¾/01xp©ù”ÒB~\Ó@K¸ë[4‡ÉÉÇYbWyÅî±&SøLğÔ£Læé›çh[L
+WâRRğÓ{|¯şCÊ£c]XÕ~( @˜eTFñ 'c‘nYN ªh#K'6> â™ÙÜ¬9GûãMß:;²IõMæ>¶Æ$˜§$©<ønÃêòéô\qùß®®d®­¼¡·Ëº•jcß•Ç¹Í0Í±qÅæ Š>†f½9Å:‡ FñÌ|=ü¶xH ´—«<³_P)%Lˆ2°åÏÆo?I“-w<SÓ-È˜ÇVI,úÅ"ÆÚSÏ„¸€å#š¼’K\4	ùà{ °h)ñnÎÀ»ıâ5@–¶€ìVç|X´*ö”îüÚâÅğ8²XDÇõYFT¡àUKîgS_MZ(œ:{t\×Ò_µIVŞ±ŸŒìFÉÔ½y‘Ù1èë,X¿ƒÜ¦eG*¼NUƒ€ˆ	å={ƒkdIFÕÓ“´íM>R’OÛídf1A×ˆrëRÑçfÌ‡mŸÈÂ¿øsŠvğcEóO­¦÷ÇÁ—òåËd2ïÔÅ?9 ?&gğv³Ş©^Û™åç +n®Ù†zr¨îö“ñÇjÄ¬=³‡PÖ»’â9–n6@õpåÌ•o	?fq4å &¥¿~y9^~>™(õç ¢V’ïÁà5EEâC°ì˜9˜ÉL|“/38°Õ^6ÌØÔ×ŒÉâbŒº÷v-!T0®Ø?hÓcKçKìv>Còì´@Í§fş>*ô‚cÄ¿W1{kx%•µr³CÃ¦€ê$çõ:Ø™ìŸ—Ü¸?­¶ğÆX.vßºOãp)=ó"†µieAD_¢‡Åâàò3Òü5?¦?~	wÁ¶Ä“şl%›ŠÎ2_Va/¹5ı4£7_…?d)÷tkŸP
+ï˜nF‹ö^ÄõQ|EØñuÄsÈ5,yŸrüÏ1V1„™/‰´ÂæQ…Aöç8¼\¸Ä—Éû†W»“YÛ[·e’)N9F‡Í@¾A5œú“)5*ûF+&+ÏqG|½¬kßHµ¹”æ†jÏÜWS¯1¤ã%à”hÚ¢-.Ê‹ƒ;KÎ\nî5ÓQÙd€?ô˜62‘´¨mv©…ŠyÑ¸dxD§ö—Î»½ü†ğ€×ä7XAŞcØb!Ì Ü3áVÇÕ“ö•%”µŒ Úe„]‰$gª´|0Œˆ¿jƒ>¦WJKN<]£š¯ıep°Ái¬©ÖD!¡µ3ş¢Të[2ÌIMı¸)9ì`ş×©R®å?µ‘¼ÄµÚX „e¤„P²(pà"wWA€{7¨ÓAbŞ·Ü`ôÀ¬DRwBüAÒ%)ğ:Y/Ã´‘E~¿!ºS­H¸T?‹… ¹ÊÊË!õç™Ú%ÍK4ı`WA•X#-yOĞ×•4¨WF3‡YzÖ¡†®ÈxWjÓßÕ{ia‹"İñ½nëõó¥„4³r‡¤$µSVœ‹†¾œÀ—.•‘ã$ƒ‰ÏšIäy{
+”“%S®*g ¸[ù|Ó7¯v0cÕ×¯ù‡)&XP
+æ´Á€ÿÍRİ8$nF:¤-Å¶’`æÖ{³¢Á˜xÉ.AA&›úÆd˜n¤Ç*×ä|&ôeKyêŞ‹¥O8cŸË­[IC £ç.ƒOû¥…ş!¹#Y“D_Æ¼/÷ó6tû>È,ÃåÑ³Bï2AÎhvm{±0¼nE…–´p‡¿ZÌzær’,‰ƒ’‚ñÙLR3´`•ßãº)ã§xÎ£‚í°0’?™@ßtdå~ºÂølÕàŠOƒ9â;”yÃ…º‡k… ˆBàÀ¸ùE¾V'¿Bøh•Cü£og å›²Òt#dG1€ù~|_*C=z$z¤Æ-é‘ı°µké­j“ÚÂp—,¹:„²8¶ğyÍGwßRJv±`t¡ø[£şÒñş¥MùÕÙ·¶ÍªHà—V––*‰Šd 5Êâò¢Û6›rÛ:ŠĞz®J­éÄ  	6À®õ€­§²$c)^p'I}Ÿ†Kº!vLWÏ¶ÄÚÑOİ‰+‚t’\ÿÕ­Ï§Mk4ML(—s\Øú×NÈéFÕ¿Óï ÷:eÃ‡ŞA†ÀôvMD¬È7oi5N³ÔSO]ÓzVGF5Ğ“®2êåeÑTêå¹âÒq¢NÆt­¿Ñ™À/ğ†éğÜğrFOT/ó–n†“ì± şöïÉsQ•tSkoŞøl¡~;l!—¹—çà¨D¦'C\ SÒBFXU¹mï`I,á‹ÆğğYò+­\„è%6¡bM„k–±7gKT·‰¤âiÁíÛ5ğOéi‡@S­,Ë·¸—ïz¶œ¥şÇĞ¢b	®šò
+¶‰Ú¼ñ0Q8‡
+¼¢Â\U6kî¼26¾º÷ç|>Ã\ËöI²ôF <:NØH×ÿ½Ú;¢ú¢w?è½Ò¶ï.m,Á”•…ƒW`“Ã,ÍÅŞ Š$Q_¬1ª–R°}kCÛ#@øºZd·¼’Zq`Ûù¸l½¢M÷‰2FITPë(•ó •3Õ#Èùj<¡XÀ”wo)®»'dZ-½¦isTŒ2š&²:1M˜î•8|Qš¾â,Y©5µ°Ñ³‹Røœ¶H÷pSØÄG,ïu'Š™#4u/‚7Ò{™t-cÌ@nPP¯|@µ¦+Î-Î DSÑÁ›,ÓÒ1{‡Çò¡bğØ GŠaiô"Nì—åâ½âª_6:^Ò’ÚóÓ*áæ;n§ß9¢[&ßœÄÕ›±·˜OÕs~5(iM³%611pRc½©Cø1Ø’~!õSt«€õ–¢„åå*äÊ4mïón‹O˜»±ï‹}ß50şìõÁ#×-Ğø$0«Å3,cáö~Í1…wºb|rĞ&è–¤Å8Vò€XË¥¢Í†NüYÆqıîøƒ¸Rñksï6ó”$%òØnçÓ;•n“6¦Û}Š¬gæ.ÈD¦Dı¤y~÷°ê!G-¤y@?…N˜‘½õXÊär¢¹PjS¯*o®W¬Å8ÛxV±@êâ­59ÃI…t[hÍÇ]"fÚf›fJGMº¥XXÛysAGúË…–¤2Z“ÖŠCrGZÈwæ`f_àé²õÊ“Ò\¨˜Ûrb>Ã­YXøÉ“ºe ÂGı·!–×Ğè8×÷N}ÒÅ¬…lò·…f€‰pP¾ŒOóÖlgdqSí†DaWS´4²¬±!#ŒFO-È]äÜV-ä›IèÓoìÂ^$—OdÓ4¸qaMø|Îr('ÿ}
+,€”è$V(Ü¾ş\ªŸ´½=†â-Ö8İX=B‡öñtï:£ëCs&fdĞ.ıùm…ÛÙöde`Õïk`ËÚíúí|~PN<õ£Ğy¬Á=’&ÄÊê^CÒÏÒµ½’î>z~Ä¦ÖÛ×ÛZ¢.ÏÎŒæ=6ºÏCĞeĞ‡†)‚r&7Ñ{ƒ?µ×Óx“³W~I¬¢œ,0ß«w9J«¸A“2{àØKñ~Ğš	AÈûlò›F‹]?¨lí€¾ó`aä¯`ŞµWd;Ô—À¯ñ¢FtÆ±Û–µ«›‘Ø;˜<¡‚P¶L®ÿğÑ×4ÕÔÒûÀ°CK™,'†;†P“ët××â7ékœØÂ÷Êö·3ã‘@PÊ–¢‡×µù Öt’Á¾ü»ÄÇñ/Ğ‚è8mi“áGÏ>­ºÒzh5ÿÑ¨ñøQjIÜDv.v’­ÎÂËÿÊÿ(6ÍF,¨USıt=,êã)=*X©İèÄ¿ßsÓ5<ì;§Ïvp;åf
+ÖÂÔö76[|¹­m¦¾hòy 7è"¿‰ìÇÎúnXbc`•ğpá¨IÕ{%ÿ¶v@€
+¹kL<Á\; om2ƒŸ=Ø¾¹šwíšuë¡„ƒº²P·×ÂX=Î/>/-‹; ky÷€_‚¸‰`aÃ¡o[[5»›åqå`zÙşœŞp•4MSàå³Ë®ƒ“£‰¦ ¸´NıÎqöäè»œ[-R±À0ú~r±ÂÛ0\8òŸÎŒ—½k'ÈY	Ó0¸dÁÅê¿ÛŒCéuí~¶·ÇEéûËÏí/YL‰r\‹;bîv‚§êÄ•ú¹n‹Ä;ÿ2êRíQ@Ê‘èÅ‘è¬=ÀZVÍ.“Ú<§'°RªL1p©çL0úèaê™8Á}tçc~£âN7LØfµY¬JÀ1ïƒ{Œ ‹îBááeyµD¹j$äÈ•SÅ[M!¨šuNĞœƒÑÊ Ş³ë#Cöw3jkªN/EšóZJªÅ¾éĞ‹ü0·?ŸW/§^`˜#H•g+Ú1{Mâ÷GœÄYéVE(Sº– ¹€ğp	§p¿>I_ïñ«£‡Ë‘B<ATNá"¡ßÙ}İmïø01«Ç
+ü#
+r‚ZØq3„¡rğk{Ë:A8#3Ø^œ¾çÈHÊ~m¯­ˆü¿Bªéß3ZŞê3È*x.)ñÊDÉ¾g‚y“D‚y‹[:0ÍÜOöuü/<EU½¡ügJUI)2ø•’¤¥Ìÿanj2DÖ~|Ì“? '÷ıßÖÍ(Nåí„ó*¹0×^):íïlésÙÌ7ªOûé¿1ÒsJMìÄ"¡dU_îo[%»Áñ«¹ÂÑQDªÇWœ,lìğÙ¿)œ1c­®Á’Æ£ÛØ–’¨¸ˆmDDvÙ<	œ1z:1CŠéÃOÎ¥ºXZEêËhy¸Ä(¡÷Ã(ß‡z¾qºw°»SŸz’õ¢6èÑ¾ûM4p'IõÊN8]ÒÎGBH ?t›ƒˆü_PKˆ|VâÖ?ø¾•¸®Em1Ş©š:L»c«e°@ó?cøŠÊUäğïhçIjÅ.ÿ„¯¡b÷œòaĞVÂµŒ_×Ü1Cr8XÆvCÎ-;L?:»0ß}°¤•Áa|fS³ ´+
+âæí_Ğ¥”öi1¬«^æ	5€ë
+'å8Rè%·jHB0ÖŸÉPn6*ı%º<t-hg˜»˜şæzö?ˆ9A9}R}Bõ©&Rº2¤(:r£Öş››š`İø‚”ÇãB8‹¡(ÆšÉÀa(¦ÇÓM)™‚Ùˆb_y°®,sò™?g™‰€$I1©D<®ûy#¡L±nİŒ½„Ppæ¡¡çá·}Yøoæ&b†mª.ğ‘Ü«ßÉ¿9ŒŒnLwGrË™fŠ¼Uç£çÇñŠ‡=Õ‚qˆlMÖ×­úa%"TVCÑ=í–!cyŒKI‰„±
+# ¦(J¡eÌ‚DÕ¶îÖçYıÄÙ›ñÍÑí4!íñùƒF— å‘b?”ÍÍ£SÆ%V#=A¼kÜÉo¤qo|×â½ºÅ$IÃT3ÊF.Ûeúßô‰BÛ£¾#€à§Ts ÄÊ1Iæôé¿ğ,)Y3O
+€Ï‡Õô96R#ÄlJYÒİ~ÛÇÁšQš„QŞ…¯=`eE ÂjhÇÜíô¡¢ÃåNÂ56Ø~`¾DNQ=ş++„÷æ&s­ na·°Û"½!ß½ <	RÎÃ¦™(Î(Ó$u£­øüÓ_èİITÜF.7Sö~(3˜ÂaĞÍËŒYóÄ
+·h)ÜÔRà“Ë–¨ó¹@±&ïŞŠõ6ìlÚäÆ·W:8]xşË:¨ù|ÿ©SÂ.!ú_¸Êh@¶Oˆñ’|aôÅDøC6q°,]wÑø‡hêˆdb©¥U'òšfoõ¤šƒ»‚§¸B¬Éş´Ã¤•Ç5[Ê w€yW<kµTg´ypR8úUpDkÑ:ÏJ7s”L
+_÷>8+’4ÊÅ+‘{¶Ğd\r¬3ÙøÛ]oxŞ‡±€X)!dc±”ğšR*¾¯³¤qœ/ßÃ¿^Å¹=S8HÅs^CÂZ¿òƒ“dÂAy‰zI4Hæ½œç#µÂ L"óf‰¸è¿È¡®²¤û<¹™ÔP¬ı–‡rp¿ôŞİwtªßŠ«ğMÛotùûQf<HDÏû&ıÏ$`o#º-ÿ­ƒrqçÉ1úX>H²8om¼pğÀès¾^”æÈÇSªñ»w6:«ÖmC²·„òO½\ŠşTŞAEdsŞ^Ó4ÛÖ)	nyİ##_x?ó;¤Ğ—G;ïà=ÀˆŸuéClç˜4Zù¿Å²xdi6!;Xğôe XP¶wD<oƒDêÆ3‡§İÇ²Ë2BgBÅæñãÚ–ÛìkŸì±şÏ„|ÑP¿89æ±0!Hªy™¯bJ5|5òÉÜ ¥vNWNønÒ~ôE˜Øà=%ÿâ¡OÓùwøVNGA¸‚ãÍÕÇe[œÚ¿¯!‚~Û.é4Ï»õ<æœ]¹ğZp­_™ç>}Š'8|×(ÂêhdYp>ùÆpìqâ¯r8Z™Ì<®Ë¨H-·¹)‹¸Äz"‚ºû¥å»sß>Ï–´:=Œ]N^
+Ù>dƒrvø›o[ªë»&Ó3$cpBˆ#PÌ1ri{UãNÿ±U2»8Š´[Ğñ«6	G»Í&kıâè@µ€Â¢GI¦<©Š¬ù;G“èägŠº.f¹€{Ã— ¶®Pƒ}S}eÈ"¬Ds§UøYÌ6Ô¯G`Ô
+Ç3æá”9àdl´ØC÷sŠùGñãäxj˜c.W¨Gy¨¢ŞSlwt5´f;É˜Yù;Ë¤júI¿1„zÅ:û]gÑvº§õóAJzáöTÏH,‡ì[" +¢YtÄx#OøÀû'Q¬Œè·p+bV"0¤8ÅOo‹ J:"F±€˜…«É%v¡‚±½‹›ÀHÙúxZÜö=õ!˜«×R@­Êqí¨Ä€yTa›†%ygºx&œFH«ªy}fşÿK1®‘ı,1C"ŞÇ¤³W² Cü¨á)«Œ ±Â©;©Z0$+P#aÄÛ>H&ñf¶¿=¹|Rˆ[WÑı™Wmç0°k×r‚Oû ›C…ûöUN?”Ÿ7å(öUQtQBÃ=Lm)Ô3²QŞ 4/y©0Òeö,f=ÔĞœØ½A‡œ»
+Ú–àII~(­ê/JpJ2ãşeF]	XñÅFØtº{ƒz™oâ*•†àâ| ÿyêvÁmå=½Û®`Ga,!Ø¤<ÅÚ@&âÃÌ¿Öür\mó¨äkb4Õ¯Áˆíe÷)<Î„3bƒIô%/æÀ™´ô8‘à™:xÕ˜ÌÏ´?S.œ-KGÂó‚)!ÙÜ¥tõ¬Mı©3gnI·wqºm»¶–HÃ5l|îKù]LR:ŒÕ¡l–ÕŸx"*Œú;HˆY•ºÙ”]æã43ÚNÈ\hk¦°ƒ—‚åŞ×ÇSµ§ÎÃFë;‹åÔ÷l3èÅ°“öm¼¨Ö:€>Æ££b<Ÿe«õ×YOÌ¨Aö§ù«`	åßvJ[[ÓÈ-Ô®áp»w„ã@»²è§£H1^Vu×çrØ™-‹ ïù-«˜¾7)ÁW€<8p—şrùé=•ø\¶zT³2´{Èea…ú˜üDä%ƒH½j/ŠA–4wdÊ×I3n£?2…jfš¯sMBıB‡Óh¥¿­ÏÚl!7)©ë©oc³
+ÿ»TÙ=¯g4CÎ¿…XæT4¥­µ@ñ $\™5÷|;ø	}•çQã±u°¥s‡Ö¬ñàá™!Ÿ†¥D®ÄQ¾½¡ Öğì½x¹^ÿCè+%İu¾%ï•tj£i=kšÎYˆò$UÆwÉFeEBeıµè
+¨EtöRVN;CMîî¢²ˆO-b…¸˜¡+h&êïë•Î^˜îjÚ9IkÛb„¼å—ËË*ŸS@á»d2&4,B/6R¸z/´Mn*(4é¿yIZ<çÀÔÀN´¶R¶äsäš«‚hÃÔâÁÉş2èÌ;dò\Y_mÃaø'Ú€Ãü[x÷È`ñ *híJ”ª-è[™ƒ§ÁU…ÏŞRŒ:øù@Ÿw}¦…TšZ+	 økF*@¹‘ŠmZ´ñ¥‹˜r,¯ôQA‰uµuèåÎçî TÄcÀV3Ïë_)\;cº,"f%¦–¼Ödå—8›•eör¢òdc«tÃÿŸ
+½;Ù~:½„M:­=df2Ä_ú’—¨xx¤	«·Y½œ¤Y2'AÌå4`;/—Æ¾«²W=-³ÜYÙtW˜€üç‡‰‘Æ¯ôpËçª<Ö…KWÖ r@
+§–°+U?^iDÇX›
+­¡…‘Œ®ñ7¼!Ú!«»¡61ZŠğWİÓº{”Pèˆ©_×'ÚBt‚	(å@$ä T‚Ø†â:Ğ –‹r|¤ı9bŞ$W½«†Ÿ±-0Ó"N½k·şV'$ŸRí}ÕŒjÿ¬–	n©‡5£W×H—#*9B›§±ä#™¡åàûòYæ Å¬!ÍÇ"–ÈÄÅ‚½eÅVõhNÈ"‡’Sy¤IØqkìĞÑ?>šO¤¶;átoò-Rß)§|™‡‹nUdòÅI­2ÎQÈ~÷ºr×~²~şèƒ õÆÒş_cºz…°:İMĞ‰/€Ñx€°DKçù¼— jdŠ±²bw´B¦Ş_§fÒN²ÂÀ† æÌ¥™ÑNè¦I8kw–Ôw–EÇiønh”eñ¢š)+2ıíüæ"é%fqÛjÕ¨wë¤2¦Œ8µô6¤-oy¾ûÀ¾Ğ^¤Mê…ôXJ"—äÄOTØ0G’—‘·L4|ŠØ#\ÔÜÅb½ŠÂWÊŒÙ/†$º=qä%S*®şVÏÖÿ‰<öµ/Áï\.Ÿ
+òn×x2ÊÎD„v3öP"öuuNÉ½ún·Nü=W§ïş	·ç0œJ×Gä?«Ğ´soÇ,Œ¤Ú¿¾š(n'µŒ_3ƒl¥ñ:ığ¶0)­NØÍœ“V»#x…p¯¯şä)ÃrE!#÷N¬,VâçÉ(Üô(¿Û‡"TÖ%1Üÿ^'ı¹uƒÂKüáî%
+f¬ƒ'¼Ÿ$…zÊş·uö–CõÌÒ%Ù¢ôK°Öw²}²énAÏ©‹R”èêB]éš“q4¼{â(Ó?_¦(	jÎ%ai.Uò/i—±‘RÕT ;Ø!Ê•˜Á\†>;6,¨yË]øtÉ‰öWá,M^•E%£É:u/yœ<\“€AÉQ?Äù­"WŞ«_U“fmØø¥à[›YRö˜?DĞ:Æù/û™ê'VeZYèOT»6úöªè©ßäü~ßŠûHÖóV9`s‘„ÈcÀ'ø–Á‹ÿgyß& ”Ø­C‹h9±ö«Ò<œz"k‹Ö~%q	"İsü¾ğ(Ix/­º¾àîxµ‰»Û;U¶±§#mÕ"Ğ_AM°¨\ºÑ>ìÔ*Qç¼s™Ù³8’Â­„g'Xm·Ûró@Î[ìÊé¥Ñ$T„1~å$Ø\%:ä>²„4Ã›âš¢THU¼#.®àØYBÿÓµË,/Ujl½/Å+&öîÛÿ	ómiù¯)”ƒÇœóªÇ	^ÃÅ&İÓÏ>#ÃàGÚönôe¼q ?;i¥+p”<|¾â½Úz¦Ùòã	Š˜ıºœ±‘okûkJr›ç›úÓ†S0X¾~†ÛåÜçÕ¿Ë)ì®¦÷ÂÓ.Ï6xÑí¨WÿàL9;«
+ Sşó¢ƒs%$“ÈØxÁ	nnª4óJËˆó¦S÷Ü™Y<£W¢	t¡YCf«kÅWiñ©ˆ¶Ëh_f’ÖTÚHªªê¿&äÍì¥7¥ÕÍ%‡›ÍûoÇ~æĞ&±7C†
+wŞ˜ “½ï§Ôªº°râäzÄğ$DUo€0-™RŒÉÆìäÈ@½#3ŒmµÜ(Ù7
+ò%ôØµÑ1Ç#¥d,oy­ûh²slÆú§Âf¹ŸjÌv¦Ãcf×TÛ[ek§Ñå¶5Xï…Ç½
+5#i¶^ğ¤aÇ÷éÁ'õÊ'¥t¢§²ï:7ÛşF ü$M½ëı›ğMÛ³n)xJa`-ëƒ”ç©xš:ÁÎ„n}×?TÂÍú€“·?§]²h¸üj¹m<épE#NxñÒ—î¾ÿòn«uŠmÚºU8wE	i	wJ™×\’‰®±ºêq¾x«¶Q–›|>¤T¼j®uN°ùĞ‡Pê%ø)l§à4{GİUeÅ¡míÄ›W!Z!Õî²Š½æhÓ¿„?¦Vçò¡Õ}l.EÑ\Jvc¬ŸÔ…P€IVLx_Ó[ˆÒĞÃ‰œ»µ3óz‹Ü#C~ç2óH‡i@cdÁFsEêZ‹ÙößŸ,âª$×SYFÀ× hĞ/xÃÑû§\„œ?3sÂw.nš¿şÃ¤'¥åÖ°Â 	ş+Ä“¸]W2‘.‡(P®ıÌ'sW¾®ºg‹“fo³J)Ä	š/a9I™Ä«™ÇğÛcb“~>•¶¿š$,|/ráØq€êœ¹`é¬"
+{à->”³³jÇç‹Ú*º>{¢ò
+±rU2-Òâïç_OáÖR¿İ<Öh$›èš€Ï;±oº©ıû›™¤Í²­9Ÿ—ù¿]›ñ“œèv“hnfñKxÈCò-ídà}ñÚæmARæ5šQÁĞVßE'‡'G<±uŠ”ˆ İîÚs…)Ò¾«aw*Õ”A kÎ|”ÉJ ;ŞzÑår/l]"ú.è'iÒÏb‚1ŠĞòc~E£´ÁÛFAô¶%r)P‰âİ© Ä»QÍˆÚ:øOWÓ'âøVšA!ĞIãlPôòØiÊÍ\¤´øaåL%·€ß…ŞaŠ)>dx³[ÏCyZ:ˆyq¨2cìàwR)ùêŸhÆçI*Š	ÄÂ«°Èo…°ÙĞª'ı%•÷œw¦;Õ­û#»½VÑúÛ>×ôòóêÕ“5ò%\b¹zC	³O$R"ïÿÜ>à– LÄjÎW“Â¤÷ıÀøôÁ
+eZ÷OºôÃ_:óø¾ÍòŞDÊÅÅ!Ûg€’É}³é'1xÓòZ-5m:À_#å¸80Ã.IôÎÏ¨¿nØ˜İ¦¹Dj©Ó×Å\".‡]dyy«ÿú(U‘|¨v\OÙ`„µA<~ö#1ËF¬+õñØ;œ]isO¶ç
+‚›u×šr€!@:’ßƒhœ3pÍ¦JõRŒ¹ğ–(ä2›wÅÖúhí¸µğ[¬¡ø2ÒÔ¨ºâ`Ñ¡åì)<fa¨-Lß‰Â¾Y÷„ıÇ¶ÎJ×¬wPœµ#&|[şVÿØ!iÚFG©¤“£½ ˆYe°›şv„Ç†ì…=,¥gœ{‰RŒı!vÎN¯˜¸42qÎ—v*Ïô½È„`ç¤©n'‡ÊÀéOÔñ:Xª}Bı¸6@Ğ0s4s’‘cKÑyRgMáEİPår6f(
+tÍoÜl7ô	ıƒb:Ñ2·púoNAÍŒS¾1Ğx\grgÎE(8LP±ºe­O¯e‰c¿Î»ûÉihÄ/* ˆjÄÑÊí®r§-GµƒCñ	ÛšÔUı2=Í:æ&&pgµõF›‡nø5ôá>;x¼<ƒÑéà"ÈŸÆÏŒIÏµD¼ïDI{¸>B®‹¾73z–Ğ-DşÖF‹N7ú5ƒw³°	¹V‰:¼âMh¤C…¤‰Ä3’ŠÀ54[Z°Bÿ”Ôá·¶ª¤®_¦l»g/“NÊ|M½h']ouBØ»¬èLgÿ×a›BI
+Û¸±İ4
+åÌ‹T¹ÕOF.Gx2aÆƒ€AE&À_É$DÙ×¨Vº‹)P<Úæ“Áè–HÀéñãÎôí±]ÂMQc5ª¸ê<,íÔ^œh€5«AàR³Ùdjj]†ˆ8v.ã–4œP3æLæ¯-41ÂÏÂÂ3 ~òN„yÛÉ€Î‹ùóN™õßÇô9¸:rpDÛ›ÿ¸zîëS´‰İbºÆDéß¡ÓÂÑx?âI-K4äZµfÌJæwƒ•Ê|¹SF¯8ûÚËµä±Ç®YŒ4³í1›ÁzÁ°Ó–ÓA®1è¤cyQWcÒã@{™u»…¼ıXzÂÒähÊıª£3pBH¹'È@¸ÁâD6ØÖi6u Ä¦Ü÷JwÈ±´/ßl©6'­gÃ|èõnGpë§Ú0æ§¡Òº¶Æê^L|é¢©MÏWH¿æfç¢U‹ƒñÔ5ÿYöo]ÃÃæ”Vm6&ŒhÂÊ‰ÅM;|sÃU5•üğÏŸv€cäìJ§‚)ºlb¹ø«œÙF¸ò2okúæ|Ê†Ù1Eœ—,}ÿ˜Næ¨é>÷&½-­7KÂy¢9Bª¨$¯ôXÛ7×­Z>äY^+Ç”¡/ìb¯7n	XD'ñ‚Rã <vÒxG¯Z”\f ĞÄ»ŸhuuÂµ6‚¬Ú‡ò˜ĞvÔÀi‘òíµv­òÙlm/°+2â‚ø·œ&™ì™KU9Îj‡šyxÜdªgxp[İİO§¨òÜ±zğÄ¢lxŒã•5P·Nt:°†ÚNĞİ©xMÛ–TI‡Kn\ÔXÂÛŠñƒ%ÆZ¾ì;eé„ôœ§päêõW¨«¶õü–h|ËÕ</¨0w n© ]Ùä2"Ğ@…Gf8À¶ú³”Ğ3¢6™"’¥
+„pY”ÅĞÙÖš,]©lX™¢S‰­-SÏWğ-3"ğ‚RêW„ œ˜Êƒs³ŞXAâ].Äş`¬~OF_mqÑR	gŠ¸,sxĞÎÄÙ½ÚÛşÚ]Rª?À7—ÈxxC¶ÑƒÔ5âÊ>ĞS¶c{SšàìÉ$?¶›Û“ÌSíšàlLôñ|¢miÁR.ªùÛA‘£›;aû-_M¶£í ®J °@ı’Î† g>nøkl úöŸ‘ú?^—çØÍæ_¯lï17ª•½ÀŠÖï6½A!KliºìÃåÈ€¤Cyé:À,Øh?);hC;î;3t^_“ÿ*œA·7Â-`‰åzEªiq´Î®ùû‘!Ö`®ñ•x¬‹B!˜ÜÚÍ‹¨R’_ÙGóVzÊ,÷¯áãÓ¨^É]ó5Û¢)”¥ïxè°&¬,ø¤ÂN»s'~L¥î}=
+˜EªäSï¥,È8¹ÙÏ-»I©S|;Ú·ÏıÜ?Ÿ²h^5Ë,·1GÂÇ_=pápÉgÕÇ•hE%»Ê?—š¿r~î½Ÿêïù©Hn-9ñ<kAîzåã"Âoá:¤ŞßµC;hi7"àD@‰sÚÆpwbD»öóìÇïCöé!~Kè«Òì¾œÖã5lk C¶‰÷<°I`€kğ´}GW-ÛHËåüaú¥ào»ÌÆ3¸ŠÓF¸Øùœ¶ïÿÑBÑ¥{ø2YÆ£~çZÅX\n.^“œÔu?ÒªûÓ€j¾9ş*˜$¹‘ìgÃ@ÇæÃ³©ZìÏ2hº[²™ôsò"ƒÜˆ¡îèÈ=€êg/9/ ù2Ú;'˜fá%,ìbustgœ6!>GVAVKrE&{m»<l³‰²mƒ¼JÑU*üEGl{=„ÕKÄfÙ”=×³pï¬XÏìUŠ™~§fj%†àÍ> İ …%ÈŸ†x¸z0=Öb+ƒÂ9/]u¢bÿáÓÖ[%K«¨|eEü{­¸c­(îq JÙª'ş6ı\FÒÁøJTb„º= ©[è€ÒÃ;v©cæ]ß×.Ÿyğ?››rğï;`îçs&ûJ÷SMÈÕaoM2¯ôØB;wkñ
+c~¿@şmuÚóv§JñE‹û³F ‹<$Wk˜?]ñÔ"÷ıƒËñ_3˜³g#“JÁøzôeŸF’…obÆõx§3"æŒSBeJCŸ;§›Ê÷¼^İ»øÿÊ(F—;L?“*Ho¼Gıáâñ€DhLÈk1¶TÂ~§¾‚&GY~BØ#|ÒüDÒY¬l¼íåELQªYI¿*]H™sc‚\İÎ€ñ¢ı$7–@š¥‹ÊûIÎ§ãÍ¥Š¶×KÅAöV0c!4p„æ£¿”ÑLÜı@œók_ƒ¹c¬`ÓÃ?¤šo*ªÌ )\Ğ×•Ïd­‡“v":„ŞÒ:ù¹:P¯8BîÒïğ·zîû.o1ü‰Ê0¯ßFäà¡Ç“ÉÈo¢S•¹PTÉùë{Ô¹`Ÿ“$‘¸XÉkZÍîÀºº‰‹ödÀh—ÄT÷S÷ÊÊ~X82–bj¥²jÄœfd›Â%¹(sĞíkÄ<Áø0§˜u  &A«X×ÔRƒyy_Š>ê‚¥‡#şìC4#/ÇŒgŠ}u“şÑrê›1s¤é¶~,§$o/şÊ}]¦f3ºp³¶ì„-™Afş·¹ò^´WöºßNQ©SÇÃ¯ÓqY*ı#ï´™$*ŞQÕ&Ï58$ßÿA”XæKeTtA~Jj@ 6Õì¤ùK¤cÚ3@İ­Âƒç'èÁ›!yxZÀ¹Ÿ
+±2—´Ş4û8Š”ö¢z­Ùİî¿…6Á×õº< ^Ük­…ùJµæY‰I€AHçèö†6¦ù i²x—Î*T"d”QÌ¦­¤YjOQ%ÌıQË£Ã‡SdëŸñ0¨Ñ‹p»Vˆ•ä
+m\;hz’­
+ {®S
+%ğ(ÊÇ.é/sëhŒ·Ì«Ú’qÆ`ùg‚pô€ÕFæƒ(ËK”ÛøË¬¦@È¤ø”Ë-QñFıµ@ù’SRH	Ğ¡ GO‡“n,g-óaxÉ(#Ë‹%Æ¬­¬*Îµ7eœW50±uÕíşäºÓª<JO¶…aøHF¡ZWş¡¶ßı¦é<q_º; JÀÎX”P6q's‘gó»up­bßh@´À°8îñèâ·JïÀkaİ·ïÃ
+a#"®¨ã6Xğvÿh¼µšÔng…Æiƒ*½İ‚€ç€o†nbşã²ßtçÂºZ„¢˜ù½
+x8QÓkü’»HøE-#O„õóÃ„G÷æ8œõQpu5©3A³ImÌV0cßã‘ûÒ·LR±Eúı6dBÍÌÕ¾³”k•1ÒS#¥õ´ö‡ãúÿÏ'¸›Íi,æ—´\
+r’Ö¢[“—ªKçÑÒÒ³íİL¾='¤õ‹+B«•Áé»d3&³¬ºÎ ‘ÏØ]7P·ç£Íò½@­©3Ï2z­y.kQ´r“‘¥Ô°©2ûë”|‹…ÅÌNÕ4‹¢õÓêobÆ»y½hƒëĞ»\lŠ=5wÓ7D»ğÓ“½"Şy¨MsK€—à`ç‡s1/ÇZ5{-%'·#1Ui™5œZ]iµéEÒ0ší¿h‰YnU|î—¢¯7Óv$xÙ©ÚÏ”kÀ“^ÌQÔçÛ'ïıºÑúYg¸ÃDHsÙ8÷5gîW‘›¾šì¬Q¦Ü6•="Û	¢Rã’òõÕù‰²£¢QÒUÔ±Rar`~,>ù¸²-?K–	:¶¿¾Ğš…îZ´Éo ¬Âb94ÔØ·‹ò(ù¹2¼à&^•V°Ÿ­XPÅÎ_Ş’ìYÙ¹ë$½Èj›½ÎÆ¬F¦!üÇ¥¶:N &Ç!ı–Ç	Ûˆ}.v‰Séã©è\í"Nœ àƒõ8ÆøÙ«@|PLxĞ‘ÁZB6ÿëßèz!K¨(ªõçèÒ¦Kï•Û¶"lìè{–½üÀ˜+n¦}L¾Ø…}İbX§ìdª“­‹ÂcÖPUw^—d]ú”ñå½!%õïÌ’õ¦{+ã´–ëævBöqšH6“agŠø”¼VãÈĞŒ’ŞÜh .‰!>Wğõƒàa\ĞÀ¤ãköhF†Ææ<FËLŒkù”2=Dâ°AUÉS¢êš “mS§¹ƒkWœOÀ(?¹Î•†ç 3RÎêõ=›üEö’»' ƒTwTÉP‘5+ß‹Ê¶RÔ=¦|™Œ5ÆPDçü×°FW8w¸Y‘¿®èèí¦¿?Ru!&ìmÓ´¦ğœ6i#…|·NgØ~Ül¨ZGh-LNÚOÛ¾¼3¨!e–ÅCR“ù>”®œ(,»wdH6W[Yü’€Øßß2}öÇ ¡ñ£Q_¨\dfĞõúò«&“%)èvïbQûLd>¯»+şq^à6‹±&ÈşÌ$©Á(‰3„çÖÆ4€º=J+²x¶EMRJàVï1 Â‹Ù¡Ñ Åç¶I‡Ä*´NúOÆüfP±×óñ`"û*ÿ5ºÕ¡s¬¬ƒK×¹FÀıN–~İÔĞÊãĞÚf™3“;Úøèû›™IY$İ`´ë½?Á5ÙáŠ²M˜®êôT@ÂgMğD+P£°¥có”¢ÊšBúEV¶VfG,ïµÔïfÇ]XÉ èMR>E†2ÿ¸Ô%0¨„ 0¢òwØ‡ƒàşz]ø5JïcO›àš}…&sªç=| ğ—XKø¶™íXÚHkG©'™°@ã|tG¦¢•Tc¥c§C'Tœ##ÊÜÿÍU)òÊÛ`ÛğÓÔ÷)üÖç®æo/¨7ŸIo"×bİ„5ºœ Ï°g±PwRòa`÷|ÄˆÌ•ºœ“ h7Hq§ğp¡Y»&Ü’ÀT!ğÙs.†ßÇÇDQ¥b"€éGhıU’ûêèõ“`‘[óRµûbN®bÅË¯]¥ôpsû|Ín&Ôï·_İ—rÄéâ_ı ĞC¥axyú¤‡4¢8Â ‰’g7ªŸª¬9ÄĞRlœ<Ü””ÕjˆŠ8Y‡(fÈr'›™í­¯×¶" <àãÕòöS¾wÄ#®×¼Q‰+”ë¦öŒwjÃ©±YÙ»ıãá©Úô¶w“^zÄV=öÎ…2Şñ×pqhš}ĞáÏ#ä¶ax˜õíåWÿò²u‡áÃV¶6a¹02·£å+ÅÏ/•rCÆÍZj‡,Ô@Ş{†°²Ò7S.›¿©73$ü–¨A=@BƒÈÄH7LÀ÷€ŸŠšL’&à=èu¶Ù‰h;˜	¢z±Iøåë(ÌÉ„½/§ µø!y¶¼tœ²!Fvï_Ìslœ}½h6Ú¯ìnó6¯ö~ñj§EÛ¹°6ac<óãq½¬•LReÕNãanë9œúŠãß%´×ÛuØàÁìiS®ÑŒ1â(6´™ª²LOEØÛë2ãÿYšœ6A!ÉÂœÙJ–¹h‡ƒ`\õ¦,Çµàõìï¹‘ÕßÈ®;‹¼‰F€é	¶cû#ÔutÀL%)êqvf.°ğğ	ßé-_u‚‰m<€#9‘HÕ–i°S¨üìÆËEŠ P'2Èc¹€æIì×»uld:“C KMl|œÿM2!nªÊtgJm™ µ:ä –BíSÖÜÉ×ˆÍ×4KÚòmhÑ:ONÎ5ÃêSŒ«\i;“*ç< DOÑûNX¶“´#sGâä¹SR†²hwG°LVÄ©®‹2?pá¾F£Y¦lo÷*Ç‰ÇY‘³
+¬áS¼öÿJî×[–×uãÙ–+"öqå†ŞoÜò–U'Ë“ºûÛ¯}½Vy…êÔK®	*ê¢ŠômiJ5s6¥S¥ªÓ2|ÂOQZ1Ó² [,¤å«5oía_nº§îñêÈg¸ğÎ÷nıˆòƒË-ü‘»Ãêu¤¶»Î@[˜%íğ§¡ÂfëZã>ß¡OîGâÑqC-3¸ëÆ›Ws…8€‚ŞÉ·@…[ÃÜRF×-kÉ]†…ùÃã”ÊK)ÁVu‡«‚úJ…np5?Û¢y¼RÒéá÷Ş±ØâÛì?äìÊ§{öxq6V—=2$î7ºÌ·ÚÕ—â½H^›JJhpw,½<l~y
+ÖÔ)ç²à×ş”èã™ÀMù¢Ï¯;„N”ó­Iˆ<UÃ¿wvûz@Õ¥*á‘ãnşvC^À–2²î\¢İÑ7‘ÜA$»Æ¨ÌæÔ¬=ô8àMÊTÄëT&4E8‚K—Š¨;Šm5ÑVb|ŞÔ8ã‘œ¦”Z#kR¡OåÀ”uÁ¯®¼X•O[2#ƒŸ~gáB´@”u58JÙTì]Š–8½åmìÃÙP#®SËüb¡Ñ4ğ‘³2025-12-02 00:11:09,425 - __main__ - INFO - ==================================================
+2025-12-02 00:11:09,427 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 00:11:09,428 - __main__ - INFO - ==================================================
+2025-12-02 00:11:09,449 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 00:11:09,487 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 00:11:09,488 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 00:11:11,506 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 00:11:11,506 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 00:11:11,575 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:11:11,576 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:11:11,577 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:11:11,579 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:11:11,581 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 00:11:30,253 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 00:11:30,256 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:11:30,258 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:11:30,259 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 00:11:30,272 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 00:11:31,375 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 00:11:31,376 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 00:11:31,379 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 00:11:31,380 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 00:12:28,790 - __main__ - INFO - ==================================================
+2025-12-02 00:12:28,791 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 00:12:28,792 - __main__ - INFO - ==================================================
+2025-12-02 00:12:28,813 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 00:12:28,848 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 00:12:28,849 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 00:12:30,861 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 00:12:30,862 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 00:12:30,927 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:12:30,929 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:12:30,930 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:12:30,931 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:12:30,934 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 00:12:47,152 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 00:12:47,154 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:12:47,155 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:12:47,157 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 00:12:47,169 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 00:12:47,459 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 00:12:47,461 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 00:12:47,474 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 00:12:47,478 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 00:20:55,101 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ã¨ã³ãã‚Š Dear My Friends!
+2025-12-02 00:20:55,112 - spotify_integration - INFO - ğŸµ ã¨ã³ãã‚Š Dear My Friends! - ãƒšã‚³ãƒªãƒ¼ãƒŒ (CV: Mãƒ»Aãƒ»O) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive Lost Princess ã€œã‚ˆã†ã“ãç¾é£Ÿæ®¿ã¸!ã€œ'
+2025-12-02 00:21:44,470 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ãƒãƒ³ãƒ‡ã‚£ãƒ»ãƒ©ã‚¦ãƒ‡ã‚£ãƒ»ã‚·ãƒ§ãƒ¼ã‚¿ã‚¤ãƒ ï¼ï¼
+2025-12-02 00:21:44,471 - spotify_integration - INFO - ğŸµ ãƒãƒ³ãƒ‡ã‚£ãƒ»ãƒ©ã‚¦ãƒ‡ã‚£ãƒ»ã‚·ãƒ§ãƒ¼ã‚¿ã‚¤ãƒ ï¼ï¼ - ãƒ¤ãƒãƒˆ (CV: ãƒ•ã‚¡ã‚¤ãƒ«ãƒ¼ã‚ºã‚ã„), ãƒ¯ã‚«ãƒŠ (CV: çŸ³è¦‹èˆèœé¦™), ãƒ•ãƒ–ã‚­ (CV: èŠ±äº•ç¾æ˜¥) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 43 ãƒãƒ³ãƒ‡ã‚£ãƒ»ãƒ©ã‚¦ãƒ‡ã‚£ãƒ»ã‚·ãƒ§ãƒ¼ã‚¿ã‚¤ãƒ ï¼ï¼'
+2025-12-02 00:28:00,423 - __main__ - INFO - ==================================================
+2025-12-02 00:28:00,424 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 00:28:00,424 - __main__ - INFO - ==================================================
+2025-12-02 00:28:00,446 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 00:28:00,486 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 00:28:00,487 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 00:28:02,500 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 00:28:02,501 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 00:28:02,564 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:28:02,565 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:28:02,566 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:28:02,568 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:28:02,570 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 00:28:19,123 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 00:28:19,125 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:28:19,126 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:28:19,126 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 00:28:19,141 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 00:28:19,450 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 00:28:19,451 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 00:28:19,455 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 00:28:19,457 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 00:28:19,586 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Into The Trust
+2025-12-02 00:28:19,589 - spotify_integration - INFO - ğŸµ Into The Trust - ã‚¨ãƒªã‚³ (CV: æ©‹æœ¬ã¡ãªã¿), ãƒã‚³ãƒˆ (CV: å°æ¾æœªå¯å­) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆ! Re:Dive PRICONNE CHARACTER SONG 40'
+2025-12-02 00:28:34,689 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: æ‹ã‚­ãƒ©ãƒªãƒã‚¸ãƒƒã‚¯â˜†å½¡
+2025-12-02 00:28:34,692 - spotify_integration - INFO - ğŸµ æ‹ã‚­ãƒ©ãƒªãƒã‚¸ãƒƒã‚¯â˜†å½¡ - ãƒªãƒ (CV: å¾³äº•é’ç©º) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 21'
+2025-12-02 00:38:36,417 - __main__ - INFO - ==================================================
+2025-12-02 00:38:36,418 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 00:38:36,418 - __main__ - INFO - ==================================================
+2025-12-02 00:38:36,439 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 00:38:36,479 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 00:38:36,480 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 00:38:38,492 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 00:38:38,493 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 00:38:38,556 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:38:38,558 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:38:38,558 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:38:38,560 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:38:38,562 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 00:38:54,161 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 00:38:54,163 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:38:54,165 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:38:54,166 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 00:38:54,176 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 00:38:54,468 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 00:38:54,469 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 00:38:54,471 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 00:38:54,478 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 00:38:54,717 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ãã‚Œã§ã‚‚ã¨ã‚‚ã«æ­©ã„ã¦ã„ã
+2025-12-02 00:38:54,719 - spotify_integration - INFO - ğŸµ ãã‚Œã§ã‚‚ã¨ã‚‚ã«æ­©ã„ã¦ã„ã - ãƒšã‚³ãƒªãƒ¼ãƒŒ (CV: Mãƒ»Aãƒ»O), ã‚³ãƒƒã‚³ãƒ­ (CV: ä¼Šè—¤ç¾æ¥), ã‚­ãƒ£ãƒ« (CV: ç«‹èŠ±ç†é¦™) | Album: 'ã‚¢ãƒ‹ãƒ¡ã€Œãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆ! Re:Diveã€ãƒ†ãƒ¼ãƒã‚½ãƒ³ã‚° ã€Œãã‚Œã§ã‚‚ã¨ã‚‚ã«æ­©ã„ã¦ã„ãã€&ã€ŒLost Princessã€'
+2025-12-02 00:43:48,335 - __main__ - INFO - ==================================================
+2025-12-02 00:43:48,336 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 00:43:48,336 - __main__ - INFO - ==================================================
+2025-12-02 00:43:48,357 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 00:43:48,397 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 00:43:48,397 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 00:43:50,409 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 00:43:50,410 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 00:43:50,473 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:43:50,474 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:43:50,475 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:43:50,476 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:43:50,478 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 00:44:06,152 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 00:44:06,154 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:44:06,154 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:44:06,155 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 00:44:06,165 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 00:44:06,518 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 00:44:06,520 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 00:44:06,524 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 00:44:06,529 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 00:44:06,679 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ãã®æ˜¥ã€æ—¥è¨˜ã®ç¶šãã‹ã‚‰
+2025-12-02 00:44:06,680 - spotify_integration - INFO - ğŸµ ãã®æ˜¥ã€æ—¥è¨˜ã®ç¶šãã‹ã‚‰ - ã‚­ãƒ£ãƒ« (CV: ç«‹èŠ±ç†é¦™) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆ! Re:Dive PRICONNE CHARACTER SONG 36'
+2025-12-02 00:45:05,964 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Only Only You
+2025-12-02 00:45:05,966 - spotify_integration - INFO - ğŸµ Only Only You - ã‚¨ãƒªã‚³ (CV: æ©‹æœ¬ã¡ãªã¿) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 23'
+2025-12-02 00:48:41,810 - __main__ - INFO - ==================================================
+2025-12-02 00:48:41,811 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 00:48:41,812 - __main__ - INFO - ==================================================
+2025-12-02 00:48:41,833 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 00:48:41,879 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 00:48:41,880 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 00:48:43,895 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 00:48:43,896 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 00:48:43,958 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:48:43,960 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:48:43,961 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:48:43,962 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:48:43,964 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 00:48:52,232 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 00:48:52,233 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:48:52,234 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:48:52,234 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 00:48:52,245 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 00:48:52,700 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 00:48:52,702 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 00:48:52,705 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 00:48:52,709 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 00:48:52,960 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Only Only You
+2025-12-02 00:48:52,963 - spotify_integration - INFO - ğŸµ Only Only You - ã‚¨ãƒªã‚³ (CV: æ©‹æœ¬ã¡ãªã¿) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 23'
+2025-12-02 00:49:56,403 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ã·ã‚Šã‚“ãƒ»ã‚ãƒ»ã‚‰ãƒ»ãã‚Šã™ã¾ã™ãªã®ï¼
+2025-12-02 00:49:56,409 - spotify_integration - INFO - ğŸµ ã·ã‚Šã‚“ãƒ»ã‚ãƒ»ã‚‰ãƒ»ãã‚Šã™ã¾ã™ãªã®ï¼ - ãƒŸãƒ¤ã‚³ (CV: é›¨å®® å¤©) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 25'
+2025-12-02 00:53:28,372 - __main__ - ERROR - æ¥æ”¶åŸ·è¡Œç·’æœªé æœŸéŒ¯èª¤: IndexError: string index out of range
+Traceback (most recent call last):
+  File "/home/ac/QTdashboard/datagrab.py", line 171, in unified_receiver
+    msg = bus.recv(timeout=0.01)
+  File "/home/ac/QTdashboard/venv/lib/python3.13/site-packages/can/bus.py", line 121, in recv
+    msg, already_filtered = self._recv_internal(timeout=time_left)
+                            ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/ac/QTdashboard/venv/lib/python3.13/site-packages/can/interfaces/slcan.py", line 304, in _recv_internal
+    dlc = int(string[9], 16)
+              ~~~~~~^^^
+IndexError: string index out of range
+2025-12-02 00:53:29,238 - __main__ - ERROR - æ¥æ”¶åŸ·è¡Œç·’æœªé æœŸéŒ¯èª¤: IndexError: string index out of range
+Traceback (most recent call last):
+  File "/home/ac/QTdashboard/datagrab.py", line 171, in unified_receiver
+    msg = bus.recv(timeout=0.01)
+  File "/home/ac/QTdashboard/venv/lib/python3.13/site-packages/can/bus.py", line 121, in recv
+    msg, already_filtered = self._recv_internal(timeout=time_left)
+                            ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/ac/QTdashboard/venv/lib/python3.13/site-packages/can/interfaces/slcan.py", line 304, in _recv_internal
+    dlc = int(string[9], 16)
+              ~~~~~~^^^
+IndexError: string index out of range
+2025-12-02 00:53:45,109 - __main__ - ERROR - æ¥æ”¶åŸ·è¡Œç·’æœªé æœŸéŒ¯èª¤: IndexError: string index out of range
+Traceback (most recent call last):
+  File "/home/ac/QTdashboard/datagrab.py", line 171, in unified_receiver
+    msg = bus.recv(timeout=0.01)
+  File "/home/ac/QTdashboard/venv/lib/python3.13/site-packages/can/bus.py", line 121, in recv
+    msg, already_filtered = self._recv_internal(timeout=time_left)
+                            ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/ac/QTdashboard/venv/lib/python3.13/site-packages/can/interfaces/slcan.py", line 304, in _recv_internal
+    dlc = int(string[9], 16)
+              ~~~~~~^^^
+IndexError: string index out of range
+2025-12-02 00:54:07,793 - __main__ - INFO - ==================================================
+2025-12-02 00:54:07,794 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 00:54:07,795 - __main__ - INFO - ==================================================
+2025-12-02 00:54:07,816 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 00:54:07,856 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 00:54:07,857 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 00:54:09,869 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 00:54:09,870 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 00:54:09,932 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:54:09,933 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:54:09,934 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:54:09,935 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:54:09,937 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 00:54:18,399 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 00:54:18,401 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:54:18,402 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:54:18,402 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 00:54:18,416 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 00:54:18,714 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 00:54:18,715 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 00:54:18,718 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 00:54:18,721 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 00:54:18,865 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: åŒå¥æ­Œ
+2025-12-02 00:54:18,866 - spotify_integration - INFO - ğŸµ åŒå¥æ­Œ - ãƒ¦ã‚­ãƒ (CV: å¤©é‡è¡ç¾), ã‚µãƒ„ã‚­ (CV: å³¶è¢‹ç¾ç”±åˆ©) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 54 åŒå¥æ­Œ'
+2025-12-02 00:55:17,027 - __main__ - INFO - ==================================================
+2025-12-02 00:55:17,028 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 00:55:17,029 - __main__ - INFO - ==================================================
+2025-12-02 00:55:17,050 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 00:55:17,091 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 00:55:17,091 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 00:55:19,107 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 00:55:19,107 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 00:55:19,171 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:55:19,172 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:55:19,173 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:55:19,175 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:55:19,176 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 00:55:26,492 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 00:55:26,494 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:55:26,495 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:55:26,496 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 00:55:26,505 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 00:55:26,833 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 00:55:26,835 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 00:55:26,839 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 00:55:26,841 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 00:55:27,018 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: åŒå¥æ­Œ
+2025-12-02 00:55:27,019 - spotify_integration - INFO - ğŸµ åŒå¥æ­Œ - ãƒ¦ã‚­ãƒ (CV: å¤©é‡è¡ç¾), ã‚µãƒ„ã‚­ (CV: å³¶è¢‹ç¾ç”±åˆ©) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 54 åŒå¥æ­Œ'
+2025-12-02 00:58:04,422 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Holy Passion Roses
+2025-12-02 00:58:04,427 - spotify_integration - INFO - ğŸµ Holy Passion Roses - ã‚µãƒ¬ãƒ³ (CV: å €æ±Ÿç”±è¡£), ã‚¢ã‚­ãƒ (CV: æ¾åµœ éº—) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 20'
+2025-12-02 00:59:17,090 - __main__ - INFO - ==================================================
+2025-12-02 00:59:17,091 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 00:59:17,092 - __main__ - INFO - ==================================================
+2025-12-02 00:59:17,113 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 00:59:17,159 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 00:59:17,160 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 00:59:19,173 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 00:59:19,174 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 00:59:19,237 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:59:19,239 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:59:19,240 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:59:19,241 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 00:59:19,243 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 00:59:25,400 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 00:59:25,402 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:59:25,403 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 00:59:25,405 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 00:59:25,416 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 00:59:25,774 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 00:59:25,776 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 00:59:25,780 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 00:59:25,786 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 00:59:25,915 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Holy Passion Roses
+2025-12-02 00:59:25,917 - spotify_integration - INFO - ğŸµ Holy Passion Roses - ã‚µãƒ¬ãƒ³ (CV: å €æ±Ÿç”±è¡£), ã‚¢ã‚­ãƒ (CV: æ¾åµœ éº—) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 20'
+2025-12-02 01:02:01,169 - __main__ - INFO - ==================================================
+2025-12-02 01:02:01,170 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 01:02:01,170 - __main__ - INFO - ==================================================
+2025-12-02 01:02:01,191 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 01:02:01,231 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 01:02:01,232 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 01:02:03,245 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 01:02:03,246 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 01:02:03,309 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:02:03,310 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:02:03,311 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:02:03,312 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:02:03,314 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 01:02:10,946 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 01:02:10,947 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:02:10,948 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:02:10,949 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 01:02:10,961 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 01:02:11,371 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 01:02:11,372 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 01:02:11,375 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 01:02:11,378 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 01:02:11,509 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: é»„æ˜å¤ªå¹³æ—…è·¯å”„
+2025-12-02 01:02:11,510 - spotify_integration - INFO - ğŸµ é»„æ˜å¤ªå¹³æ—…è·¯å”„ - ãƒ«ã‚« (CV: ä½è—¤åˆ©å¥ˆ) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 17'
+2025-12-02 01:05:37,085 - __main__ - INFO - ==================================================
+2025-12-02 01:05:37,086 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 01:05:37,087 - __main__ - INFO - ==================================================
+2025-12-02 01:05:37,110 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 01:05:37,152 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 01:05:37,153 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 01:05:39,165 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 01:05:39,166 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 01:05:39,229 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:05:39,231 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:05:39,232 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:05:39,233 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:05:39,235 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 01:05:51,087 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 01:05:51,089 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:05:51,091 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:05:51,094 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 01:05:51,101 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 01:05:51,413 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 01:05:51,416 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 01:05:51,425 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 01:05:51,427 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 01:05:51,539 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: é»„æ˜å¤ªå¹³æ—…è·¯å”„
+2025-12-02 01:05:51,541 - spotify_integration - INFO - ğŸµ é»„æ˜å¤ªå¹³æ—…è·¯å”„ - ãƒ«ã‚« (CV: ä½è—¤åˆ©å¥ˆ) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 17'
+2025-12-02 01:06:39,049 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Secret Star
+2025-12-02 01:06:39,051 - spotify_integration - INFO - ğŸµ Secret Star - ãƒ¦ã‚¤ (CV: ç¨®ç”°æ¢¨æ²™), ãƒ’ãƒ¨ãƒª (CV: æ±å±±å¥ˆå¤®), ãƒ¬ã‚¤ (CV: æ—©è¦‹æ²™ç¹”) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 29'
+2025-12-02 01:08:32,498 - __main__ - INFO - ==================================================
+2025-12-02 01:08:32,498 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 01:08:32,499 - __main__ - INFO - ==================================================
+2025-12-02 01:08:32,520 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 01:08:32,560 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 01:08:32,561 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 01:08:34,574 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 01:08:34,575 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 01:08:34,638 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:08:34,640 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:08:34,641 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:08:34,642 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:08:34,644 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 01:08:40,745 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 01:08:40,747 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:08:40,749 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:08:40,749 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 01:08:40,759 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 01:08:41,079 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 01:08:41,080 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 01:08:41,087 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 01:08:41,096 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 01:08:41,208 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Secret Star
+2025-12-02 01:08:41,209 - spotify_integration - INFO - ğŸµ Secret Star - ãƒ¦ã‚¤ (CV: ç¨®ç”°æ¢¨æ²™), ãƒ’ãƒ¨ãƒª (CV: æ±å±±å¥ˆå¤®), ãƒ¬ã‚¤ (CV: æ—©è¦‹æ²™ç¹”) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 29'
+2025-12-02 01:10:15,818 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Knight's Soul
+2025-12-02 01:10:15,820 - spotify_integration - INFO - ğŸµ Knight's Soul - ãƒãƒ„ãƒª (CV: ä¸‹ç”°éº»ç¾), ã‚¯ãƒªã‚¹ãƒ†ã‚£ãƒ¼ãƒŠ (CV: ãŸã‹ã¯ã—æ™ºç§‹) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 31'
+2025-12-02 01:11:05,755 - __main__ - INFO - ==================================================
+2025-12-02 01:11:05,756 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 01:11:05,757 - __main__ - INFO - ==================================================
+2025-12-02 01:11:05,778 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 01:11:05,819 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 01:11:05,820 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 01:11:07,833 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 01:11:07,834 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 01:11:07,896 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:11:07,898 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:11:07,899 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:11:07,900 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:11:07,902 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 01:11:14,114 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 01:11:14,116 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:11:14,118 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:11:14,119 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 01:11:14,128 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 01:11:14,421 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 01:11:14,422 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 01:11:14,427 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 01:11:14,430 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 01:11:14,549 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Knight's Soul
+2025-12-02 01:11:14,550 - spotify_integration - INFO - ğŸµ Knight's Soul - ãƒãƒ„ãƒª (CV: ä¸‹ç”°éº»ç¾), ã‚¯ãƒªã‚¹ãƒ†ã‚£ãƒ¼ãƒŠ (CV: ãŸã‹ã¯ã—æ™ºç§‹) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 31'
+2025-12-02 01:14:29,154 - __main__ - INFO - ==================================================
+2025-12-02 01:14:29,155 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 01:14:29,156 - __main__ - INFO - ==================================================
+2025-12-02 01:14:29,181 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 01:14:29,227 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 01:14:29,228 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 01:14:31,241 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 01:14:31,242 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 01:14:31,308 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:14:31,309 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:14:31,310 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:14:31,312 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:14:31,313 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 01:14:38,912 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 01:14:38,914 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:14:38,915 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:14:38,915 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 01:14:38,926 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 01:14:39,238 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 01:14:39,240 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 01:14:39,244 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 01:14:39,246 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 01:14:39,367 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Knight's Soul
+2025-12-02 01:14:39,369 - spotify_integration - INFO - ğŸµ Knight's Soul - ãƒãƒ„ãƒª (CV: ä¸‹ç”°éº»ç¾), ã‚¯ãƒªã‚¹ãƒ†ã‚£ãƒ¼ãƒŠ (CV: ãŸã‹ã¯ã—æ™ºç§‹) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 31'
+2025-12-02 01:14:59,807 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Lost Princess
+2025-12-02 01:14:59,808 - spotify_integration - INFO - ğŸµ Lost Princess - ãƒšã‚³ãƒªãƒ¼ãƒŒ (CV: Mãƒ»Aãƒ»O), ã‚³ãƒƒã‚³ãƒ­ (CV: ä¼Šè—¤ç¾æ¥), ã‚­ãƒ£ãƒ« (CV: ç«‹èŠ±ç†é¦™) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 01'
+2025-12-02 01:17:09,009 - __main__ - INFO - ==================================================
+2025-12-02 01:17:09,010 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 01:17:09,011 - __main__ - INFO - ==================================================
+2025-12-02 01:17:09,034 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 01:17:09,077 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 01:17:09,078 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 01:17:11,091 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 01:17:11,091 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 01:17:11,156 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:17:11,157 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:17:11,158 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:17:11,160 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:17:11,161 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 01:17:17,502 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 01:17:17,505 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:17:17,506 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:17:17,507 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 01:17:17,516 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 01:17:17,856 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 01:17:17,857 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 01:17:17,861 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 01:17:17,863 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 01:17:18,088 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Lost Princess
+2025-12-02 01:17:18,090 - spotify_integration - INFO - ğŸµ Lost Princess - ãƒšã‚³ãƒªãƒ¼ãƒŒ (CV: Mãƒ»Aãƒ»O), ã‚³ãƒƒã‚³ãƒ­ (CV: ä¼Šè—¤ç¾æ¥), ã‚­ãƒ£ãƒ« (CV: ç«‹èŠ±ç†é¦™) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 01'
+2025-12-02 01:18:57,015 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Halloween Monster Jam !!!
+2025-12-02 01:18:57,017 - spotify_integration - INFO - ğŸµ Halloween Monster Jam !!! - ã‚«ã‚ªãƒª (CV: é«˜æ£®å¥ˆæ´¥ç¾), ã‚¹ã‚ºãƒŠ (CV: ä¸Šå‚ã™ã¿ã‚Œ), ãƒ‹ãƒãƒ³ (CV: ä½è—¤è¡ç¾) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 24'
+2025-12-02 01:23:42,905 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ç™½ç¿¼ã®ã‚°ãƒ­ãƒ¼ãƒªã‚¨
+2025-12-02 01:23:42,910 - spotify_integration - INFO - ğŸµ ç™½ç¿¼ã®ã‚°ãƒ­ãƒ¼ãƒªã‚¨ - ãƒ¢ãƒ‹ã‚« (CV: è¾» ã‚ã‚†ã¿), ãƒ¦ã‚­ (CV: å¤§ç©ºç›´ç¾), ãƒ‹ãƒãƒ³ (CV: ä½è—¤è¡ç¾), ã‚¯ã‚¦ã‚« (CV: é•·å¦»æ¨¹é‡Œ), ã‚¢ãƒ¦ãƒŸ (CV: å¤§é–¢è‹±é‡Œ) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 10'
+2025-12-02 01:25:54,412 - __main__ - INFO - ==================================================
+2025-12-02 01:25:54,413 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 01:25:54,414 - __main__ - INFO - ==================================================
+2025-12-02 01:25:54,439 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 01:25:54,485 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 01:25:54,486 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 01:25:56,501 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 01:25:56,502 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 01:25:56,568 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:25:56,570 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:25:56,571 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:25:56,573 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:25:56,575 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 01:26:03,390 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 01:26:03,391 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:26:03,392 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:26:03,393 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 01:26:03,402 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 01:26:03,728 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 01:26:03,729 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 01:26:03,732 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 01:26:03,733 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 01:26:03,855 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: ç™½ç¿¼ã®ã‚°ãƒ­ãƒ¼ãƒªã‚¨
+2025-12-02 01:26:03,857 - spotify_integration - INFO - ğŸµ ç™½ç¿¼ã®ã‚°ãƒ­ãƒ¼ãƒªã‚¨ - ãƒ¢ãƒ‹ã‚« (CV: è¾» ã‚ã‚†ã¿), ãƒ¦ã‚­ (CV: å¤§ç©ºç›´ç¾), ãƒ‹ãƒãƒ³ (CV: ä½è—¤è¡ç¾), ã‚¯ã‚¦ã‚« (CV: é•·å¦»æ¨¹é‡Œ), ã‚¢ãƒ¦ãƒŸ (CV: å¤§é–¢è‹±é‡Œ) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 10'
+2025-12-02 01:27:55,477 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Resonate ã€œãã—ã¦ã¾ã è¦‹ã¬æ˜æ—¥ã¸ã€œ
+2025-12-02 01:27:55,485 - spotify_integration - INFO - ğŸµ Resonate ã€œãã—ã¦ã¾ã è¦‹ã¬æ˜æ—¥ã¸ã€œ - ã‚·ãƒŠãƒ„ (CV: çš†å·ç´”å­), ã‚¢ã‚¤ãƒ© (CV: æ¾å²¡ç”±è²´) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 53 Resonate ã€œãã—ã¦ã¾ã è¦‹ã¬æ˜æ—¥ã¸ã€œ'
+2025-12-02 01:29:05,692 - __main__ - INFO - ==================================================
+2025-12-02 01:29:05,693 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 01:29:05,693 - __main__ - INFO - ==================================================
+2025-12-02 01:29:05,714 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 01:29:05,756 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 01:29:05,756 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 01:29:07,768 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 01:29:07,769 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 01:29:07,834 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:29:07,836 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:29:07,837 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:29:07,838 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:29:07,840 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 01:29:23,044 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 01:29:23,046 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:29:23,047 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:29:23,048 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 01:29:23,059 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 01:29:23,415 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 01:29:23,428 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 01:29:23,449 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 01:29:23,454 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 01:29:23,542 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Resonate ã€œãã—ã¦ã¾ã è¦‹ã¬æ˜æ—¥ã¸ã€œ
+2025-12-02 01:29:23,544 - spotify_integration - INFO - ğŸµ Resonate ã€œãã—ã¦ã¾ã è¦‹ã¬æ˜æ—¥ã¸ã€œ - ã‚·ãƒŠãƒ„ (CV: çš†å·ç´”å­), ã‚¢ã‚¤ãƒ© (CV: æ¾å²¡ç”±è²´) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 53 Resonate ã€œãã—ã¦ã¾ã è¦‹ã¬æ˜æ—¥ã¸ã€œ'
+2025-12-02 01:31:31,223 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Tiny Twin Stars!!
+2025-12-02 01:31:31,230 - spotify_integration - INFO - ğŸµ Tiny Twin Stars!! - ãƒ¡ãƒ‰ã‚¥ãƒ¼ã‚µ (CV: æ°´æ©‹ã‹ãŠã‚Š), ãƒ¢ãƒ‹ã‚« (CV: è¾» ã‚ã‚†ã¿) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 45 Tiny Twin Stars!!'
+2025-12-02 01:32:21,136 - __main__ - INFO - ==================================================
+2025-12-02 01:32:21,137 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 01:32:21,139 - __main__ - INFO - ==================================================
+2025-12-02 01:32:21,165 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 01:32:21,227 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 01:32:21,229 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 01:32:23,251 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 01:32:23,252 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 01:32:23,319 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:32:23,320 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:32:23,321 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:32:23,322 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:32:23,324 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 01:32:30,466 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 01:32:30,468 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:32:30,473 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:32:30,474 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 01:32:30,483 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 01:32:30,814 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 01:32:30,815 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 01:32:30,819 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 01:32:30,821 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 01:32:30,926 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Tiny Twin Stars!!
+2025-12-02 01:32:30,928 - spotify_integration - INFO - ğŸµ Tiny Twin Stars!! - ãƒ¡ãƒ‰ã‚¥ãƒ¼ã‚µ (CV: æ°´æ©‹ã‹ãŠã‚Š), ãƒ¢ãƒ‹ã‚« (CV: è¾» ã‚ã‚†ã¿) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 45 Tiny Twin Stars!!'
+2025-12-02 01:35:07,883 - __main__ - INFO - ==================================================
+2025-12-02 01:35:07,884 - __main__ - INFO - Luxgen M7 å„€è¡¨æ¿ç³»çµ±å•Ÿå‹• (Safe Mode)
+2025-12-02 01:35:07,885 - __main__ - INFO - ==================================================
+2025-12-02 01:35:07,909 - __main__ - INFO - åµæ¸¬åˆ° CANable è£ç½®: /dev/ttyACM0 - CANable2 b158aa7 github.com/normaldotcom/canable2.git
+2025-12-02 01:35:07,956 - __main__ - INFO - å·²é¸æ“‡è£ç½®: /dev/ttyACM0
+2025-12-02 01:35:07,957 - __main__ - INFO - æ­£åœ¨åˆå§‹åŒ– CAN Bus...
+2025-12-02 01:35:09,971 - __main__ - INFO - CAN Bus å·²é€£æ¥: unknown
+2025-12-02 01:35:09,972 - __main__ - INFO - æ­£åœ¨è¼‰å…¥ DBC æª”æ¡ˆ...
+2025-12-02 01:35:10,040 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:35:10,041 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:35:10,042 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:35:10,043 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-02 01:35:10,045 - __main__ - INFO - DBC æª”æ¡ˆå·²è¼‰å…¥ï¼Œå…± 21 å€‹è¨Šæ¯å®šç¾©
+2025-12-02 01:35:16,607 - __main__ - INFO - æ­£åœ¨å•Ÿå‹•èƒŒæ™¯åŸ·è¡Œç·’...
+2025-12-02 01:35:16,609 - __main__ - INFO - CAN è¨Šæ¯æ¥æ”¶åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:35:16,611 - __main__ - INFO - OBD-II æŸ¥è©¢åŸ·è¡Œç·’å·²å•Ÿå‹•
+2025-12-02 01:35:16,611 - __main__ - INFO - å„€è¡¨æ¿é‹è¡Œä¸­...
+2025-12-02 01:35:16,621 - spotify_integration - INFO - æ­£åœ¨åˆå§‹åŒ– Spotify é€£ç·š...
+2025-12-02 01:35:16,969 - spotify_auth - INFO - æˆåŠŸèªè­‰ Spotify ä½¿ç”¨è€…: andyching168
+2025-12-02 01:35:16,975 - spotify_integration - INFO - Spotify èªè­‰æˆåŠŸ
+2025-12-02 01:35:17,001 - spotify_listener - INFO - Spotify ç›£è½å™¨å·²å•Ÿå‹•ï¼ˆAPI é–“éš”: 2.0ç§’ï¼‰
+2025-12-02 01:35:17,002 - spotify_integration - INFO - Spotify æ•´åˆå·²å•Ÿç”¨
+2025-12-02 01:35:17,133 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Tiny Twin Stars!!
+2025-12-02 01:35:17,135 - spotify_integration - INFO - ğŸµ Tiny Twin Stars!! - ãƒ¡ãƒ‰ã‚¥ãƒ¼ã‚µ (CV: æ°´æ©‹ã‹ãŠã‚Š), ãƒ¢ãƒ‹ã‚« (CV: è¾» ã‚ã‚†ã¿) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 45 Tiny Twin Stars!!'
+2025-12-02 01:35:19,248 - spotify_listener - INFO - æ­Œæ›²è®Šæ›´: Yes! Precious Harmony!
+2025-12-02 01:35:19,252 - spotify_integration - INFO - ğŸµ Yes! Precious Harmony! - ãƒšã‚³ãƒªãƒ¼ãƒŒ (CV: Mãƒ»Aãƒ»O), ã‚³ãƒƒã‚³ãƒ­ (CV: ä¼Šè—¤ç¾æ¥), ã‚­ãƒ£ãƒ« (CV: ç«‹èŠ±ç†é¦™) | Album: 'ãƒ—ãƒªãƒ³ã‚»ã‚¹ã‚³ãƒã‚¯ãƒˆï¼Re:Dive PRICONNE CHARACTER SONG 13'

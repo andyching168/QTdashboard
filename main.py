@@ -11,8 +11,9 @@ from collections import deque
 
 # === 效能優化：調整 Python GC ===
 # 在 RPi4 等低效能裝置上，Python 的垃圾回收可能導致週期性卡頓
-# 調整 GC 閾值，減少全量 GC 的頻率
-gc.set_threshold(50000, 500, 100)  # 預設 (700, 10, 10)，大幅提高閾值
+# 策略：降低閾值讓 GC 更頻繁但每次更短，避免長時間阻塞
+# 預設 (700, 10, 10)，我們用 (200, 5, 5) 讓每次 GC 更小更快
+gc.set_threshold(200, 5, 5)
 
 # 抑制 Qt 多媒體 FFmpeg 音訊格式解析警告
 os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=false')
@@ -460,6 +461,10 @@ class SplashScreen(QWidget):
         # 使用 KeepAspectRatio 而不是 Expanding，確保影片不會變形
         self.video_widget.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
         
+        # 強制使用軟體渲染（避免 OpenGL/picom 衝突）
+        self.video_widget.setAttribute(Qt.WidgetAttribute.WA_PaintOnScreen, False)
+        self.video_widget.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
+        
         self.player = QMediaPlayer()
         self.player.setVideoOutput(self.video_widget)
         
@@ -471,6 +476,7 @@ class SplashScreen(QWidget):
         # 連接信號
         self.player.mediaStatusChanged.connect(self.on_media_status_changed)
         self.player.errorOccurred.connect(self.on_error)
+        self.player.playbackStateChanged.connect(self.on_playback_state_changed)
         
         # 超時保護：10 秒後強制結束（避免 GStreamer 卡住）
         self.timeout_timer = QTimer()
@@ -525,6 +531,16 @@ class SplashScreen(QWidget):
         """播放器錯誤處理"""
         print(f"[Splash] 播放錯誤: {error} - {error_string}")
         self._emit_finished()
+    
+    def on_playback_state_changed(self, state):
+        """播放狀態變更處理"""
+        from PyQt6.QtMultimedia import QMediaPlayer
+        state_names = {
+            QMediaPlayer.PlaybackState.StoppedState: "已停止",
+            QMediaPlayer.PlaybackState.PlayingState: "播放中",
+            QMediaPlayer.PlaybackState.PausedState: "已暫停"
+        }
+        print(f"[Splash] 播放狀態: {state_names.get(state, state)}")
     
     def on_timeout(self):
         """超時處理"""
@@ -662,27 +678,54 @@ class DoorStatusCard(QWidget):
         self.update_display()
     
     def load_images(self):
-        """載入所有門狀態圖片"""
+        """載入所有門狀態圖片（預先縮放，避免每次更新時重新縮放）"""
         sprite_path = "carSprite"
+        target_size = (340, 280)
         
         # 載入基底圖並縮放保持比例
         base_pixmap = QPixmap(os.path.join(sprite_path, "closed_base.png"))
         if not base_pixmap.isNull():
-            scaled_base = base_pixmap.scaled(340, 280, 
+            scaled_base = base_pixmap.scaled(target_size[0], target_size[1], 
                                             Qt.AspectRatioMode.KeepAspectRatio,
                                             Qt.TransformationMode.SmoothTransformation)
             self.base_layer.setPixmap(scaled_base)
         
-        # 載入把手圖片
-        self.fl_handle_pixmap = QPixmap(os.path.join(sprite_path, "closed_fl_handle.png"))
-        self.fr_handle_pixmap = QPixmap(os.path.join(sprite_path, "closed_fr_handle.png"))
+        # 載入把手圖片（預先縮放）
+        fl_handle = QPixmap(os.path.join(sprite_path, "closed_fl_handle.png"))
+        self.fl_handle_pixmap = fl_handle.scaled(target_size[0], target_size[1],
+                                                  Qt.AspectRatioMode.KeepAspectRatio,
+                                                  Qt.TransformationMode.SmoothTransformation) if not fl_handle.isNull() else fl_handle
         
-        # 載入門開啟圖片
-        self.fl_open_pixmap = QPixmap(os.path.join(sprite_path, "FL.png"))
-        self.fr_open_pixmap = QPixmap(os.path.join(sprite_path, "FR.png"))
-        self.rl_open_pixmap = QPixmap(os.path.join(sprite_path, "RL.png"))
-        self.rr_open_pixmap = QPixmap(os.path.join(sprite_path, "RR.png"))
-        self.bk_open_pixmap = QPixmap(os.path.join(sprite_path, "BK.png"))
+        fr_handle = QPixmap(os.path.join(sprite_path, "closed_fr_handle.png"))
+        self.fr_handle_pixmap = fr_handle.scaled(target_size[0], target_size[1],
+                                                  Qt.AspectRatioMode.KeepAspectRatio,
+                                                  Qt.TransformationMode.SmoothTransformation) if not fr_handle.isNull() else fr_handle
+        
+        # 載入門開啟圖片（預先縮放）
+        fl_open = QPixmap(os.path.join(sprite_path, "FL.png"))
+        self.fl_open_pixmap = fl_open.scaled(target_size[0], target_size[1],
+                                              Qt.AspectRatioMode.KeepAspectRatio,
+                                              Qt.TransformationMode.SmoothTransformation) if not fl_open.isNull() else fl_open
+        
+        fr_open = QPixmap(os.path.join(sprite_path, "FR.png"))
+        self.fr_open_pixmap = fr_open.scaled(target_size[0], target_size[1],
+                                              Qt.AspectRatioMode.KeepAspectRatio,
+                                              Qt.TransformationMode.SmoothTransformation) if not fr_open.isNull() else fr_open
+        
+        rl_open = QPixmap(os.path.join(sprite_path, "RL.png"))
+        self.rl_open_pixmap = rl_open.scaled(target_size[0], target_size[1],
+                                              Qt.AspectRatioMode.KeepAspectRatio,
+                                              Qt.TransformationMode.SmoothTransformation) if not rl_open.isNull() else rl_open
+        
+        rr_open = QPixmap(os.path.join(sprite_path, "RR.png"))
+        self.rr_open_pixmap = rr_open.scaled(target_size[0], target_size[1],
+                                              Qt.AspectRatioMode.KeepAspectRatio,
+                                              Qt.TransformationMode.SmoothTransformation) if not rr_open.isNull() else rr_open
+        
+        bk_open = QPixmap(os.path.join(sprite_path, "BK.png"))
+        self.bk_open_pixmap = bk_open.scaled(target_size[0], target_size[1],
+                                              Qt.AspectRatioMode.KeepAspectRatio,
+                                              Qt.TransformationMode.SmoothTransformation) if not bk_open.isNull() else bk_open
     
     def set_door_status(self, door, is_closed):
         """設置門的狀態
@@ -705,61 +748,40 @@ class DoorStatusCard(QWidget):
         self.update_display()
     
     def update_display(self):
-        """更新顯示 - 根據門的狀態疊加圖層"""
+        """更新顯示 - 根據門的狀態疊加圖層（使用預先縮放的圖片）"""
         # 1. 基底圖永遠顯示（已經在 base_layer 上）
         
         # 2. 左前門：關閉時顯示把手，打開時顯示開啟狀態
         if self.door_fl_closed:
-            scaled_pixmap = self.fl_handle_pixmap.scaled(340, 280,
-                                                         Qt.AspectRatioMode.KeepAspectRatio,
-                                                         Qt.TransformationMode.SmoothTransformation)
-            self.fl_handle_layer.setPixmap(scaled_pixmap)
+            self.fl_handle_layer.setPixmap(self.fl_handle_pixmap)
             self.fl_open_layer.clear()
         else:
             self.fl_handle_layer.clear()
-            scaled_pixmap = self.fl_open_pixmap.scaled(340, 280,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
-            self.fl_open_layer.setPixmap(scaled_pixmap)
+            self.fl_open_layer.setPixmap(self.fl_open_pixmap)
         
         # 3. 右前門：關閉時顯示把手，打開時顯示開啟狀態
         if self.door_fr_closed:
-            scaled_pixmap = self.fr_handle_pixmap.scaled(340, 280,
-                                                         Qt.AspectRatioMode.KeepAspectRatio,
-                                                         Qt.TransformationMode.SmoothTransformation)
-            self.fr_handle_layer.setPixmap(scaled_pixmap)
+            self.fr_handle_layer.setPixmap(self.fr_handle_pixmap)
             self.fr_open_layer.clear()
         else:
             self.fr_handle_layer.clear()
-            scaled_pixmap = self.fr_open_pixmap.scaled(340, 280,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
-            self.fr_open_layer.setPixmap(scaled_pixmap)
+            self.fr_open_layer.setPixmap(self.fr_open_pixmap)
         
         # 4. 左後門：只在打開時顯示
         if not self.door_rl_closed:
-            scaled_pixmap = self.rl_open_pixmap.scaled(340, 280,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
-            self.rl_open_layer.setPixmap(scaled_pixmap)
+            self.rl_open_layer.setPixmap(self.rl_open_pixmap)
         else:
             self.rl_open_layer.clear()
         
         # 5. 右後門：只在打開時顯示
         if not self.door_rr_closed:
-            scaled_pixmap = self.rr_open_pixmap.scaled(340, 280,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
-            self.rr_open_layer.setPixmap(scaled_pixmap)
+            self.rr_open_layer.setPixmap(self.rr_open_pixmap)
         else:
             self.rr_open_layer.clear()
         
         # 6. 尾門：只在打開時顯示
         if not self.door_bk_closed:
-            scaled_pixmap = self.bk_open_pixmap.scaled(340, 280,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
-            self.bk_open_layer.setPixmap(scaled_pixmap)
+            self.bk_open_layer.setPixmap(self.bk_open_pixmap)
         else:
             self.bk_open_layer.clear()
         
@@ -6666,7 +6688,8 @@ class Dashboard(QWidget):
     signal_update_temperature = pyqtSignal(float)
     signal_update_fuel = pyqtSignal(float)
     signal_update_gear = pyqtSignal(str)
-    signal_update_turn_signal = pyqtSignal(str)  # "left", "right", "both", "off"
+    signal_update_turn_signal = pyqtSignal(str)  # 燈號狀態 (保留相容性)
+    signal_update_turn_signal_switch = pyqtSignal(str)  # 撥桿狀態: "left", "right", "both", "off"
     
     # Spotify 相關 Signals
     signal_update_spotify_track = pyqtSignal(str, str, str)
@@ -6697,6 +6720,8 @@ class Dashboard(QWidget):
         
         # 連接方向燈 Signal
         self.signal_update_turn_signal.connect(self._slot_update_turn_signal)
+        # 連接撥桿狀態 Signal（用於穩定閃爍）
+        self.signal_update_turn_signal_switch.connect(self._slot_update_turn_signal_switch)
         
         # 連接導航 Signal
         self.signal_update_navigation.connect(self._slot_update_navigation)
@@ -6835,19 +6860,21 @@ class Dashboard(QWidget):
         layout.addWidget(center_container, 1)
         layout.addWidget(right_container)
         
-        # 方向燈狀態（直接反映 CAN 訊號的亮滅狀態）
-        self.left_turn_on = False   # 左轉燈當前是否為亮
-        self.right_turn_on = False  # 右轉燈當前是否為亮
-        
-        # 漸層動畫位置 (0.0 到 1.0)
+        # === 方向燈狀態（簡化版：常亮不閃爍）===
+        self.turn_signal_switch = "off"  # "left", "right", "both", "off"
+        self.left_turn_on = False
+        self.right_turn_on = False
         self.left_gradient_pos = 0.0
         self.right_gradient_pos = 0.0
         
-        # 動畫計時器 - 用於平滑的漸層效果
+        # 雙閃燈關閉緩衝計時器（1.5秒內沒有收到雙閃訊號才算結束）
+        self.hazard_off_timer = QTimer()
+        self.hazard_off_timer.setSingleShot(True)
+        self.hazard_off_timer.timeout.connect(self._hazard_off_timeout)
+        
+        # 保留舊的 timer 以免報錯（但不使用）
+        self.blink_timer = QTimer()
         self.animation_timer = QTimer()
-        self.animation_timer.timeout.connect(self.update_gradient_animation)
-        # Timer 啟動延遲到 start_dashboard() 調用時
-        # self.animation_timer.start(16)  # 約 60 FPS
         
         return status_bar
     
@@ -6857,93 +6884,83 @@ class Dashboard(QWidget):
         current_time = datetime.now().strftime("%H:%M")
         self.time_label.setText(current_time)
     
+    def _do_blink(self):
+        """已停用 - 不再閃爍"""
+        pass
+    
     def update_gradient_animation(self):
-        """更新漸層動畫效果（優化：只在需要時更新樣式）"""
-        # 如果兩個方向燈都關閉且動畫已完成，跳過更新
-        if (not self.left_turn_on and not self.right_turn_on and 
-            self.left_gradient_pos <= 0.0 and self.right_gradient_pos <= 0.0):
-            return
-        
-        # 熄滅動畫速度
-        fade_speed = 0.05
-        
-        # 記錄舊的狀態用於比較
-        old_left_pos = self.left_gradient_pos
-        old_right_pos = self.right_gradient_pos
-        old_left_on = getattr(self, '_prev_left_turn_on', None)
-        old_right_on = getattr(self, '_prev_right_turn_on', None)
-        
-        # 左轉燈動畫
-        if self.left_turn_on:
-            # 亮起時直接全滿
-            self.left_gradient_pos = 1.0
-        else:
-            # 熄滅時從中間向外漸暗
-            self.left_gradient_pos = max(0.0, self.left_gradient_pos - fade_speed)
-        
-        # 右轉燈動畫
-        if self.right_turn_on:
-            # 亮起時直接全滿
-            self.right_gradient_pos = 1.0
-        else:
-            # 熄滅時從中間向外漸暗
-            self.right_gradient_pos = max(0.0, self.right_gradient_pos - fade_speed)
-        
-        # 只在狀態實際變更時才更新樣式（避免無謂的 CSS 重解析）
-        left_changed = (self.left_gradient_pos != old_left_pos or 
-                       self.left_turn_on != old_left_on)
-        right_changed = (self.right_gradient_pos != old_right_pos or 
-                        self.right_turn_on != old_right_on)
-        
-        if left_changed or right_changed:
-            self._prev_left_turn_on = self.left_turn_on
-            self._prev_right_turn_on = self.right_turn_on
-            self.update_turn_signal_style()
+        """已停用 - 不再使用漸層動畫"""
+        pass
     
     def update_turn_signal_style(self):
-        """更新方向燈的視覺樣式 - 使用 QPainter 實作，避免 CSS 效能瓶頸"""
-        # 方向燈圖標樣式（圖標仍使用 CSS，因為只在狀態改變時更新一次）
-        indicator_inactive = """
-            QLabel {
-                color: #2a2a2a;
-                font-size: 28px;
-                font-weight: bold;
-                background: transparent;
-                border: 2px solid #2a2a2a;
-                border-radius: 8px;
-            }
-        """
-        
-        indicator_active = """
-            QLabel {
-                color: #00FF00;
-                font-size: 28px;
-                font-weight: bold;
-                background: transparent;
-                border: 2px solid #000000;
-                border-radius: 8px;
-            }
-        """
+        """更新方向燈的視覺樣式 - 優化版本，減少 CSS 更新"""
+        # 快取上次的狀態，只在變化時才更新 CSS
+        prev_left_on = getattr(self, '_css_left_on', None)
+        prev_right_on = getattr(self, '_css_right_on', None)
         
         # === 左轉燈 ===
-        # 圖標的亮滅只看 left_turn_on，不受動畫影響
-        if self.left_turn_on:
-            self.left_turn_indicator.setStyleSheet(indicator_active)
-        else:
-            self.left_turn_indicator.setStyleSheet(indicator_inactive)
+        if self.left_turn_on != prev_left_on:
+            self._css_left_on = self.left_turn_on
+            if self.left_turn_on:
+                self.left_turn_indicator.setStyleSheet("""
+                    QLabel {
+                        color: #00FF00;
+                        font-size: 28px;
+                        font-weight: bold;
+                        background: transparent;
+                        border: 2px solid #000000;
+                        border-radius: 8px;
+                    }
+                """)
+            else:
+                self.left_turn_indicator.setStyleSheet("""
+                    QLabel {
+                        color: #2a2a2a;
+                        font-size: 28px;
+                        font-weight: bold;
+                        background: transparent;
+                        border: 2px solid #2a2a2a;
+                        border-radius: 8px;
+                    }
+                """)
         
         # 漸層條使用 QPainter 繪製，直接設定 gradient_pos
         self.left_gradient_bar.set_gradient_pos(self.left_gradient_pos)
         
         # === 右轉燈 ===
-        # 圖標的亮滅只看 right_turn_on，不受動畫影響
-        if self.right_turn_on:
-            self.right_turn_indicator.setStyleSheet(indicator_active)
-        else:
-            self.right_turn_indicator.setStyleSheet(indicator_inactive)
+        if self.right_turn_on != prev_right_on:
+            self._css_right_on = self.right_turn_on
+            if self.right_turn_on:
+                self.right_turn_indicator.setStyleSheet("""
+                    QLabel {
+                        color: #00FF00;
+                        font-size: 28px;
+                        font-weight: bold;
+                        background: transparent;
+                        border: 2px solid #000000;
+                        border-radius: 8px;
+                    }
+                """)
+            else:
+                self.right_turn_indicator.setStyleSheet("""
+                    QLabel {
+                        color: #2a2a2a;
+                        font-size: 28px;
+                        font-weight: bold;
+                        background: transparent;
+                        border: 2px solid #2a2a2a;
+                        border-radius: 8px;
+                    }
+                """)
         
         # 漸層條使用 QPainter 繪製，直接設定 gradient_pos
         self.right_gradient_bar.set_gradient_pos(self.right_gradient_pos)
+        
+        # 強制立即重繪，避免 GC 期間畫面卡住
+        self.left_gradient_bar.repaint()
+        self.right_gradient_bar.repaint()
+        self.left_turn_indicator.repaint()
+        self.right_turn_indicator.repaint()
 
     def init_ui(self):
         # 主垂直佈局（包含狀態欄和儀表板）
@@ -7807,15 +7824,23 @@ class Dashboard(QWidget):
             state: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off"
         執行緒安全：透過 Signal 發送，由主執行緒執行
         
-        典型使用方式（85 BPM 閃爍，由 CAN bus 控制）：
-            # CAN 訊號指示左轉燈亮
-            dashboard.set_turn_signal("left_on")
-            # CAN 訊號指示左轉燈滅
-            dashboard.set_turn_signal("left_off")
+        注意：新策略以撥桿為主，此接口保留供相容性使用
         """
         valid_states = ["left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off"]
         if state in valid_states:
             self.signal_update_turn_signal.emit(state)
+    
+    def set_turn_signal_switch(self, switch_state):
+        """外部數據接口：設置撥桿狀態（控制穩定閃爍）
+        Args:
+            switch_state: "left", "right", "both", "off"
+        執行緒安全：透過 Signal 發送，由主執行緒執行
+        
+        新策略：撥桿狀態決定「應該閃爍」，UI 自己產生穩定的 500ms 閃爍
+        """
+        valid_states = ["left", "right", "both", "off"]
+        if switch_state in valid_states:
+            self.signal_update_turn_signal_switch.emit(switch_state)
     
     def set_door_status(self, door, is_closed):
         """外部數據接口：設置門的狀態
@@ -7985,14 +8010,22 @@ class Dashboard(QWidget):
     @pyqtSlot(float)
     def _slot_set_temperature(self, temp):
         """Slot: 在主執行緒中更新水溫顯示"""
-        self.temp = max(0, min(100, temp))
-        self.update_display()
+        new_temp = max(0, min(100, temp))
+        # 只在變化超過 1% 時才更新（減少重繪頻率）
+        # 注意：self.temp 可能是 None（初始狀態）
+        if self.temp is None or abs(new_temp - self.temp) > 1:
+            self.temp = new_temp
+            self.update_display()
     
     @pyqtSlot(float)
     def _slot_set_fuel(self, fuel):
         """Slot: 在主執行緒中更新油量顯示"""
-        self.fuel = max(0, min(100, fuel))
-        self.update_display()
+        new_fuel = max(0, min(100, fuel))
+        # 只在變化超過 1% 時才更新（減少重繪頻率）
+        # 注意：self.fuel 可能是 None（初始狀態）
+        if self.fuel is None or abs(new_fuel - self.fuel) > 1:
+            self.fuel = new_fuel
+            self.update_display()
     
     @pyqtSlot(str)
     def _slot_set_gear(self, gear):
@@ -8036,56 +8069,78 @@ class Dashboard(QWidget):
     
     @pyqtSlot(str)
     def _slot_update_turn_signal(self, state):
-        """Slot: 在主執行緒中更新方向燈狀態（從 CAN 訊號）
-        Args:
-            state: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off"
+        """Slot: 接收實際燈號狀態（用於同步閃爍時機，但不作為主要控制）
         
-        RPI4 優化：收到 CAN 訊號時立即更新 UI，不等待 animation_timer
+        新策略：撥桿狀態為主，燈號狀態為輔
+        這個 slot 現在只用來微調閃爍同步，主要閃爍由 blink_timer 控制
         """
-        # 方向燈剛啟動時收起控制面板（狀態從 off 變成 on）
-        # 注意：雙閃燈 (both_on) 不收起控制面板，因為通常是停車時使用
-        prev_left = self.left_turn_on
-        prev_right = self.right_turn_on
+        # 實際燈號可以用來同步閃爍時機（如果需要的話）
+        # 目前先保留但不做任何事，讓 blink_timer 完全控制
+        pass
+
+    @pyqtSlot(str)
+    def _slot_update_turn_signal_switch(self, switch_state):
+        """Slot: 接收撥桿狀態，直接顯示常亮（不閃爍）
         
-        if state == "left_on" and not prev_left and self.panel_visible:
-            self.hide_control_panel()
-        elif state == "right_on" and not prev_right and self.panel_visible:
-            self.hide_control_panel()
-        # 雙閃燈 (both_on) 不收起控制面板
+        Args:
+            switch_state: "left", "right", "both", "off"
+        """
+        prev_switch = self.turn_signal_switch
         
-        if state == "left_on":
+        # 撥桿剛啟動時收起控制面板
+        if switch_state in ("left", "right") and prev_switch == "off":
+            if self.panel_visible:
+                self.hide_control_panel()
+        
+        # 簡化版：直接常亮，不閃爍
+        if switch_state == "left":
+            self.hazard_off_timer.stop()  # 取消雙閃關閉計時
+            self.turn_signal_switch = switch_state
             self.left_turn_on = True
             self.right_turn_on = False
-            # RPI4 優化：立即更新漸層位置和樣式
             self.left_gradient_pos = 1.0
+            self.right_gradient_pos = 0.0
             self.update_turn_signal_style()
-        elif state == "left_off":
+        elif switch_state == "right":
+            self.hazard_off_timer.stop()  # 取消雙閃關閉計時
+            self.turn_signal_switch = switch_state
             self.left_turn_on = False
-            # 熄滅動畫由 animation_timer 處理
-        elif state == "right_on":
             self.right_turn_on = True
-            self.left_turn_on = False
-            # RPI4 優化：立即更新漸層位置和樣式
+            self.left_gradient_pos = 0.0
             self.right_gradient_pos = 1.0
             self.update_turn_signal_style()
-        elif state == "right_off":
-            self.right_turn_on = False
-            # 熄滅動畫由 animation_timer 處理
-        elif state == "both_on":
+        elif switch_state == "both":
+            self.hazard_off_timer.stop()  # 取消雙閃關閉計時
+            self.turn_signal_switch = switch_state
             self.left_turn_on = True
             self.right_turn_on = True
-            # RPI4 優化：立即更新漸層位置和樣式
             self.left_gradient_pos = 1.0
             self.right_gradient_pos = 1.0
             self.update_turn_signal_style()
-        elif state == "both_off":
-            self.left_turn_on = False
-            self.right_turn_on = False
-            # 熄滅動畫由 animation_timer 處理
-        elif state == "off":
-            self.left_turn_on = False
-            self.right_turn_on = False
-            # 熄滅動畫由 animation_timer 處理
+        else:  # "off"
+            # 如果之前是雙閃，需要緩衝 1.5 秒才算真正關閉
+            if prev_switch == "both":
+                # 啟動緩衝計時器（如果還沒啟動）
+                if not self.hazard_off_timer.isActive():
+                    self.hazard_off_timer.start(1500)  # 1.5 秒
+                # 暫時保持雙閃狀態，等計時器到期才關閉
+            else:
+                # 普通方向燈：立即關閉
+                self.turn_signal_switch = "off"
+                self.left_turn_on = False
+                self.right_turn_on = False
+                self.left_gradient_pos = 0.0
+                self.right_gradient_pos = 0.0
+                self.update_turn_signal_style()
+    
+    def _hazard_off_timeout(self):
+        """雙閃燈緩衝計時器到期 - 真正關閉雙閃"""
+        self.turn_signal_switch = "off"
+        self.left_turn_on = False
+        self.right_turn_on = False
+        self.left_gradient_pos = 0.0
+        self.right_gradient_pos = 0.0
+        self.update_turn_signal_style()
 
     # === Spotify Slots ===
     @pyqtSlot(str, str, str)
@@ -9170,7 +9225,7 @@ class Dashboard(QWidget):
             """)
 
     def update_display(self):
-        """更新所有儀表顯示"""
+        """更新所有儀表顯示（優化版本：只更新變化的部分）"""
         # 更新四宮格卡片
         # rpm 是以「千轉」為單位 (0-8)，轉換為實際轉速
         self.quad_gauge_card.set_rpm(self.rpm * 1000)
@@ -9194,31 +9249,35 @@ class Dashboard(QWidget):
         self.fuel_gauge.set_value(self.fuel)
         self.speed_label.setText(str(int(self.speed)))
         
-        # 更新檔位顯示顏色
-        gear_colors = {
-            "P": "#6af",   # 藍色
-            "R": "#f66",   # 紅色
-            "N": "#fa6",   # 橙色
-            "D": "#4ade80",  # 綠色
-            "1": "#6af",   # 藍色 (1檔)
-            "2": "#6af",   # 藍色 (2檔)
-            "3": "#6af",   # 藍色 (3檔)
-            "4": "#6af",   # 藍色 (4檔)
-            "5": "#6af",   # 藍色 (5檔)
-            "S": "#f6f",   # 紫色
-            "L": "#ff6",   # 黃色
-        }
-        color = gear_colors.get(self.gear, "#6af")
-        self.gear_label.setStyleSheet(f"""
-            color: {color};
-            font-size: 120px;
-            font-weight: bold;
-            font-family: Arial;
-            background: rgba(30, 30, 40, 0.8);
-            border: 4px solid #456;
-            border-radius: 20px;
-        """)
-        self.gear_label.setText(self.gear)
+        # 優化：只在檔位變化時更新樣式（避免頻繁的 CSS 解析）
+        current_gear = self.gear
+        if not hasattr(self, '_last_displayed_gear') or self._last_displayed_gear != current_gear:
+            self._last_displayed_gear = current_gear
+            # 更新檔位顯示顏色
+            gear_colors = {
+                "P": "#6af",   # 藍色
+                "R": "#f66",   # 紅色
+                "N": "#fa6",   # 橙色
+                "D": "#4ade80",  # 綠色
+                "1": "#6af",   # 藍色 (1檔)
+                "2": "#6af",   # 藍色 (2檔)
+                "3": "#6af",   # 藍色 (3檔)
+                "4": "#6af",   # 藍色 (4檔)
+                "5": "#6af",   # 藍色 (5檔)
+                "S": "#f6f",   # 紫色
+                "L": "#ff6",   # 黃色
+            }
+            color = gear_colors.get(current_gear, "#6af")
+            self.gear_label.setStyleSheet(f"""
+                color: {color};
+                font-size: 120px;
+                font-weight: bold;
+                font-family: Arial;
+                background: rgba(30, 30, 40, 0.8);
+                border: 4px solid #456;
+                border-radius: 20px;
+            """)
+            self.gear_label.setText(current_gear)
 
 
 class ScalableWindow(QMainWindow):
