@@ -17,10 +17,14 @@ gc.set_threshold(50000, 500, 100)  # 預設 (700, 10, 10)，大幅提高閾值
 # 抑制 Qt 多媒體 FFmpeg 音訊格式解析警告
 os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=false')
 
-# === Raspberry Pi 硬體加速設定 ===
-# 強制 Qt 使用 GStreamer 後端（對 V4L2 硬體解碼支援較好）
+# === 多媒體後端設定 ===
+# Raspberry Pi: 使用 GStreamer 後端（對 V4L2 硬體解碼支援較好）
+# macOS/Windows: 使用 FFmpeg 後端（預設，無需設定）
 # 必須在 import PyQt6.QtMultimedia 之前設定
-os.environ.setdefault('QT_MEDIA_BACKEND', 'gstreamer')
+if platform.system() == 'Linux':
+    # 在 Linux (包含 Raspberry Pi) 上使用 GStreamer
+    os.environ.setdefault('QT_MEDIA_BACKEND', 'gstreamer')
+# macOS 和 Windows 使用預設的 FFmpeg 後端，不需要特別設定
 
 # === 垂直同步 (VSync) 設定 ===
 # 啟用 OpenGL VSync，避免影片播放時畫面撕裂

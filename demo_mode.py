@@ -47,6 +47,7 @@ class VehicleSignals(QObject):
     update_fuel = pyqtSignal(float)
     update_gear = pyqtSignal(str)
     update_turbo = pyqtSignal(float)  # 渦輪增壓 (bar)
+    update_battery = pyqtSignal(float)  # 電瓶電壓 (V)
 
 
 class VehicleSimulator:
@@ -60,6 +61,7 @@ class VehicleSimulator:
         self.gear = "P"
         self.actual_gear = 1  # 實際檔位 (1-5)
         self.turbo = -0.7  # 渦輪增壓 (bar)，待速時為負壓
+        self.battery = 12.6  # 電瓶電壓 (V)
         
         self.mode = "idle"
         self.time = 0
@@ -156,6 +158,22 @@ class VehicleSimulator:
         
         # 限制範圍
         self.turbo = max(-1.0, min(1.0, self.turbo))
+        
+        # 更新電瓶電壓
+        # 怠速時電壓較低 (~12.4V)，行駛時發電機充電較高 (~13.8-14.2V)
+        if self.rpm < 1.0:
+            target_voltage = 12.4  # 怠速
+        elif self.rpm < 2.0:
+            target_voltage = 13.2  # 低轉速
+        else:
+            target_voltage = 13.8 + (self.rpm - 2.0) / 5.0 * 0.4  # 高轉速，最高約 14.2V
+        
+        # 平滑過渡
+        self.battery = self.battery + (target_voltage - self.battery) * 0.1
+        # 加一點小波動
+        self.battery += random.uniform(-0.05, 0.05)
+        # 限制範圍
+        self.battery = max(11.0, min(14.5, self.battery))
         
         # 更新油量（緩慢減少）
         if self.speed > 0:
@@ -330,6 +348,7 @@ def main():
         vehicle_signals.update_fuel.connect(dashboard.set_fuel)
         vehicle_signals.update_gear.connect(dashboard.set_gear)
         vehicle_signals.update_turbo.connect(dashboard.set_turbo)
+        vehicle_signals.update_battery.connect(dashboard.set_battery)
         
         # 設定 Spotify 回調（如果啟用）
         # 注意：demo_mode 有自己的 spotify_listener，所以要禁用 dashboard 內建的
@@ -394,6 +413,7 @@ def main():
             vehicle_signals.update_temp.emit(simulator.temp)
             vehicle_signals.update_gear.emit(simulator.gear)
             vehicle_signals.update_turbo.emit(simulator.turbo)
+            vehicle_signals.update_battery.emit(simulator.battery)
             
             # 如果沒有啟用 Spotify，使用模擬音樂
             if not spotify_enabled:
