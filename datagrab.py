@@ -2,6 +2,8 @@ import time
 import threading
 import sys
 import logging
+import platform
+import subprocess
 import can
 import cantools
 import serial.tools.list_ports
@@ -60,6 +62,183 @@ console = Console()
 send_lock = threading.Lock() # 保護寫入操作
 
 # --- 1. 硬體連接 ---
+
+def detect_socketcan_interfaces():
+    """
+    偵測可用的 SocketCAN 介面 (僅 Linux)
+    返回: list of (interface_name, status) 或空列表
+    """
+    if platform.system() != 'Linux':
+        return []
+    
+    interfaces = []
+    try:
+        # 使用 ip link 列出所有 CAN 介面
+        result = subprocess.run(
+            ['ip', '-details', 'link', 'show', 'type', 'can'],
+            capture_output=True, text=True, timeout=5
+        )
+        
+        if result.returncode == 0 and result.stdout.strip():
+            lines = result.stdout.strip().split('\n')
+            current_iface = None
+            
+            for line in lines:
+                # 解析介面名稱 (例如: "3: can0: <NOARP,UP,LOWER_UP>...")
+                if ': ' in line and not line.startswith(' '):
+                    parts = line.split(': ')
+                    if len(parts) >= 2:
+                        current_iface = parts[1].split('@')[0]  # 處理 can0@... 格式
+                        # 檢查狀態
+                        is_up = 'UP' in line and 'LOWER_UP' in line
+                        status = "UP" if is_up else "DOWN"
+                        interfaces.append((current_iface, status))
+            
+            logger.info(f"偵測到 SocketCAN 介面: {interfaces}")
+        
+    except FileNotFoundError:
+        logger.debug("ip 命令不存在，跳過 SocketCAN 偵測")
+    except subprocess.TimeoutExpired:
+        logger.warning("SocketCAN 偵測超時")
+    except Exception as e:
+        logger.debug(f"SocketCAN 偵測錯誤: {e}")
+    
+    return interfaces
+
+
+def setup_socketcan_interface(interface='can0', bitrate=500000):
+    """
+    設定 SocketCAN 介面 (需要 root 權限)
+    返回: True 如果成功，False 如果失敗
+    """
+    try:
+        # 先嘗試關閉介面（如果已經開啟）
+        subprocess.run(['sudo', 'ip', 'link', 'set', interface, 'down'],
+                      capture_output=True, timeout=5)
+        
+        # 設定 bitrate
+        result = subprocess.run(
+            ['sudo', 'ip', 'link', 'set', interface, 'type', 'can', 'bitrate', str(bitrate)],
+            capture_output=True, text=True, timeout=5
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"設定 {interface} bitrate 失敗: {result.stderr}")
+            return False
+        
+        # 啟動介面
+        result = subprocess.run(
+            ['sudo', 'ip', 'link', 'set', interface, 'up'],
+            capture_output=True, text=True, timeout=5
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"啟動 {interface} 失敗: {result.stderr}")
+            return False
+        
+        logger.info(f"SocketCAN 介面 {interface} 已設定 (bitrate={bitrate})")
+        return True
+        
+    except FileNotFoundError:
+        logger.error("需要 sudo 和 ip 命令來設定 SocketCAN")
+        return False
+    except subprocess.TimeoutExpired:
+        logger.error("設定 SocketCAN 超時")
+        return False
+    except Exception as e:
+        logger.error(f"設定 SocketCAN 錯誤: {e}")
+        return False
+
+
+def init_can_bus(bitrate=500000):
+    """
+    初始化 CAN Bus 連線
+    優先順序：
+    1. Linux: SocketCAN (如果有可用介面)
+    2. 所有平台: SLCAN (USB CAN adapter)
+    
+    返回: (bus, interface_type) 或 (None, None)
+    """
+    bus = None
+    interface_type = None
+    
+    # === CAN 過濾器：只接收我們需要的 ID ===
+    # 這可以大幅減少 CPU 負擔，特別是在高流量 CAN Bus 上
+    can_filters = [
+        {"can_id": 0x7E8, "can_mask": 0x7FF},  # OBD ECU 回應
+        {"can_id": 0x7E9, "can_mask": 0x7FF},  # OBD TCM 回應
+        {"can_id": 0x340, "can_mask": 0x7FF},  # ENGINE_RPM1 (檔位)
+        {"can_id": 0x335, "can_mask": 0x7FF},  # THROTTLE_STATUS (油量、巡航)
+        {"can_id": 0x38A, "can_mask": 0x7FF},  # SPEED_FL (車速)
+        {"can_id": 0x410, "can_mask": 0x7FF},  # CONSOLE_STATUS (方向燈撥桿)
+        {"can_id": 0x420, "can_mask": 0x7FF},  # BODY_ECU_STATUS (方向燈、門狀態)
+    ]
+    
+    # === 1. 嘗試 SocketCAN (僅 Linux) ===
+    if platform.system() == 'Linux':
+        console.print("[cyan]偵測 SocketCAN 介面...[/cyan]")
+        socketcan_interfaces = detect_socketcan_interfaces()
+        
+        if socketcan_interfaces:
+            for iface, status in socketcan_interfaces:
+                console.print(f"  發現: [green]{iface}[/green] ({status})")
+                
+                # 如果介面是 DOWN，嘗試設定並啟動
+                if status == "DOWN":
+                    console.print(f"  [yellow]介面 {iface} 未啟動，嘗試設定...[/yellow]")
+                    if not setup_socketcan_interface(iface, bitrate):
+                        continue
+                
+                # 嘗試連接
+                try:
+                    bus = can.interface.Bus(
+                        interface='socketcan',
+                        channel=iface,
+                        bitrate=bitrate,
+                        receive_own_messages=False,
+                        can_filters=can_filters
+                    )
+                    interface_type = f"SocketCAN ({iface})"
+                    console.print(f"[bold green]✓ SocketCAN 連線成功: {iface}[/bold green]")
+                    logger.info(f"CAN Bus 已連接 (SocketCAN): {iface}, 過濾器: {len(can_filters)} 個 ID")
+                    return bus, interface_type
+                    
+                except Exception as e:
+                    logger.warning(f"SocketCAN {iface} 連線失敗: {e}")
+                    continue
+        else:
+            console.print("  [yellow]未發現 SocketCAN 介面[/yellow]")
+    
+    # === 2. Fallback 到 SLCAN ===
+    console.print("[cyan]嘗試 SLCAN 模式...[/cyan]")
+    
+    port = select_serial_port()
+    if not port:
+        console.print("[red]未找到可用的 CAN 裝置[/red]")
+        return None, None
+    
+    try:
+        # 注意：SLCAN 不支援硬體過濾器，過濾會在軟體層進行
+        # 但設定 can_filters 仍有助於 python-can 內部優化
+        bus = can.interface.Bus(
+            interface='slcan',
+            channel=port,
+            bitrate=bitrate,
+            timeout=0.01,
+            receive_own_messages=False,
+            can_filters=can_filters
+        )
+        interface_type = f"SLCAN ({port})"
+        console.print(f"[bold green]✓ SLCAN 連線成功: {port}[/bold green]")
+        logger.info(f"CAN Bus 已連接 (SLCAN): {port}, 過濾器: {len(can_filters)} 個 ID")
+        return bus, interface_type
+        
+    except Exception as e:
+        console.print(f"[red]SLCAN 連線失敗: {e}[/red]")
+        logger.error(f"SLCAN 初始化失敗: {e}", exc_info=True)
+        return None, None
+
+
 def select_serial_port():
     import glob
     
@@ -579,37 +758,31 @@ def main():
     
     bus = None
     db = None
+    interface_type = None
     
     try:
         logger.info("=" * 50)
-        logger.info("Luxgen M7 儀表板系統啟動 (Safe Mode)")
+        logger.info("Luxgen M7 儀表板系統啟動")
+        logger.info(f"平台: {platform.system()}")
         logger.info("=" * 50)
         
-        # 1. 選擇並連接硬體（必須在 run_dashboard 之前完成）
-        port = select_serial_port()
-        if not port:
-            logger.error("未選擇 Serial 裝置，程式退出")
+        # 1. 初始化 CAN Bus（自動選擇 SocketCAN 或 SLCAN）
+        console.print(Panel.fit(
+            "[bold cyan]Luxgen M7 儀表板系統[/bold cyan]\n"
+            f"平台: {platform.system()}",
+            title="啟動中"
+        ))
+        
+        bus, interface_type = init_can_bus(bitrate=500000)
+        
+        if bus is None:
+            logger.error("無法初始化 CAN Bus，程式退出")
+            console.print("[red]無法連接 CAN Bus！請檢查硬體連線。[/red]")
             return
         
-        logger.info(f"已選擇裝置: {port}")
-
-        try:
-            logger.info("正在初始化 CAN Bus...")
-            # RPI4 優化：使用更小的 timeout 和設定 receive_own_messages=False
-            bus = can.interface.Bus(
-                interface='slcan', 
-                channel=port, 
-                bitrate=500000,
-                timeout=0.01,  # 從 0.1 降低到 0.01，減少延遲
-                receive_own_messages=False  # 不接收自己發送的訊息，減少處理負擔
-            )
-            logger.info(f"CAN Bus 已連接: {bus}")
-            
-        except Exception as e:
-            console.print(f"[red]CAN Bus 初始化失敗: {e}[/red]")
-            logger.error(f"CAN Bus 初始化失敗: {e}", exc_info=True)
-            return
+        logger.info(f"CAN Bus 連線模式: {interface_type}")
         
+        # 2. 載入 DBC 檔案
         try:
             logger.info("正在載入 DBC 檔案...")
             db = cantools.database.load_file('luxgen_m7_2009.dbc')
@@ -618,7 +791,7 @@ def main():
             console.print("[red]DBC 檔案遺失！將無法解碼 CAN 訊號[/red]")
             return
 
-        # 2. 建立信號物件
+        # 3. 建立信號物件
         signals = WorkerSignals()
         
         def setup_can_data_source(dashboard):
@@ -670,11 +843,14 @@ def main():
             
             return cleanup
         
-        # 3. 使用統一啟動流程
+        # 4. 使用統一啟動流程
         console.print("[green]啟動儀表板前端...[/green]")
         
+        # 根據連線模式設定視窗標題
+        window_title = f"Luxgen M7 儀表板 - {interface_type}"
+        
         run_dashboard(
-            window_title="Luxgen M7 儀表板 - CAN Bus",
+            window_title=window_title,
             setup_data_source=setup_can_data_source
         )
 
