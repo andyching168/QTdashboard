@@ -125,13 +125,43 @@ fi
 echo ""
 
 # =============================================================================
-# 偵測 CANable 裝置
+# 偵測 CAN Bus 裝置 (SocketCAN 優先)
 # =============================================================================
-CANABLE_PORT=""
+CAN_INTERFACE=""
+CAN_TYPE=""
 
-# 使用 Python 偵測 (更準確)
-echo "🔍 掃描 Serial 裝置..."
-CANABLE_PORT=$($PYTHON_CMD -c "
+# === 1. 檢查 SocketCAN 介面 (can0, can1, slcan0 等) ===
+echo "🔍 掃描 CAN Bus 裝置..."
+
+if [ "$IS_RPI" = true ] || [ "$(uname)" = "Linux" ]; then
+    # 檢查是否有 CAN 類型的網路介面
+    if ip link show type can 2>/dev/null | grep -q "can"; then
+        for iface in can0 can1 slcan0; do
+            if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
+                CAN_INTERFACE="$iface"
+                CAN_TYPE="socketcan"
+                echo "✅ 偵測到 SocketCAN 介面: $iface (已啟動)"
+                break
+            elif ip link show "$iface" 2>/dev/null | grep -q "state DOWN"; then
+                # 介面存在但未啟動，嘗試啟動
+                echo "⚙️  偵測到 SocketCAN 介面 $iface (未啟動)，嘗試設定..."
+                sudo ip link set "$iface" type can bitrate 500000 2>/dev/null
+                sudo ip link set "$iface" up 2>/dev/null
+                if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
+                    CAN_INTERFACE="$iface"
+                    CAN_TYPE="socketcan"
+                    echo "✅ SocketCAN 介面 $iface 已啟動"
+                    break
+                fi
+            fi
+        done
+    fi
+fi
+
+# === 2. 如果沒有 SocketCAN，檢查 Serial Port (SLCAN 模式) ===
+if [ -z "$CAN_INTERFACE" ]; then
+    # 使用 Python 偵測 (更準確)
+    CANABLE_PORT=$($PYTHON_CMD -c "
 import serial.tools.list_ports
 for p in serial.tools.list_ports.comports():
     if 'canable' in p.description.lower():
@@ -139,18 +169,23 @@ for p in serial.tools.list_ports.comports():
         break
 " 2>/dev/null || echo "")
 
-# 方法 2: 如果 Python 沒找到，嘗試用 dmesg (Linux/RPi)
-if [ -z "$CANABLE_PORT" ] && [ "$IS_RPI" = true ]; then
-    # 檢查 /dev/ttyACM* 或 /dev/ttyUSB*
-    for dev in /dev/ttyACM* /dev/ttyUSB*; do
-        if [ -e "$dev" ]; then
-            # 簡單檢查是否存在
-            if dmesg 2>/dev/null | tail -50 | grep -qi "canable\|slcan"; then
-                CANABLE_PORT="$dev"
-                break
+    # 方法 2: 如果 Python 沒找到，嘗試用 dmesg (Linux/RPi)
+    if [ -z "$CANABLE_PORT" ] && [ "$IS_RPI" = true ]; then
+        for dev in /dev/ttyACM* /dev/ttyUSB*; do
+            if [ -e "$dev" ]; then
+                if dmesg 2>/dev/null | tail -50 | grep -qi "canable\|slcan"; then
+                    CANABLE_PORT="$dev"
+                    break
+                fi
             fi
-        fi
-    done
+        done
+    fi
+    
+    if [ -n "$CANABLE_PORT" ]; then
+        CAN_INTERFACE="$CANABLE_PORT"
+        CAN_TYPE="slcan"
+        echo "✅ 偵測到 CANable (SLCAN): $CANABLE_PORT"
+    fi
 fi
 
 # =============================================================================
@@ -170,11 +205,12 @@ fi
 echo ""
 
 # =============================================================================
-# 根據 CANable 偵測結果決定啟動模式
+# 根據 CAN Bus 偵測結果決定啟動模式
 # =============================================================================
-if [ -n "$CANABLE_PORT" ]; then
+if [ -n "$CAN_INTERFACE" ]; then
     echo "=============================================="
-    echo "🚗 偵測到 CANable: $CANABLE_PORT"
+    echo "🚗 偵測到 CAN Bus 裝置"
+    echo "   介面: $CAN_INTERFACE ($CAN_TYPE)"
     echo "   啟動 CAN Bus 模式 (datagrab.py)"
     echo "=============================================="
     echo ""
@@ -184,7 +220,7 @@ if [ -n "$CANABLE_PORT" ]; then
     
 else
     echo "=============================================="
-    echo "🎮 未偵測到 CANable 裝置"
+    echo "🎮 未偵測到 CAN Bus 裝置"
     echo "   啟動演示模式 (demo_mode.py --spotify)"
     echo "=============================================="
     echo ""

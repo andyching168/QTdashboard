@@ -6588,6 +6588,12 @@ class ControlPanel(QWidget):
             elif clicked == btn_close:
                 # 執行關閉程式
                 print("[電源] 關閉程式...")
+                # 建立標記檔案，防止自動重啟
+                try:
+                    with open('/tmp/.dashboard_manual_exit', 'w') as f:
+                        f.write('manual_exit')
+                except:
+                    pass
                 self._show_power_countdown("關閉程式", 1)
                 QTimer.singleShot(1000, lambda: QApplication.instance().quit())
             # 取消則不做任何事

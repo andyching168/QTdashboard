@@ -20,12 +20,35 @@
 SCRIPT_DIR="/home/ac/QTdashboard"
 cd "$SCRIPT_DIR"
 
-# === 垂直同步 (VSync) 設定 ===
-# 針對 480x1920 直式螢幕旋轉 90 度使用 (1920x480)
-export vblank_mode=1                    # Mesa VSync
-export __GL_SYNC_TO_VBLANK=1           # NVIDIA VSync (如果有)
-export QT_QPA_EGLFS_FORCE_VSYNC=1      # Qt EGLFS VSync
-export QSG_RENDER_LOOP=basic            # Qt 基本渲染迴圈，更穩定
+# === 建立 session 標記，防止關閉後自動重啟 ===
+touch /tmp/.dashboard_session_started
+
+# === 效能監控模式檢查 ===
+PERF_LOG_FILE="/tmp/dashboard_perf.log"
+if [ -f "/tmp/.dashboard_perf_mode" ]; then
+    export PERF_MONITOR=1
+    echo "📊 效能監控模式已啟用"
+    # 重導向效能相關輸出到 log 檔案
+    exec > >(tee -a "$PERF_LOG_FILE") 2>&1
+    echo ""
+    echo "=============================================="
+    echo "📊 效能監控 Log 開始 - $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "=============================================="
+fi
+
+# === Qt 渲染優化設定 (Raspberry Pi) ===
+# 使用 OpenGL 硬體加速
+export QT_QUICK_BACKEND=                # 使用預設 (OpenGL)
+export QSG_RENDER_LOOP=threaded         # 多執行緒渲染迴圈 (更流暢)
+export QT_QPA_PLATFORM=xcb              # 使用 X11 後端
+
+# Mesa/OpenGL 設定 - 啟用 VSync
+export vblank_mode=1                    # 開啟 VSync
+export __GL_SYNC_TO_VBLANK=1            # 開啟 NVIDIA VSync
+
+# 其他優化
+export QT_X11_NO_MITSHM=0               # 啟用共享記憶體 (提升效能)
+export LIBGL_DRI3_DISABLE=1             # 某些情況下可改善旋轉螢幕效能
 
 # 進度更新函數
 update_progress() {
@@ -118,11 +141,40 @@ fi
 
 echo ""
 
-# --- 8. 偵測 CANable 裝置 ---
-echo "🔍 掃描 Serial 裝置..."
-update_progress "🔌 掃描 CAN Bus 裝置" "偵測 CANable..." 80
+# --- 8. 偵測 CAN Bus 裝置 ---
+echo "🔍 掃描 CAN Bus 裝置..."
+update_progress "🔌 掃描 CAN Bus 裝置" "偵測 SocketCAN / CANable..." 80
 
-CANABLE_PORT=$($PYTHON_CMD -c "
+CAN_INTERFACE=""
+CAN_TYPE=""
+
+# 方法 1: 優先檢查 SocketCAN 介面 (can0, can1, vcan0 等)
+if ip link show type can 2>/dev/null | grep -q "can"; then
+    # 找到 CAN 介面，檢查是否有已啟動的
+    for iface in can0 can1 slcan0; do
+        if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
+            CAN_INTERFACE="$iface"
+            CAN_TYPE="socketcan"
+            echo "✅ 偵測到 SocketCAN 介面: $iface (已啟動)"
+            break
+        elif ip link show "$iface" 2>/dev/null | grep -q "state DOWN"; then
+            # 介面存在但未啟動，嘗試啟動
+            echo "⚙️  偵測到 SocketCAN 介面 $iface (未啟動)，嘗試設定..."
+            sudo ip link set "$iface" type can bitrate 500000 2>/dev/null
+            sudo ip link set "$iface" up 2>/dev/null
+            if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
+                CAN_INTERFACE="$iface"
+                CAN_TYPE="socketcan"
+                echo "✅ SocketCAN 介面 $iface 已啟動"
+                break
+            fi
+        fi
+    done
+fi
+
+# 方法 2: 如果沒有 SocketCAN，檢查 Serial Port (SLCAN 模式)
+if [ -z "$CAN_INTERFACE" ]; then
+    CANABLE_PORT=$($PYTHON_CMD -c "
 import serial.tools.list_ports
 for p in serial.tools.list_ports.comports():
     if 'canable' in p.description.lower():
@@ -130,16 +182,23 @@ for p in serial.tools.list_ports.comports():
         break
 " 2>/dev/null || echo "")
 
-# 方法 2: 如果 Python 沒找到，嘗試用 dmesg
-if [ -z "$CANABLE_PORT" ]; then
-    for dev in /dev/ttyACM* /dev/ttyUSB*; do
-        if [ -e "$dev" ]; then
-            if dmesg 2>/dev/null | tail -50 | grep -qi "canable\|slcan"; then
-                CANABLE_PORT="$dev"
-                break
+    # 方法 3: 如果 Python 沒找到，嘗試用 dmesg
+    if [ -z "$CANABLE_PORT" ]; then
+        for dev in /dev/ttyACM* /dev/ttyUSB*; do
+            if [ -e "$dev" ]; then
+                if dmesg 2>/dev/null | tail -50 | grep -qi "canable\|slcan"; then
+                    CANABLE_PORT="$dev"
+                    break
+                fi
             fi
-        fi
-    done
+        done
+    fi
+    
+    if [ -n "$CANABLE_PORT" ]; then
+        CAN_INTERFACE="$CANABLE_PORT"
+        CAN_TYPE="slcan"
+        echo "✅ 偵測到 CANable (SLCAN): $CANABLE_PORT"
+    fi
 fi
 
 # --- 9. 檢查 Spotify cache 是否存在 ---
@@ -162,10 +221,11 @@ echo ""
 # --- 關閉進度視窗 ---
 close_progress
 
-# --- 10. 根據 CANable 偵測結果決定啟動模式 ---
-if [ -n "$CANABLE_PORT" ]; then
+# --- 10. 根據 CAN Bus 偵測結果決定啟動模式 ---
+if [ -n "$CAN_INTERFACE" ]; then
     echo "=============================================="
-    echo "🚗 偵測到 CANable: $CANABLE_PORT"
+    echo "🚗 偵測到 CAN Bus 裝置"
+    echo "   介面: $CAN_INTERFACE ($CAN_TYPE)"
     echo "   啟動 CAN Bus 模式 (datagrab.py)"
     echo "=============================================="
     echo ""
@@ -174,7 +234,7 @@ if [ -n "$CANABLE_PORT" ]; then
     $PYTHON_CMD "$SCRIPT_DIR/datagrab.py"
 else
     echo "=============================================="
-    echo "🎮 未偵測到 CANable 裝置"
+    echo "🎮 未偵測到 CAN Bus 裝置"
     echo "   啟動演示模式 (demo_mode.py --spotify)"
     echo "=============================================="
     echo ""

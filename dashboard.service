@@ -1,0 +1,27 @@
+[Unit]
+Description=Luxgen M7 Dashboard
+After=multi-user.target systemd-user-sessions.service
+Wants=systemd-user-sessions.service
+
+[Service]
+Type=simple
+User=ac
+Group=ac
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-force
+StandardOutput=tty
+StandardError=journal
+UtmpIdentifier=tty1
+UtmpMode=user
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+WorkingDirectory=/home/ac/QTdashboard
+ExecStart=/bin/bash -c 'exec /usr/bin/xinit /home/ac/QTdashboard/startx_dashboard.sh -- :0 vt1 -keeptty -novtswitch'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

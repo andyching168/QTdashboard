@@ -15634,3 +15634,53 @@ cantools.database.errors.UnsupportedDatabaseFormatError: DBC: "The signals TRANS
 2025-12-01 16:50:48,322 - spotify_integration - INFO - Spotify 整合已啟用
 2025-12-01 16:50:48,412 - spotify_listener - INFO - 歌曲變更: 瞳に映るシルエット
 2025-12-01 16:50:48,412 - spotify_integration - INFO - 🎵 瞳に映るシルエット - スズメ (CV: 悠木 碧), キョウカ (CV: 小倉 唯) | Album: 'プリンセスコネクト! Re:Dive PRICONNE CHARACTER SONG 40'
+2025-12-03 00:47:32,079 - __main__ - INFO - ==================================================
+2025-12-03 00:47:32,079 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 00:47:32,080 - __main__ - INFO - 平台: Linux
+2025-12-03 00:47:32,080 - __main__ - INFO - ==================================================
+2025-12-03 00:47:32,094 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 00:47:32,132 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 00:47:32,134 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 00:47:32,134 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 00:47:32,134 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 00:47:32,158 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 00:47:32,158 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 00:47:32,159 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 00:47:32,159 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 00:47:32,161 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 00:47:37,271 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 00:47:37,273 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 00:47:37,273 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 00:47:37,274 - __main__ - INFO - 儀表板運行中...
+2025-12-03 00:47:37,278 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 00:47:37,460 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 00:47:37,461 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 00:47:37,462 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 00:47:37,463 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 00:47:47,729 - spotify_listener - INFO - 歌曲變更: 妄想サマーハレーション
+2025-12-03 00:47:47,730 - spotify_integration - INFO - 🎵 妄想サマーハレーション - チエル (CV: 佐倉綾音), クロエ (CV: 種﨑敦美), ユニ (CV: 小原好美) | Album: 'プリンセスコネクト! Re:Dive PRICONNE CHARACTER SONG 39'
+2025-12-03 00:49:37,743 - __main__ - INFO - ==================================================
+2025-12-03 00:49:37,743 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 00:49:37,744 - __main__ - INFO - 平台: Linux
+2025-12-03 00:49:37,744 - __main__ - INFO - ==================================================
+2025-12-03 00:49:37,757 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 00:49:37,791 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 00:49:37,793 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 00:49:37,793 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 00:49:37,793 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 00:49:37,816 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 00:49:37,817 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 00:49:37,817 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 00:49:37,817 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 00:49:37,818 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 00:49:51,020 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 00:49:51,021 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 00:49:51,022 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 00:49:51,022 - __main__ - INFO - 儀表板運行中...
+2025-12-03 00:49:51,026 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 00:49:51,211 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 00:49:51,212 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 00:49:51,213 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 00:49:51,214 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 00:49:51,382 - spotify_listener - INFO - 歌曲變更: 妄想サマーハレーション
+2025-12-03 00:49:51,383 - spotify_integration - INFO - 🎵 妄想サマーハレーション - チエル (CV: 佐倉綾音), クロエ (CV: 種﨑敦美), ユニ (CV: 小原好美) | Album: 'プリンセスコネクト! Re:Dive PRICONNE CHARACTER SONG 39'
