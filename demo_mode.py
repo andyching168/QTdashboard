@@ -21,6 +21,7 @@ from PyQt6.QtCore import QTimer, pyqtSignal, QObject
 
 # 使用 main.py 的統一啟動流程
 from main import run_dashboard
+from shutdown_monitor import get_shutdown_monitor
 
 # Spotify 整合（可選）
 try:
@@ -53,7 +54,7 @@ class VehicleSignals(QObject):
 class VehicleSimulator:
     """車輛狀態模擬器"""
     
-    def __init__(self):
+    def __init__(self, test_shutdown_mode=False, shutdown_delay=5.0):
         self.speed = 0.0
         self.rpm = 0.8  # 千轉
         self.fuel = 65.0
@@ -66,6 +67,12 @@ class VehicleSimulator:
         self.mode = "idle"
         self.time = 0
         self.target_speed = 0
+        
+        # 電壓歸零測試模式
+        self.test_shutdown_mode = test_shutdown_mode
+        self.shutdown_delay = shutdown_delay  # 幾秒後觸發電壓歸零
+        self.shutdown_triggered = False
+        self.startup_time = time.time()
         
         # 音樂播放模擬
         self.music_time = 0
@@ -82,6 +89,16 @@ class VehicleSimulator:
     def update(self, dt=0.1):
         """更新車輛狀態"""
         self.time += dt
+        
+        # === 電壓歸零測試模式 ===
+        if self.test_shutdown_mode:
+            elapsed = time.time() - self.startup_time
+            if elapsed >= self.shutdown_delay and not self.shutdown_triggered:
+                print(f"\n⚡ [測試模式] {self.shutdown_delay} 秒後觸發電壓歸零...")
+                print(f"   電壓: {self.battery:.1f}V → 0.0V")
+                self.battery = 0.0
+                self.shutdown_triggered = True
+                return  # 提前返回，不再更新其他狀態
         
         # 模式切換
         if self.mode == "idle":
@@ -236,6 +253,9 @@ def main():
                         help='啟用 Spotify Connect 整合（需要先設定 spotify_config.json）')
     parser.add_argument('--perf', action='store_true',
                         help='啟用效能監控模式（偵測卡頓並輸出診斷資訊）')
+    parser.add_argument('--test-shutdown', type=float, nargs='?', const=5.0, default=None,
+                        metavar='DELAY',
+                        help='電壓歸零關機測試模式，指定幾秒後觸發 (預設 5 秒)')
     args = parser.parse_args()
     
     # 如果指定了 --perf，設定環境變數
@@ -243,6 +263,17 @@ def main():
         os.environ['PERF_MONITOR'] = '1'
         print("🔍 效能監控模式已啟用")
         print("   卡頓 (>50ms) 會顯示警告訊息")
+        print()
+    
+    # 電壓歸零測試模式
+    test_shutdown_mode = args.test_shutdown is not None
+    shutdown_delay = args.test_shutdown if test_shutdown_mode else 5.0
+    
+    if test_shutdown_mode:
+        print("⚡ 電壓歸零測試模式已啟用")
+        print(f"   {shutdown_delay} 秒後將模擬電壓歸零")
+        print("   系統將顯示關機倒數對話框")
+        print("   （非 RPi 環境會退出程式而非關機）")
         print()
     
     # 設定日誌
@@ -264,6 +295,9 @@ def main():
     print("功能:")
     print("  - 自動模擬車輛行駛狀態")
     print("  - 怠速 → 加速 → 巡航 → 減速 循環")
+    
+    if test_shutdown_mode:
+        print(f"  - ⚡ 電壓歸零測試 ({shutdown_delay} 秒後觸發)")
     
     # Spotify 整合狀態
     spotify_enabled = False
@@ -335,7 +369,10 @@ def main():
     print("=" * 50)
     
     # 建立模擬器和信號
-    simulator = VehicleSimulator()
+    simulator = VehicleSimulator(
+        test_shutdown_mode=test_shutdown_mode,
+        shutdown_delay=shutdown_delay
+    )
     vehicle_signals = VehicleSignals()
     
     def setup_demo_data_source(dashboard):
@@ -348,6 +385,7 @@ def main():
         vehicle_signals.update_fuel.connect(dashboard.set_fuel)
         vehicle_signals.update_gear.connect(dashboard.set_gear)
         vehicle_signals.update_turbo.connect(dashboard.set_turbo)
+        # 使用 set_battery 方法，它會自動通知關機監控器
         vehicle_signals.update_battery.connect(dashboard.set_battery)
         
         # 設定 Spotify 回調（如果啟用）

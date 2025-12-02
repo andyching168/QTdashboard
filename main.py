@@ -6548,7 +6548,42 @@ class ControlPanel(QWidget):
         msg.setWindowTitle("確認操作")
         
         if action == 'app_restart':
-            msg.setText("是否要重新啟動儀表板程式？")
+            # 特殊處理：提供重啟和關閉兩個選項
+            msg.setText("請選擇操作：")
+            msg.setInformativeText(
+                "⚠️ 注意：在 Raspberry Pi 上，若關閉程式後\n"
+                "需透過 SSH 才能重新啟動儀表板。\n\n"
+                "建議使用「重啟程式」以確保可繼續操作。"
+            )
+            msg.setIcon(QMessageBox.Icon.Question)
+            
+            # 自訂按鈕
+            btn_restart = msg.addButton("🔄 重啟程式", QMessageBox.ButtonRole.AcceptRole)
+            btn_close = msg.addButton("⏹️ 關閉程式", QMessageBox.ButtonRole.DestructiveRole)
+            btn_cancel = msg.addButton("取消", QMessageBox.ButtonRole.RejectRole)
+            
+            msg.setDefaultButton(btn_restart)
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            msg.exec()
+            
+            clicked = msg.clickedButton()
+            if clicked == btn_restart:
+                # 執行重啟
+                try:
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    print("[電源] 準備程式重啟...")
+                    self._show_power_countdown("程式重啟", 1)
+                    QTimer.singleShot(1000, lambda: self._restart_application(script_dir))
+                except Exception as e:
+                    self._show_power_error(e)
+            elif clicked == btn_close:
+                # 執行關閉程式
+                print("[電源] 關閉程式...")
+                self._show_power_countdown("關閉程式", 1)
+                QTimer.singleShot(1000, lambda: QApplication.instance().quit())
+            # 取消則不做任何事
+            return
+            
         elif action == 'reboot':
             if is_linux:
                 msg.setText("是否要重新啟動系統？\n\n系統將會完全重啟。")
@@ -6571,12 +6606,8 @@ class ControlPanel(QWidget):
         try:
             script_dir = os.path.dirname(os.path.abspath(__file__))
             
-            if action == 'app_restart':
-                print("[電源] 準備程式重啟...")
-                self._show_power_countdown("程式重啟", 1)
-                QTimer.singleShot(1000, lambda: self._restart_application(script_dir))
-                
-            elif action == 'reboot':
+            # app_restart 已在上面處理，這裡只處理 reboot 和 shutdown
+            if action == 'reboot':
                 if is_linux:
                     print("[電源] 準備系統重啟...")
                     self._show_power_countdown("系統重啟", 3)
@@ -6611,6 +6642,16 @@ class ControlPanel(QWidget):
             err_box.setIcon(QMessageBox.Icon.Critical)
             err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             err_box.exec()
+    
+    def _show_power_error(self, error):
+        """顯示電源操作錯誤"""
+        from PyQt6.QtWidgets import QMessageBox
+        err_box = QMessageBox()
+        err_box.setWindowTitle("錯誤")
+        err_box.setText(f"操作失敗:\n{str(error)}")
+        err_box.setIcon(QMessageBox.Icon.Critical)
+        err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        err_box.exec()
     
     def _show_power_countdown(self, action_name, seconds):
         """顯示電源操作倒數提示"""
@@ -9091,6 +9132,10 @@ class Dashboard(QWidget):
         # B: 定速巡航作動切換
         elif key == Qt.Key.Key_B:
             self.toggle_cruise_engaged()
+        
+        # F10 / =: 電壓歸零測試（觸發關機對話框）
+        elif key == Qt.Key.Key_F10 or key == Qt.Key.Key_Equal:
+            self.trigger_voltage_zero_test()
 
         self.update_display()
 
@@ -9133,6 +9178,10 @@ class Dashboard(QWidget):
         Args:
             voltage: 電壓值 (V)
         """
+        # 電壓歸零測試鎖定：測試中忽略正常電壓更新
+        if getattr(self, '_voltage_test_locked', False) and voltage > 1.0:
+            return  # 測試中，忽略正常電壓
+        
         self.battery = voltage
         # 更新四宮格卡片
         if hasattr(self, 'quad_gauge_card'):
@@ -9144,6 +9193,60 @@ class Dashboard(QWidget):
         # 關機監控：檢測電壓掉落
         if hasattr(self, '_shutdown_monitor'):
             self._shutdown_monitor.update_voltage(voltage)
+    
+    def trigger_voltage_zero_test(self):
+        """觸發電壓歸零測試（F10 或 = 鍵）"""
+        # 如果已經在測試中，忽略
+        if getattr(self, '_voltage_test_locked', False):
+            print("⚡ [測試] 電壓測試已在進行中...")
+            return
+        
+        print("⚡ [測試] 按鍵觸發電壓歸零測試")
+        print(f"   電壓: {self.battery:.1f}V → 0.0V")
+        
+        # 鎖定電壓測試，忽略後續的正常電壓更新
+        self._voltage_test_locked = True
+        
+        # 先設定正常電壓（確保關機監控器記錄過正常狀態）
+        if hasattr(self, '_shutdown_monitor'):
+            if not self._shutdown_monitor.was_powered:
+                print("   先模擬正常電壓狀態...")
+                self._voltage_test_locked = False  # 暫時解鎖
+                self._shutdown_monitor.update_voltage(12.5)
+                self._voltage_test_locked = True   # 重新鎖定
+            
+            # 連接對話框關閉事件來解鎖
+            def on_dialog_closed():
+                self._voltage_test_locked = False
+                print("⚡ [測試] 電壓測試結束，恢復正常更新")
+            
+            # 連接取消和確認信號
+            if self._shutdown_monitor.shutdown_dialog:
+                try:
+                    self._shutdown_monitor.shutdown_dialog.shutdown_cancelled.disconnect(on_dialog_closed)
+                except:
+                    pass
+                try:
+                    self._shutdown_monitor.shutdown_dialog.shutdown_confirmed.disconnect(on_dialog_closed)
+                except:
+                    pass
+                try:
+                    self._shutdown_monitor.shutdown_dialog.exit_app.disconnect(on_dialog_closed)
+                except:
+                    pass
+            
+            # 模擬電壓掉落到 0V
+            self._voltage_test_locked = False  # 暫時解鎖讓 0V 可以更新
+            self.set_battery(0.0)
+            self.set_battery(0.0)
+            self.set_battery(0.0)  # 連續三次觸發防抖
+            self._voltage_test_locked = True   # 重新鎖定
+            
+            # 重新連接信號（在對話框創建後）
+            if self._shutdown_monitor.shutdown_dialog:
+                self._shutdown_monitor.shutdown_dialog.shutdown_cancelled.connect(on_dialog_closed)
+                self._shutdown_monitor.shutdown_dialog.shutdown_confirmed.connect(on_dialog_closed)
+                self._shutdown_monitor.shutdown_dialog.exit_app.connect(on_dialog_closed)
     
     def update_cruise_display(self):
         """更新巡航顯示 - 三種狀態"""

@@ -5,13 +5,29 @@
 當電壓從 >10V 掉到 ≈0V 時，顯示倒數計時對話框
 如果使用者在 30 秒內按「取消」，則不關機
 否則自動執行 sudo poweroff
+
+測試模式（非 Raspberry Pi）：
+    - 不執行關機命令，改為退出程式
+    - 可透過 test_mode 參數控制
 """
 
 import os
+import sys
+import platform
 import subprocess
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QWidget
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QWidget, QApplication
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
+
+
+def is_raspberry_pi():
+    """檢測是否在樹莓派上運行"""
+    try:
+        with open('/proc/cpuinfo', 'r') as f:
+            cpuinfo = f.read()
+            return 'Raspberry Pi' in cpuinfo or 'BCM' in cpuinfo
+    except:
+        return False
 
 
 class ShutdownDialog(QDialog):
@@ -19,35 +35,59 @@ class ShutdownDialog(QDialog):
     
     shutdown_confirmed = pyqtSignal()  # 確認關機信號
     shutdown_cancelled = pyqtSignal()  # 取消關機信號
+    exit_app = pyqtSignal()  # 退出程式信號（測試模式用）
     
-    def __init__(self, countdown_seconds=30, parent=None):
-        super().__init__(parent)
+    def __init__(self, countdown_seconds=30, test_mode=None, parent=None):
+        # macOS 上不設定 parent，使用獨立視窗
+        if platform.system() == 'Darwin':
+            super().__init__(None)  # 無 parent
+        else:
+            super().__init__(parent)
         
+        self._parent_window = parent  # 保存父視窗引用（用於置中）
         self.countdown = countdown_seconds
         self.initial_countdown = countdown_seconds
         
-        # 設置視窗屬性
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint | 
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Dialog
-        )
-        self.setModal(True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 測試模式：自動偵測或手動指定
+        if test_mode is None:
+            self.test_mode = not is_raspberry_pi()
+        else:
+            self.test_mode = test_mode
         
-        # 固定大小
-        self.setFixedSize(500, 300)
+        # 設置視窗屬性 - macOS 需要特別處理
+        if platform.system() == 'Darwin':
+            # macOS: 使用獨立最上層視窗
+            self.setWindowFlags(
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Tool  # Tool 視窗在 macOS 上更容易顯示在前景
+            )
+            self.setWindowTitle("電源中斷警告")
+        else:
+            # Linux/RPi: 使用無框架模式，但不使用透明背景（會影響觸控）
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint | 
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Dialog
+            )
+            # 注意：不設置 WA_TranslucentBackground，否則觸控螢幕可能無法點擊
+            # self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        self.setModal(False)  # 非模態，避免阻塞主視窗
+        
+        # 確保可以接收觸控/滑鼠事件
+        self.setAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        
+        # 固定大小（加大以容納更大的按鈕）
+        self.setFixedSize(550, 350)
         
         self._init_ui()
         self._setup_timer()
     
     def _init_ui(self):
         """初始化 UI"""
-        # 主容器
-        container = QWidget(self)
-        container.setGeometry(0, 0, 500, 300)
-        container.setStyleSheet("""
-            QWidget {
+        # 設置對話框本身的背景（不使用子容器，避免觸控問題）
+        self.setStyleSheet("""
+            QDialog {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #2a1a1a, stop:1 #1a0a0a);
                 border-radius: 20px;
@@ -55,7 +95,8 @@ class ShutdownDialog(QDialog):
             }
         """)
         
-        layout = QVBoxLayout(container)
+        # 直接在對話框上創建佈局
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
         
@@ -84,7 +125,8 @@ class ShutdownDialog(QDialog):
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # 倒數計時
-        self.countdown_label = QLabel(f"{self.countdown} 秒後自動關機")
+        action_text = "退出程式" if self.test_mode else "自動關機"
+        self.countdown_label = QLabel(f"{self.countdown} 秒後{action_text}")
         self.countdown_label.setStyleSheet("""
             color: #ff8800;
             font-size: 24px;
@@ -95,19 +137,20 @@ class ShutdownDialog(QDialog):
         
         # 按鈕區域
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(20)
+        button_layout.setSpacing(30)  # 增加按鈕間距
         
-        # 取消按鈕
+        # 取消按鈕 - 加大尺寸方便觸控
         self.cancel_btn = QPushButton("取消關機")
-        self.cancel_btn.setFixedSize(180, 50)
+        self.cancel_btn.setFixedSize(200, 60)  # 加大按鈕
         self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cancel_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # 確保可以獲得焦點
         self.cancel_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4a4a55;
                 color: white;
                 border: none;
-                border-radius: 10px;
-                font-size: 18px;
+                border-radius: 12px;
+                font-size: 20px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -119,17 +162,19 @@ class ShutdownDialog(QDialog):
         """)
         self.cancel_btn.clicked.connect(self._on_cancel)
         
-        # 立即關機按鈕
-        self.shutdown_btn = QPushButton("立即關機")
-        self.shutdown_btn.setFixedSize(180, 50)
+        # 立即關機/退出按鈕 - 加大尺寸方便觸控
+        btn_text = "立即退出" if self.test_mode else "立即關機"
+        self.shutdown_btn = QPushButton(btn_text)
+        self.shutdown_btn.setFixedSize(200, 60)  # 加大按鈕
         self.shutdown_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.shutdown_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # 確保可以獲得焦點
         self.shutdown_btn.setStyleSheet("""
             QPushButton {
                 background-color: #c33;
                 color: white;
                 border: none;
-                border-radius: 10px;
-                font-size: 18px;
+                border-radius: 12px;
+                font-size: 20px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -167,7 +212,22 @@ class ShutdownDialog(QDialog):
         self.timer.start(1000)  # 每秒更新
         
         # 置中顯示
-        if self.parent():
+        if platform.system() == 'Darwin':
+            # macOS: 使用螢幕中心
+            from PyQt6.QtGui import QGuiApplication
+            screen = QGuiApplication.primaryScreen()
+            if screen:
+                screen_geo = screen.availableGeometry()
+                x = screen_geo.x() + (screen_geo.width() - self.width()) // 2
+                y = screen_geo.y() + (screen_geo.height() - self.height()) // 2
+                self.move(x, y)
+        elif self._parent_window:
+            # Linux/RPi: 使用父視窗中心
+            parent_rect = self._parent_window.geometry()
+            x = parent_rect.x() + (parent_rect.width() - self.width()) // 2
+            y = parent_rect.y() + (parent_rect.height() - self.height()) // 2
+            self.move(x, y)
+        elif self.parent():
             parent_rect = self.parent().geometry()
             x = parent_rect.x() + (parent_rect.width() - self.width()) // 2
             y = parent_rect.y() + (parent_rect.height() - self.height()) // 2
@@ -198,7 +258,8 @@ class ShutdownDialog(QDialog):
                 background: transparent;
             """)
         
-        self.countdown_label.setText(f"{self.countdown} 秒後自動關機")
+        action_text = "退出程式" if self.test_mode else "自動關機"
+        self.countdown_label.setText(f"{self.countdown} 秒後{action_text}")
     
     def _on_cancel(self):
         """取消關機"""
@@ -212,16 +273,23 @@ class ShutdownDialog(QDialog):
         self._do_shutdown()
     
     def _do_shutdown(self):
-        """執行關機"""
-        print("🔴 執行系統關機...")
-        self.shutdown_confirmed.emit()
-        self.close()
-        
-        # 執行關機命令
-        try:
-            subprocess.run(['sudo', 'poweroff'], check=False)
-        except Exception as e:
-            print(f"關機失敗: {e}")
+        """執行關機或退出程式"""
+        if self.test_mode:
+            print("🟡 [測試模式] 退出程式...")
+            self.exit_app.emit()
+            self.close()
+            # 延遲退出，讓信號有時間處理
+            QTimer.singleShot(100, lambda: QApplication.instance().quit())
+        else:
+            print("🔴 執行系統關機...")
+            self.shutdown_confirmed.emit()
+            self.close()
+            
+            # 執行關機命令
+            try:
+                subprocess.run(['sudo', 'poweroff'], check=False)
+            except Exception as e:
+                print(f"關機失敗: {e}")
 
 
 class ShutdownMonitor(QObject):
@@ -230,17 +298,28 @@ class ShutdownMonitor(QObject):
     # 信號
     power_lost = pyqtSignal()      # 電源中斷
     power_restored = pyqtSignal()  # 電源恢復
+    exit_app = pyqtSignal()        # 退出程式（測試模式用）
     
     def __init__(self, 
                  voltage_threshold=10.0,      # 正常電壓閾值
                  low_voltage_threshold=1.0,   # 低電壓閾值 (視為斷電)
                  debounce_count=3,            # 需要連續幾次低電壓才觸發
+                 test_mode=None,              # 測試模式（None=自動偵測）
                  parent=None):
         super().__init__(parent)
         
         self.voltage_threshold = voltage_threshold
         self.low_voltage_threshold = low_voltage_threshold
         self.debounce_count = debounce_count
+        
+        # 測試模式：自動偵測或手動指定
+        if test_mode is None:
+            self.test_mode = not is_raspberry_pi()
+        else:
+            self.test_mode = test_mode
+        
+        if self.test_mode:
+            print("[ShutdownMonitor] 測試模式：電壓歸零將退出程式而非關機")
         
         # 狀態
         self.last_voltage = 0.0
@@ -284,11 +363,30 @@ class ShutdownMonitor(QObject):
     def show_shutdown_dialog(self, parent=None):
         """顯示關機對話框"""
         if self.shutdown_dialog is None:
-            self.shutdown_dialog = ShutdownDialog(countdown_seconds=30, parent=parent)
+            self.shutdown_dialog = ShutdownDialog(
+                countdown_seconds=30, 
+                test_mode=self.test_mode,
+                parent=parent
+            )
             self.shutdown_dialog.shutdown_cancelled.connect(self._on_shutdown_cancelled)
+            self.shutdown_dialog.exit_app.connect(lambda: self.exit_app.emit())
         
         if not self.shutdown_dialog.isVisible():
             self.shutdown_dialog.show()
+            
+            # 強制前景顯示
+            self.shutdown_dialog.raise_()
+            self.shutdown_dialog.activateWindow()
+            
+            # macOS 額外處理：使用 NSApplication 強制激活
+            if platform.system() == 'Darwin':
+                try:
+                    from AppKit import NSApplication, NSApp
+                    NSApp.activateIgnoringOtherApps_(True)
+                except ImportError:
+                    pass  # 沒有 pyobjc，跳過
+            
+            print("[關機對話框] 已顯示")
     
     def _on_shutdown_cancelled(self):
         """使用者取消關機"""
@@ -310,21 +408,47 @@ def get_shutdown_monitor() -> ShutdownMonitor:
 
 
 if __name__ == "__main__":
-    """測試用"""
+    """測試用 - 可以直接執行來測試關機對話框"""
     import sys
-    from PyQt6.QtWidgets import QApplication, QMainWindow
+    from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel
     
     app = QApplication(sys.argv)
     
     # 建立測試視窗
     window = QMainWindow()
-    window.setWindowTitle("關機測試")
+    window.setWindowTitle("關機測試 - 電壓歸零測試")
     window.setGeometry(100, 100, 800, 480)
     window.setStyleSheet("background: #1a1a25;")
     
+    # 顯示測試資訊
+    info_label = QLabel(window)
+    info_label.setGeometry(50, 50, 700, 380)
+    info_label.setStyleSheet("color: white; font-size: 16px;")
+    info_label.setWordWrap(True)
+    
     # 建立監控器
     monitor = get_shutdown_monitor()
+    
+    test_info = f"""
+    <h2>🔌 電壓歸零關機測試</h2>
+    <hr>
+    <p><b>測試模式:</b> {'是 (退出程式)' if monitor.test_mode else '否 (真實關機)'}</p>
+    <p><b>是否為 Raspberry Pi:</b> {is_raspberry_pi()}</p>
+    <hr>
+    <p><b>測試流程:</b></p>
+    <ol>
+        <li>1 秒後: 模擬正常電壓 12.5V</li>
+        <li>3 秒後: 模擬電壓掉落到 0V</li>
+        <li>系統將顯示關機倒數對話框</li>
+        <li>你可以選擇「取消關機」或等待倒數結束</li>
+    </ol>
+    <hr>
+    <p style="color: #ff8800;">⚠️ 在非 RPi 環境，倒數結束會退出程式而非關機</p>
+    """
+    info_label.setText(test_info)
+    
     monitor.power_lost.connect(lambda: monitor.show_shutdown_dialog(window))
+    monitor.exit_app.connect(lambda: print("✅ 收到退出信號"))
     
     # 模擬電壓變化
     def simulate_power_loss():
