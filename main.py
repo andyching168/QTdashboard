@@ -19,12 +19,21 @@ os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=fa
 
 # === 多媒體後端設定 ===
 # Raspberry Pi: 使用 GStreamer 後端（對 V4L2 硬體解碼支援較好）
-# macOS/Windows: 使用 FFmpeg 後端（預設，無需設定）
+# macOS/Windows/桌面 Linux: 使用 FFmpeg 後端（PyQt6 預設帶的後端）
 # 必須在 import PyQt6.QtMultimedia 之前設定
-if platform.system() == 'Linux':
-    # 在 Linux (包含 Raspberry Pi) 上使用 GStreamer
+def _is_raspberry_pi():
+    """檢測是否在樹莓派上運行"""
+    try:
+        with open('/proc/cpuinfo', 'r') as f:
+            cpuinfo = f.read()
+            return 'Raspberry Pi' in cpuinfo or 'BCM' in cpuinfo
+    except:
+        return False
+
+if _is_raspberry_pi():
+    # 只在 Raspberry Pi 上使用 GStreamer（系統有安裝完整的 GStreamer Qt 插件）
     os.environ.setdefault('QT_MEDIA_BACKEND', 'gstreamer')
-# macOS 和 Windows 使用預設的 FFmpeg 後端，不需要特別設定
+# 桌面 Linux、macOS、Windows 使用預設的 FFmpeg 後端（PyQt6 內建）
 
 # === 垂直同步 (VSync) 設定 ===
 # 啟用 OpenGL VSync，避免影片播放時畫面撕裂

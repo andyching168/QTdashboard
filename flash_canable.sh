@@ -128,9 +128,11 @@ download_firmware() {
     print_info "下載韌體: $filename"
     
     if command -v curl &> /dev/null; then
-        curl -L -o "$filepath" "$url" --progress-bar
+        # 加入 -k 跳過 SSL 憑證驗證
+        curl -k -L -o "$filepath" "$url" --progress-bar
     else
-        wget -O "$filepath" "$url"
+        # wget 使用 --no-check-certificate
+        wget --no-check-certificate -O "$filepath" "$url"
     fi
     
     if [ -f "$filepath" ]; then
