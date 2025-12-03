@@ -47,8 +47,8 @@ class GPIOButtonHandler(QObject):
     button_b_long_pressed = pyqtSignal() # 按鈕 B 長按
     
     # 配置參數
-    BUTTON_A_PIN = 19  # GPIO19
-    BUTTON_B_PIN = 26  # GPIO26
+    BUTTON_B_PIN = 19  # GPIO19
+    BUTTON_A_PIN = 26  # GPIO26
     LONG_PRESS_TIME = 0.8  # 長按閾值（秒）
     DEBOUNCE_TIME = 0.05   # 防抖動時間（秒）
     
@@ -57,6 +57,10 @@ class GPIOButtonHandler(QObject):
         
         self._button_a: Optional['Button'] = None
         self._button_b: Optional['Button'] = None
+        
+        # 長按標記 - 追蹤長按是否已觸發，避免釋放時再觸發短按
+        self._button_a_held_triggered = False
+        self._button_b_held_triggered = False
         
         # 初始化 GPIO
         self._initialized = False
@@ -114,24 +118,36 @@ class GPIOButtonHandler(QObject):
     # === 按鈕 A 事件處理 ===
     def _on_button_a_held(self):
         """按鈕 A 長按"""
+        self._button_a_held_triggered = True  # 標記長按已觸發
         print("[GPIO] 按鈕 A 長按")
         self.button_a_long_pressed.emit()
     
     def _on_button_a_released(self):
-        """按鈕 A 被釋放 - 用 is_held 判斷是短按還是長按"""
-        if not self._button_a.is_held:
+        """按鈕 A 被釋放 - 只有在沒觸發過長按時才算短按"""
+        if self._button_a_held_triggered:
+            # 長按後釋放，重置標記，不觸發短按
+            self._button_a_held_triggered = False
+            print("[GPIO] 按鈕 A 長按釋放（忽略）")
+        else:
+            # 真正的短按
             print("[GPIO] 按鈕 A 短按")
             self.button_a_pressed.emit()
     
     # === 按鈕 B 事件處理 ===
     def _on_button_b_held(self):
         """按鈕 B 長按"""
+        self._button_b_held_triggered = True  # 標記長按已觸發
         print("[GPIO] 按鈕 B 長按")
         self.button_b_long_pressed.emit()
     
     def _on_button_b_released(self):
-        """按鈕 B 被釋放 - 用 is_held 判斷是短按還是長按"""
-        if not self._button_b.is_held:
+        """按鈕 B 被釋放 - 只有在沒觸發過長按時才算短按"""
+        if self._button_b_held_triggered:
+            # 長按後釋放，重置標記，不觸發短按
+            self._button_b_held_triggered = False
+            print("[GPIO] 按鈕 B 長按釋放（忽略）")
+        else:
+            # 真正的短按
             print("[GPIO] 按鈕 B 短按")
             self.button_b_pressed.emit()
     

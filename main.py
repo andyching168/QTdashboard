@@ -5764,7 +5764,7 @@ class ControlPanel(QWidget):
         self.button_widgets = {}  # 用於存取特定按鈕
         button_configs = [
             ("WiFi", "📶", "#1DB954"),
-            ("藍牙", "🔵", "#4285F4"),
+            ("時間", "🕐", "#4285F4"),
             ("亮度", "☀", "#FF9800"),
             ("更新", "🔄", "#00BCD4"),
             ("電源", "🔌", "#E91E63"),
@@ -6176,8 +6176,8 @@ class ControlPanel(QWidget):
             parent = self.parent()
             if parent and hasattr(parent, 'show_wifi_manager'):
                 parent.show_wifi_manager()  # type: ignore
-        elif title == "藍牙":
-            print("藍牙功能待實現")
+        elif title == "時間":
+            self.do_time_sync()
         elif title == "亮度":
             self.cycle_brightness()
         elif title == "更新":
@@ -6190,6 +6190,161 @@ class ControlPanel(QWidget):
             if parent and hasattr(parent, 'show_mqtt_settings'):
                 parent.show_mqtt_settings()  # type: ignore
     
+    def do_time_sync(self):
+        """執行 NTP 時間校正"""
+        from PyQt6.QtWidgets import QMessageBox
+        import subprocess
+        
+        # 檢查網路狀態
+        main_window = self.parent()
+        if main_window and hasattr(main_window, 'is_offline') and main_window.is_offline:
+            msg = QMessageBox()
+            msg.setWindowTitle("無法校正時間")
+            msg.setText("網路未連線，無法執行 NTP 時間校正。\n請先連接網路後再試。")
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            msg.exec()
+            return
+        
+        # 更新按鈕狀態為同步中
+        self._update_time_button_syncing(True)
+        
+        try:
+            result_text = ""
+            success = False
+            
+            # 嘗試使用 timedatectl (systemd-timesyncd)
+            if os.path.exists('/usr/bin/timedatectl'):
+                print("[時間校正] 使用 timedatectl...")
+                
+                # 啟用 NTP
+                subprocess.run(['sudo', 'timedatectl', 'set-ntp', 'true'], 
+                              capture_output=True, timeout=5)
+                
+                # 重啟 timesyncd 強制同步
+                subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-timesyncd'],
+                              capture_output=True, timeout=10)
+                
+                # 等待同步
+                import time
+                time.sleep(2)
+                
+                # 檢查同步狀態
+                result = subprocess.run(['timedatectl', 'show', '--property=NTPSynchronized'],
+                                       capture_output=True, text=True, timeout=5)
+                
+                if 'NTPSynchronized=yes' in result.stdout:
+                    success = True
+                    result_text = "NTP 同步成功"
+                else:
+                    # 即使沒有顯示同步成功，也可能已經更新
+                    success = True
+                    result_text = "已嘗試 NTP 同步"
+                    
+            # 備用：嘗試使用 ntpdate
+            elif os.path.exists('/usr/sbin/ntpdate'):
+                print("[時間校正] 使用 ntpdate...")
+                result = subprocess.run(
+                    ['sudo', 'ntpdate', '-u', 'pool.ntp.org'],
+                    capture_output=True, text=True, timeout=15
+                )
+                if result.returncode == 0:
+                    success = True
+                    result_text = "NTP 同步成功"
+                else:
+                    # 嘗試備用伺服器
+                    result = subprocess.run(
+                        ['sudo', 'ntpdate', '-u', 'time.google.com'],
+                        capture_output=True, text=True, timeout=15
+                    )
+                    success = result.returncode == 0
+                    result_text = "NTP 同步成功" if success else "同步失敗"
+            else:
+                result_text = "未找到 NTP 工具"
+                success = False
+            
+            # 如果有 RTC，也同步到 RTC
+            if success and os.path.exists('/dev/rtc0'):
+                print("[時間校正] 同步時間到 RTC...")
+                subprocess.run(['sudo', 'hwclock', '-w'], capture_output=True, timeout=5)
+                result_text += "\n已同步到 RTC"
+            
+            # 顯示結果
+            from datetime import datetime
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            msg = QMessageBox()
+            if success:
+                msg.setWindowTitle("時間校正完成")
+                msg.setText(f"{result_text}\n\n目前時間：{current_time}")
+                msg.setIcon(QMessageBox.Icon.Information)
+            else:
+                msg.setWindowTitle("時間校正失敗")
+                msg.setText(f"{result_text}\n\n請檢查網路連線後重試。")
+                msg.setIcon(QMessageBox.Icon.Warning)
+            
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            msg.exec()
+            
+            # 更新日期時間顯示
+            self.update_status_info()
+            
+        except subprocess.TimeoutExpired:
+            msg = QMessageBox()
+            msg.setWindowTitle("時間校正逾時")
+            msg.setText("NTP 同步逾時，請檢查網路連線後重試。")
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            msg.exec()
+        except Exception as e:
+            msg = QMessageBox()
+            msg.setWindowTitle("時間校正錯誤")
+            msg.setText(f"發生錯誤：{str(e)}")
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            msg.exec()
+        finally:
+            # 恢復按鈕狀態
+            self._update_time_button_syncing(False)
+    
+    def _update_time_button_syncing(self, syncing):
+        """更新時間按鈕的同步狀態"""
+        if "時間" not in self.button_widgets:
+            return
+        
+        btn_container = self.button_widgets["時間"]
+        for child in btn_container.findChildren(QPushButton):
+            if syncing:
+                child.setText("⏳")
+                child.setEnabled(False)
+                child.setStyleSheet("""
+                    QPushButton {
+                        background-color: #666;
+                        border: none;
+                        border-radius: 20px;
+                        font-size: 48px;
+                        color: white;
+                    }
+                """)
+            else:
+                child.setText("🕐")
+                child.setEnabled(True)
+                child.setStyleSheet("""
+                    QPushButton {
+                        background-color: #4285F4;
+                        border: none;
+                        border-radius: 20px;
+                        font-size: 48px;
+                        color: white;
+                    }
+                    QPushButton:hover {
+                        background-color: #5a9cf4;
+                    }
+                    QPushButton:pressed {
+                        background-color: #3367d6;
+                    }
+                """)
+
     def cycle_brightness(self):
         """循環切換亮度"""
         parent = self.parent()

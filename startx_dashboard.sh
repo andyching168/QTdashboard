@@ -11,10 +11,9 @@
 #   3. 禁用螢幕保護/電源管理 (防止黑屏)
 #   4. 啟動 openbox 視窗管理器
 #   5. 啟動 PipeWire 音訊服務
-#   6. NTP 時間校正
-#   7. 偵測 CANable 裝置，決定啟動模式
-#   8. Spotify 授權處理
-#   9. 啟動儀表板應用程式
+#   6. 偵測 CAN Bus 裝置，決定啟動模式
+#   7. Spotify 授權處理
+#   8. 啟動儀表板應用程式
 # =============================================================================
 
 SCRIPT_DIR="/home/ac/QTdashboard"
@@ -107,43 +106,9 @@ echo "  Luxgen M7 儀表板 - 自動啟動"
 echo "=============================================="
 echo ""
 
-# --- 7. NTP 時間校正 ---
-echo "🌐 檢查網路連線..."
-update_progress "🌐 檢查網路連線" "正在偵測..." 60
-if ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1; then
-    echo "✅ 網路已連線"
-    update_progress "🌐 檢查網路連線" "網路已連線" 65
-    
-    # NTP 時間校正
-    echo "🕐 進行 NTP 時間校正..."
-    update_progress "🕐 時間校正" "NTP 同步中..." 70
-    if command -v timedatectl >/dev/null 2>&1; then
-        # 使用 systemd-timesyncd (Raspberry Pi OS / 現代 Linux)
-        sudo timedatectl set-ntp true 2>/dev/null || true
-        # 強制同步一次
-        sudo systemctl restart systemd-timesyncd 2>/dev/null || true
-        sleep 2
-        echo "   時間: $(date '+%Y-%m-%d %H:%M:%S')"
-        update_progress "🕐 時間校正" "$(date '+%Y-%m-%d %H:%M:%S')" 75
-    elif command -v ntpdate >/dev/null 2>&1; then
-        # 使用 ntpdate (傳統方式)
-        sudo ntpdate -u pool.ntp.org 2>/dev/null || sudo ntpdate -u time.google.com 2>/dev/null || true
-        echo "   時間: $(date '+%Y-%m-%d %H:%M:%S')"
-        update_progress "🕐 時間校正" "$(date '+%Y-%m-%d %H:%M:%S')" 75
-    else
-        echo "⚠️  未找到 NTP 工具，跳過時間校正"
-        update_progress "🕐 時間校正" "跳過 (無 NTP 工具)" 75
-    fi
-else
-    echo "⚠️  無網路連線，跳過 NTP 時間校正"
-    update_progress "🌐 檢查網路連線" "無網路連線" 75
-fi
-
-echo ""
-
-# --- 8. 偵測 CAN Bus 裝置 ---
+# --- 7. 偵測 CAN Bus 裝置 ---
 echo "🔍 掃描 CAN Bus 裝置..."
-update_progress "🔌 掃描 CAN Bus 裝置" "偵測 SocketCAN / CANable..." 80
+update_progress "🔌 掃描 CAN Bus 裝置" "偵測 SocketCAN / CANable..." 60
 
 CAN_INTERFACE=""
 CAN_TYPE=""

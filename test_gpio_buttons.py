@@ -30,8 +30,8 @@ def test_with_gpiozero():
         print("=" * 50)
         print()
         print("按鈕配置:")
-        print("  GPIO19 - 按鈕 A")
-        print("  GPIO26 - 按鈕 B")
+        print("  GPIO19 - 按鈕 B")
+        print("  GPIO26 - 按鈕 A")
         print("  GND    - 共地")
         print()
         print("長按時間: 0.8 秒")
@@ -40,8 +40,8 @@ def test_with_gpiozero():
         print("-" * 50)
         
         # 設定按鈕（使用內部上拉電阻）
-        button_a = Button(19, pull_up=True, bounce_time=0.05, hold_time=0.8)
-        button_b = Button(26, pull_up=True, bounce_time=0.05, hold_time=0.8)
+        button_b = Button(19, pull_up=True, bounce_time=0.05, hold_time=0.8)
+        button_a = Button(26, pull_up=True, bounce_time=0.05, hold_time=0.8)
         
         # 事件計數器
         event_count = [0]

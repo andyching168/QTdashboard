@@ -15684,3 +15684,485 @@ cantools.database.errors.UnsupportedDatabaseFormatError: DBC: "The signals TRANS
 2025-12-03 00:49:51,214 - spotify_integration - INFO - Spotify 整合已啟用
 2025-12-03 00:49:51,382 - spotify_listener - INFO - 歌曲變更: 妄想サマーハレーション
 2025-12-03 00:49:51,383 - spotify_integration - INFO - 🎵 妄想サマーハレーション - チエル (CV: 佐倉綾音), クロエ (CV: 種﨑敦美), ユニ (CV: 小原好美) | Album: 'プリンセスコネクト! Re:Dive PRICONNE CHARACTER SONG 39'
+2025-12-03 01:03:41,117 - __main__ - INFO - ==================================================
+2025-12-03 01:03:41,118 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 01:03:41,119 - __main__ - INFO - 平台: Linux
+2025-12-03 01:03:41,119 - __main__ - INFO - ==================================================
+2025-12-03 01:03:41,152 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 01:03:41,225 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 01:03:41,228 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 01:03:41,229 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 01:03:41,229 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 01:03:41,292 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:03:41,293 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:03:41,294 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:03:41,295 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:03:41,296 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 01:03:59,272 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 01:03:59,274 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 01:03:59,275 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 01:03:59,275 - __main__ - INFO - 儀表板運行中...
+2025-12-03 01:03:59,285 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 01:04:00,116 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 01:04:00,134 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 01:04:00,142 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 01:04:00,151 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 01:20:22,770 - __main__ - INFO - ==================================================
+2025-12-03 01:20:22,771 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 01:20:22,771 - __main__ - INFO - 平台: Linux
+2025-12-03 01:20:22,771 - __main__ - INFO - ==================================================
+2025-12-03 01:20:22,784 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 01:20:22,818 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 01:20:22,820 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 01:20:22,820 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 01:20:22,820 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 01:20:22,843 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:20:22,843 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:20:22,843 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:20:22,844 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:20:22,844 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 01:20:36,120 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 01:20:36,121 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 01:20:36,122 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 01:20:36,122 - __main__ - INFO - 儀表板運行中...
+2025-12-03 01:20:36,128 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 01:20:36,511 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 01:20:36,521 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 01:20:36,524 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 01:20:36,524 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 01:21:09,660 - spotify_listener - INFO - 歌曲變更: Yes! Precious Harmony!
+2025-12-03 01:21:09,662 - spotify_integration - INFO - 🎵 Yes! Precious Harmony! - ペコリーヌ (CV: M・A・O), コッコロ (CV: 伊藤美来), キャル (CV: 立花理香) | Album: 'プリンセスコネクト！Re:Dive PRICONNE CHARACTER SONG 13'
+2025-12-03 01:34:52,271 - __main__ - INFO - ==================================================
+2025-12-03 01:34:52,273 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 01:34:52,273 - __main__ - INFO - 平台: Linux
+2025-12-03 01:34:52,274 - __main__ - INFO - ==================================================
+2025-12-03 01:34:52,307 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 01:34:52,378 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 01:34:52,382 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 01:34:52,383 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 01:34:52,383 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 01:34:52,446 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:34:52,447 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:34:52,447 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:34:52,448 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:34:52,450 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 01:35:05,059 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 01:35:05,061 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 01:35:05,062 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 01:35:05,062 - __main__ - INFO - 儀表板運行中...
+2025-12-03 01:35:05,076 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 01:35:05,485 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 01:35:05,486 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 01:35:05,488 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 01:35:05,489 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 01:39:44,872 - __main__ - INFO - ==================================================
+2025-12-03 01:39:44,873 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 01:39:44,873 - __main__ - INFO - 平台: Linux
+2025-12-03 01:39:44,873 - __main__ - INFO - ==================================================
+2025-12-03 01:39:44,887 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 01:39:44,921 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 01:39:44,923 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 01:39:44,923 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 01:39:44,923 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 01:39:44,947 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:39:44,947 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:39:44,947 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:39:44,948 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:39:44,948 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 01:39:58,173 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 01:39:58,174 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 01:39:58,175 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 01:39:58,175 - __main__ - INFO - 儀表板運行中...
+2025-12-03 01:39:58,181 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 01:39:58,428 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 01:39:58,428 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 01:39:58,429 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 01:39:58,430 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 01:50:38,798 - __main__ - INFO - ==================================================
+2025-12-03 01:50:38,798 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 01:50:38,799 - __main__ - INFO - 平台: Linux
+2025-12-03 01:50:38,799 - __main__ - INFO - ==================================================
+2025-12-03 01:50:38,812 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 01:50:38,845 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 01:50:38,847 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 01:50:38,847 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 01:50:38,848 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 01:50:38,870 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:50:38,870 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:50:38,871 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:50:38,871 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 01:50:38,872 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 01:50:52,018 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 01:50:52,019 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 01:50:52,020 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 01:50:52,020 - __main__ - INFO - 儀表板運行中...
+2025-12-03 01:50:52,026 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 01:50:52,751 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 01:50:52,752 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 01:50:52,753 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 01:50:52,753 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 01:52:06,820 - spotify_listener - INFO - 歌曲變更: Yes! Precious Harmony!
+2025-12-03 01:52:06,821 - spotify_integration - INFO - 🎵 Yes! Precious Harmony! - ペコリーヌ (CV: M・A・O), コッコロ (CV: 伊藤美来), キャル (CV: 立花理香) | Album: 'プリンセスコネクト！Re:Dive PRICONNE CHARACTER SONG 13'
+2025-12-03 01:54:54,121 - spotify_listener - INFO - 歌曲變更: Re:collection
+2025-12-03 01:54:54,123 - spotify_integration - INFO - 🎵 Re:collection - アメス (CV: 相坂優歌) | Album: 'プリンセスコネクト！Re:Dive PRICONNE CHARACTER SONG 42'
+2025-12-03 15:24:03,737 - __main__ - INFO - ==================================================
+2025-12-03 15:24:03,737 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 15:24:03,738 - __main__ - INFO - 平台: Linux
+2025-12-03 15:24:03,738 - __main__ - INFO - ==================================================
+2025-12-03 15:24:03,751 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 15:24:03,785 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 15:24:03,786 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 15:24:03,787 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 15:24:03,787 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 15:24:03,809 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 15:24:03,810 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 15:24:03,810 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 15:24:03,811 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 15:24:03,811 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 15:24:11,585 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 15:24:11,586 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 15:24:11,586 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 15:24:11,587 - __main__ - INFO - 儀表板運行中...
+2025-12-03 15:24:11,593 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 15:24:11,980 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 15:24:11,980 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 15:24:11,981 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 15:24:11,982 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 15:26:01,571 - __main__ - INFO - 正在關閉系統...
+2025-12-03 15:26:01,577 - __main__ - ERROR - CAN Bus 錯誤: Error receiving: 錯誤的檔案敘述項 [Error Code 9]
+2025-12-03 15:30:52,795 - __main__ - INFO - ==================================================
+2025-12-03 15:30:52,796 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 15:30:52,796 - __main__ - INFO - 平台: Linux
+2025-12-03 15:30:52,796 - __main__ - INFO - ==================================================
+2025-12-03 15:30:52,810 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 15:30:52,844 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 15:30:52,846 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 15:30:52,846 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 15:30:52,846 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 15:30:52,869 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 15:30:52,870 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 15:30:52,870 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 15:30:52,870 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 15:30:52,871 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 15:31:06,115 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 15:31:06,116 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 15:31:06,117 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 15:31:06,117 - __main__ - INFO - 儀表板運行中...
+2025-12-03 15:31:06,122 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 15:31:06,419 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 15:31:06,436 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 15:31:06,453 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 15:31:06,455 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 16:42:17,279 - __main__ - INFO - ==================================================
+2025-12-03 16:42:17,279 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 16:42:17,280 - __main__ - INFO - 平台: Linux
+2025-12-03 16:42:17,280 - __main__ - INFO - ==================================================
+2025-12-03 16:42:17,293 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 16:42:17,326 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 16:42:17,328 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 16:42:17,328 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 16:42:17,329 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 16:42:17,352 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:42:17,352 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:42:17,352 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:42:17,353 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:42:17,353 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 16:42:25,371 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 16:42:25,372 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 16:42:25,373 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 16:42:25,373 - __main__ - INFO - 儀表板運行中...
+2025-12-03 16:42:25,379 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 16:42:25,750 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 16:42:25,750 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 16:42:25,751 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 16:42:25,752 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 16:42:40,608 - __main__ - INFO - 正在關閉系統...
+2025-12-03 16:42:40,611 - __main__ - ERROR - CAN Bus 錯誤: Error receiving: 錯誤的檔案敘述項 [Error Code 9]
+2025-12-03 16:42:40,637 - __main__ - ERROR - OBD 查詢錯誤: file descriptor cannot be a negative integer (-1)
+2025-12-03 16:43:23,869 - __main__ - INFO - ==================================================
+2025-12-03 16:43:23,870 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 16:43:23,870 - __main__ - INFO - 平台: Linux
+2025-12-03 16:43:23,870 - __main__ - INFO - ==================================================
+2025-12-03 16:43:23,883 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 16:43:23,895 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 16:43:23,896 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 16:43:23,897 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 16:43:23,897 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 16:43:23,918 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:43:23,919 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:43:23,919 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:43:23,920 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:43:23,920 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 16:43:28,603 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 16:43:28,604 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 16:43:28,605 - __main__ - INFO - 儀表板運行中...
+2025-12-03 16:43:28,604 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 16:43:28,609 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 16:43:28,864 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 16:43:28,865 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 16:43:28,866 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 16:43:28,866 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 16:47:00,069 - __main__ - INFO - 正在關閉系統...
+2025-12-03 16:47:00,075 - __main__ - ERROR - OBD 查詢錯誤: file descriptor cannot be a negative integer (-1)
+2025-12-03 16:47:00,076 - __main__ - ERROR - CAN Bus 錯誤: Error receiving: 錯誤的檔案敘述項 [Error Code 9]
+2025-12-03 16:49:33,163 - __main__ - INFO - ==================================================
+2025-12-03 16:49:33,164 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 16:49:33,164 - __main__ - INFO - 平台: Linux
+2025-12-03 16:49:33,164 - __main__ - INFO - ==================================================
+2025-12-03 16:49:33,180 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 16:49:33,193 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 16:49:33,195 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 16:49:33,196 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 16:49:33,196 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 16:49:33,220 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:49:33,220 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:49:33,221 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:49:33,221 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:49:33,222 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 16:49:39,487 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 16:49:39,488 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 16:49:39,489 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 16:49:39,490 - __main__ - INFO - 儀表板運行中...
+2025-12-03 16:49:39,496 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 16:49:39,777 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 16:49:39,778 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 16:49:39,782 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 16:49:39,782 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 16:57:07,677 - __main__ - INFO - 正在關閉系統...
+2025-12-03 16:57:07,690 - __main__ - ERROR - CAN Bus 錯誤: Error receiving: 錯誤的檔案敘述項 [Error Code 9]
+2025-12-03 16:57:07,699 - __main__ - ERROR - OBD 查詢錯誤: file descriptor cannot be a negative integer (-1)
+2025-12-03 16:58:18,338 - __main__ - INFO - ==================================================
+2025-12-03 16:58:18,339 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 16:58:18,339 - __main__ - INFO - 平台: Linux
+2025-12-03 16:58:18,339 - __main__ - INFO - ==================================================
+2025-12-03 16:58:18,353 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 16:58:18,365 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 16:58:18,366 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 16:58:18,367 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 16:58:18,367 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 16:58:18,388 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:58:18,389 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:58:18,389 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:58:18,390 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 16:58:18,390 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 16:58:22,754 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 16:58:22,756 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 16:58:22,757 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 16:58:22,757 - __main__ - INFO - 儀表板運行中...
+2025-12-03 16:58:22,762 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 16:58:23,004 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 16:58:23,004 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 16:58:23,005 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 16:58:23,006 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 17:00:59,620 - __main__ - INFO - 正在關閉系統...
+2025-12-03 17:00:59,627 - __main__ - ERROR - CAN Bus 錯誤: Error receiving: 錯誤的檔案敘述項 [Error Code 9]
+2025-12-03 17:00:59,660 - __main__ - ERROR - OBD 查詢錯誤: file descriptor cannot be a negative integer (-1)
+2025-12-03 17:01:14,369 - __main__ - INFO - ==================================================
+2025-12-03 17:01:14,370 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 17:01:14,370 - __main__ - INFO - 平台: Linux
+2025-12-03 17:01:14,370 - __main__ - INFO - ==================================================
+2025-12-03 17:01:14,383 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 17:01:14,395 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 17:01:14,397 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 17:01:14,397 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 17:01:14,398 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 17:01:14,420 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:01:14,420 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:01:14,421 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:01:14,421 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:01:14,422 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 17:01:25,366 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 17:01:25,367 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 17:01:25,367 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 17:01:25,367 - __main__ - INFO - 儀表板運行中...
+2025-12-03 17:01:25,373 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 17:01:25,598 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 17:01:25,599 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 17:01:25,600 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 17:01:25,600 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 17:07:33,349 - __main__ - INFO - ==================================================
+2025-12-03 17:07:33,355 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 17:07:33,356 - __main__ - INFO - 平台: Linux
+2025-12-03 17:07:33,356 - __main__ - INFO - ==================================================
+2025-12-03 17:07:33,371 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 17:07:33,413 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 17:07:33,415 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 17:07:33,415 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 17:07:33,416 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 17:07:33,443 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:07:33,444 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:07:33,445 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:07:33,445 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:07:33,446 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 17:07:48,710 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 17:07:48,711 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 17:07:48,712 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 17:07:48,713 - __main__ - INFO - 儀表板運行中...
+2025-12-03 17:07:48,724 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 17:07:48,999 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 17:07:48,999 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 17:07:49,000 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 17:07:49,001 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 17:09:23,879 - __main__ - INFO - ==================================================
+2025-12-03 17:09:23,880 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 17:09:23,880 - __main__ - INFO - 平台: Linux
+2025-12-03 17:09:23,880 - __main__ - INFO - ==================================================
+2025-12-03 17:09:23,893 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 17:09:23,927 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 17:09:23,928 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 17:09:23,929 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 17:09:23,929 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 17:09:23,952 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:09:23,952 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:09:23,952 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:09:23,953 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:09:23,953 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 17:09:37,178 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 17:09:37,179 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 17:09:37,180 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 17:09:37,180 - __main__ - INFO - 儀表板運行中...
+2025-12-03 17:09:37,185 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 17:09:37,473 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 17:09:37,474 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 17:09:37,474 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 17:09:37,475 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 17:16:30,397 - __main__ - INFO - ==================================================
+2025-12-03 17:16:30,398 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 17:16:30,398 - __main__ - INFO - 平台: Linux
+2025-12-03 17:16:30,399 - __main__ - INFO - ==================================================
+2025-12-03 17:16:30,412 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 17:16:30,445 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 17:16:30,447 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 17:16:30,448 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 17:16:30,448 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 17:16:30,472 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:16:30,473 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:16:30,473 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:16:30,474 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:16:30,476 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 17:16:43,733 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 17:16:43,735 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 17:16:43,735 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 17:16:43,737 - __main__ - INFO - 儀表板運行中...
+2025-12-03 17:16:43,744 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 17:16:44,032 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 17:16:44,033 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 17:16:44,034 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 17:16:44,034 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 17:21:23,118 - __main__ - INFO - ==================================================
+2025-12-03 17:21:23,119 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 17:21:23,120 - __main__ - INFO - 平台: Linux
+2025-12-03 17:21:23,120 - __main__ - INFO - ==================================================
+2025-12-03 17:21:23,133 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 17:21:23,170 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 17:21:23,171 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 17:21:23,172 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 17:21:23,172 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 17:21:23,195 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:21:23,196 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:21:23,196 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:21:23,196 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:21:23,197 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 17:21:36,675 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 17:21:36,677 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 17:21:36,681 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 17:21:36,682 - __main__ - INFO - 儀表板運行中...
+2025-12-03 17:21:36,689 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 17:21:37,067 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 17:21:37,068 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 17:21:37,069 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 17:21:37,070 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 17:25:53,230 - __main__ - INFO - ==================================================
+2025-12-03 17:25:53,230 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 17:25:53,231 - __main__ - INFO - 平台: Linux
+2025-12-03 17:25:53,231 - __main__ - INFO - ==================================================
+2025-12-03 17:25:53,245 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 17:25:53,267 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 17:25:53,271 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 17:25:53,272 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 17:25:53,272 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 17:25:53,299 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:25:53,300 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:25:53,300 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:25:53,301 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:25:53,302 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 17:26:04,342 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 17:26:04,343 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 17:26:04,343 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 17:26:04,343 - __main__ - INFO - 儀表板運行中...
+2025-12-03 17:26:04,350 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 17:26:04,581 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 17:26:04,582 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 17:26:04,583 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 17:26:04,583 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 17:28:37,951 - __main__ - INFO - 正在關閉系統...
+2025-12-03 17:28:37,956 - __main__ - ERROR - CAN Bus 錯誤: Error receiving: 錯誤的檔案敘述項 [Error Code 9]
+2025-12-03 17:28:49,147 - __main__ - INFO - ==================================================
+2025-12-03 17:28:49,148 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 17:28:49,148 - __main__ - INFO - 平台: Linux
+2025-12-03 17:28:49,148 - __main__ - INFO - ==================================================
+2025-12-03 17:28:49,162 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 17:28:49,174 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 17:28:49,176 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 17:28:49,177 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 17:28:49,177 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 17:28:49,199 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:28:49,200 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:28:49,200 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:28:49,201 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:28:49,201 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 17:29:00,234 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 17:29:00,235 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 17:29:00,236 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 17:29:00,236 - __main__ - INFO - 儀表板運行中...
+2025-12-03 17:29:00,241 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 17:29:00,505 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 17:29:00,506 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 17:29:00,507 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 17:29:00,507 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 17:33:07,003 - __main__ - INFO - ==================================================
+2025-12-03 17:33:07,004 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 17:33:07,005 - __main__ - INFO - 平台: Linux
+2025-12-03 17:33:07,005 - __main__ - INFO - ==================================================
+2025-12-03 17:33:07,018 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 17:33:07,051 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 17:33:07,053 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 17:33:07,053 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 17:33:07,053 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 17:33:07,076 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:33:07,077 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:33:07,077 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:33:07,078 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:33:07,078 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 17:33:20,479 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 17:33:20,480 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 17:33:20,481 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 17:33:20,482 - __main__ - INFO - 儀表板運行中...
+2025-12-03 17:33:20,490 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 17:33:20,789 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 17:33:20,789 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 17:33:20,790 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 17:33:20,791 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-03 17:40:34,947 - __main__ - INFO - ==================================================
+2025-12-03 17:40:34,948 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2025-12-03 17:40:34,949 - __main__ - INFO - 平台: Linux
+2025-12-03 17:40:34,949 - __main__ - INFO - ==================================================
+2025-12-03 17:40:34,962 - __main__ - INFO - 偵測到 SocketCAN 介面: [('can0', 'UP'), ('tseg1 2..256 tseg2 2..128 sjw 1..128 brp 1..512 brp_inc 1', 'DOWN')]
+2025-12-03 17:40:34,995 - can.interfaces.socketcan.socketcan - INFO - Created a socket
+2025-12-03 17:40:34,997 - __main__ - INFO - CAN Bus 已連接 (SocketCAN): can0, 過濾器: 7 個 ID
+2025-12-03 17:40:34,997 - __main__ - INFO - CAN Bus 連線模式: SocketCAN (can0)
+2025-12-03 17:40:34,997 - __main__ - INFO - 正在載入 DBC 檔案...
+2025-12-03 17:40:35,020 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:40:35,021 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:40:35,021 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:40:35,021 - cantools.database.can.database - WARNING - Overwriting message 'undefined' with 'undefined' in the name to message dictionary.
+2025-12-03 17:40:35,022 - __main__ - INFO - DBC 檔案已載入，共 21 個訊息定義
+2025-12-03 17:40:48,187 - __main__ - INFO - 正在啟動背景執行緒...
+2025-12-03 17:40:48,188 - __main__ - INFO - CAN 訊息接收執行緒已啟動
+2025-12-03 17:40:48,189 - __main__ - INFO - OBD-II 查詢執行緒已啟動
+2025-12-03 17:40:48,189 - __main__ - INFO - 儀表板運行中...
+2025-12-03 17:40:48,194 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-03 17:40:48,428 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-03 17:40:48,428 - spotify_integration - INFO - Spotify 認證成功
+2025-12-03 17:40:48,429 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-03 17:40:48,430 - spotify_integration - INFO - Spotify 整合已啟用
