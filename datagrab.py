@@ -327,6 +327,21 @@ def unified_receiver(bus, db, signals):
     current_rpm_smoothed = 0.0
     rpm_alpha = 0.25  # 平滑係數 (0.0~1.0)，越小越平滑但反應越慢
     
+    # 速度平滑參數 (OBD)
+    current_speed_smoothed = 0.0
+    speed_alpha = 0.3  # 速度平滑係數
+    speed_correction = 1.10  # 速度校正係數 (+10%)，模擬原廠快樂表
+    last_obd_speed_int = None  # OBD 速度緩存
+    
+    # 油量平滑演算法參數
+    # 使用移動平均 + 變化率限制，避免浮動
+    fuel_samples = []  # 油量樣本緩衝區
+    fuel_sample_size = 10  # 保留最近 10 個樣本
+    fuel_smoothed = None  # 平滑後的油量值
+    fuel_last_update_time = 0  # 上次更新時間
+    fuel_min_update_interval = 2.0  # 最少 2 秒更新一次 UI
+    fuel_change_threshold = 0.5  # 油量變化閾值 (0.5%)
+    
     # 檔位切換狀態追蹤
     last_gear_str = None
     last_gear_change_time = 0
@@ -338,7 +353,7 @@ def unified_receiver(bus, db, signals):
     }
     last_cruise_state = (None, None)  # 巡航狀態緩存
     last_fuel_int = None  # 油量緩存（整數化，避免浮點微小變化觸發更新）
-    last_speed_int = None  # 速度緩存
+    last_speed_int = None  # CAN 速度緩存（僅供記錄，不更新 UI）
     
     logger.info("CAN 訊息接收執行緒已啟動")
     
@@ -380,6 +395,28 @@ def unified_receiver(bus, db, signals):
                         # [修改] 放棄 CAN RPM，直接使用 OBD 數據更新介面
                         # 雖然頻率較低，但數值是標準且準確的
                         signals.update_rpm.emit(current_rpm_smoothed / 1000.0)
+                    
+                    # PID 0D (Vehicle Speed) - 車速
+                    elif msg.data[2] == 0x0D:
+                        if len(msg.data) < 4:
+                            continue
+                        raw_speed = msg.data[3]  # 單位: km/h
+                        
+                        # 平滑處理
+                        if current_speed_smoothed == 0:
+                            current_speed_smoothed = raw_speed
+                        else:
+                            current_speed_smoothed = (current_speed_smoothed * (1 - speed_alpha)) + (raw_speed * speed_alpha)
+                        
+                        data_store["OBD"]["speed"] = raw_speed
+                        data_store["OBD"]["last_update"] = time.time()
+                        
+                        # 套用校正係數後更新 UI（模擬原廠快樂表）
+                        corrected_speed = current_speed_smoothed * speed_correction
+                        speed_int = int(corrected_speed)
+                        if last_obd_speed_int is None or abs(speed_int - last_obd_speed_int) >= 1:
+                            signals.update_speed.emit(corrected_speed)
+                            last_obd_speed_int = speed_int
                     
                     # PID 05 (Temp) - 水箱溫度 (通常只在 ECU 0x7E8)
                     elif msg.data[2] == 0x05 and msg.arbitration_id == 0x7E8:
@@ -501,17 +538,50 @@ def unified_receiver(bus, db, signals):
                     # FUEL 縮放 (0.3984, 0)，範圍 0-100%
                     fuel_value = decoded['FUEL']
                     if hasattr(fuel_value, 'value'):
-                        fuel = float(fuel_value.value)
+                        fuel_raw = float(fuel_value.value)
                     else:
-                        fuel = float(fuel_value)
+                        fuel_raw = float(fuel_value)
 
-                    data_store["CAN"]["fuel"] = fuel
+                    data_store["CAN"]["fuel"] = fuel_raw
                     
-                    # RPI4 優化：只在油量變化超過 1% 時才更新 UI
-                    fuel_int = int(fuel)
-                    if last_fuel_int is None or abs(fuel_int - last_fuel_int) >= 1:
-                        signals.update_fuel.emit(fuel)
-                        last_fuel_int = fuel_int
+                    # === 油量平滑演算法 ===
+                    # 1. 加入樣本緩衝區
+                    fuel_samples.append(fuel_raw)
+                    if len(fuel_samples) > fuel_sample_size:
+                        fuel_samples.pop(0)
+                    
+                    # 2. 計算移動平均（去除最高和最低值後的平均）
+                    if len(fuel_samples) >= 3:
+                        sorted_samples = sorted(fuel_samples)
+                        # 去除最高和最低的異常值
+                        trimmed = sorted_samples[1:-1] if len(sorted_samples) > 4 else sorted_samples
+                        fuel_avg = sum(trimmed) / len(trimmed)
+                    else:
+                        fuel_avg = fuel_raw
+                    
+                    # 3. 初始化或更新平滑值
+                    current_time = time.time()
+                    if fuel_smoothed is None:
+                        fuel_smoothed = fuel_avg
+                        last_fuel_int = int(fuel_smoothed)
+                        signals.update_fuel.emit(fuel_smoothed)
+                        fuel_last_update_time = current_time
+                    else:
+                        # 4. 變化率限制：每次最多變化 0.5%
+                        fuel_diff = fuel_avg - fuel_smoothed
+                        if abs(fuel_diff) > fuel_change_threshold:
+                            # 限制變化幅度
+                            fuel_smoothed += fuel_change_threshold if fuel_diff > 0 else -fuel_change_threshold
+                        else:
+                            fuel_smoothed = fuel_avg
+                        
+                        # 5. 只在變化足夠大且間隔足夠長時更新 UI
+                        fuel_int = int(fuel_smoothed)
+                        time_since_update = current_time - fuel_last_update_time
+                        if (abs(fuel_int - last_fuel_int) >= 1) or (time_since_update > 5.0 and abs(fuel_smoothed - last_fuel_int) > 0.3):
+                            signals.update_fuel.emit(fuel_smoothed)
+                            last_fuel_int = fuel_int
+                            fuel_last_update_time = current_time
                     
                     # === 巡航狀態 ===
                     # CRUSE_ONOFF: bit 2 (開關)
@@ -542,6 +612,7 @@ def unified_receiver(bus, db, signals):
                     logger.error(f"處理油量/巡航訊息錯誤: {e}")
             
             # 4. 處理 SPEED_FL 速度 (ID 0x38A / 906)
+            # 注意：速度改用 OBD PID 0x0D 更新 UI，CAN 速度僅供記錄參考
             elif msg.arbitration_id == 0x38A:
                 try:
                     decoded = db.decode_message(msg.arbitration_id, msg.data)
@@ -552,13 +623,9 @@ def unified_receiver(bus, db, signals):
                     else:
                         speed = float(speed_value)
 
+                    # 只記錄到 data_store，不更新 UI（改由 OBD PID 0x0D 更新）
                     data_store["CAN"]["speed"] = speed
-                    
-                    # RPI4 優化：只在速度變化超過 1 km/h 時才更新 UI
-                    speed_int = int(speed)
-                    if last_speed_int is None or abs(speed_int - last_speed_int) >= 1:
-                        signals.update_speed.emit(speed)
-                        last_speed_int = speed_int
+                    last_speed_int = int(speed)  # 更新緩存供參考
                             
                 except cantools.database.errors.DecodeError as e:
                     logger.error(f"DBC 解碼錯誤 (SPEED_FL): {e}")
@@ -711,7 +778,17 @@ def obd_query(bus, signals):
             )
             with send_lock:
                 bus.send(msg_rpm)
-            time.sleep(0.1)
+            time.sleep(0.08)
+            
+            # 查詢 車速 (PID 0x0D)
+            msg_speed = can.Message(
+                arbitration_id=0x7DF, 
+                data=[0x02, 0x01, 0x0D, 0, 0, 0, 0, 0], 
+                is_extended_id=False
+            )
+            with send_lock:
+                bus.send(msg_speed)
+            time.sleep(0.08)
 
             # 查詢 水溫 (PID 0x05)
             msg_temp = can.Message(
