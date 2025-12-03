@@ -6896,6 +6896,9 @@ class Dashboard(QWidget):
     
     # 網路狀態 Signal
     signal_update_network = pyqtSignal(bool)  # 傳遞網路狀態 (is_connected)
+    
+    # 手煞車 Signal
+    signal_update_parking_brake = pyqtSignal(bool)  # 傳遞手煞車狀態 (is_engaged)
 
     def __init__(self):
         super().__init__()
@@ -6921,6 +6924,9 @@ class Dashboard(QWidget):
         
         # 連接網路狀態 Signal
         self.signal_update_network.connect(self._update_network_status)
+        
+        # 連接手煞車 Signal
+        self.signal_update_parking_brake.connect(self._slot_update_parking_brake)
         
         # 適配 1920x480 螢幕
         self.setFixedSize(1920, 480)
@@ -7266,9 +7272,36 @@ class Dashboard(QWidget):
         center_layout.setSpacing(0)
         center_layout.setContentsMargins(5, 10, 5, 10)
         
-        # === 上方：CRUISE 顯示區（預留空間）===
+        # === 上方：手煞車 + CRUISE 顯示區 ===
+        indicator_row = QWidget()
+        indicator_row.setFixedHeight(50)
+        indicator_row.setStyleSheet("background: transparent;")
+        indicator_row_layout = QHBoxLayout(indicator_row)
+        indicator_row_layout.setContentsMargins(0, 0, 0, 0)
+        indicator_row_layout.setSpacing(0)
+        
+        # 手煞車指示器（左側，固定寬度並置中）
+        parking_brake_container = QWidget()
+        parking_brake_container.setFixedWidth(80)
+        parking_brake_container.setStyleSheet("background: transparent;")
+        parking_brake_layout = QHBoxLayout(parking_brake_container)
+        parking_brake_layout.setContentsMargins(0, 0, 0, 0)
+        parking_brake_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.parking_brake_label = QLabel("")
+        self.parking_brake_label.setFixedSize(50, 50)
+        self.parking_brake_label.setStyleSheet("""
+            color: #f66;
+            font-size: 28px;
+            font-weight: bold;
+            font-family: Arial;
+            background: transparent;
+        """)
+        self.parking_brake_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        parking_brake_layout.addWidget(self.parking_brake_label)
+        
+        # CRUISE 指示器（右側）
         self.cruise_label = QLabel("")
-        self.cruise_label.setFixedHeight(50)
         self.cruise_label.setStyleSheet("""
             color: #4ade80;
             font-size: 40px;
@@ -7278,6 +7311,9 @@ class Dashboard(QWidget):
             letter-spacing: 3px;
         """)
         self.cruise_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        indicator_row_layout.addWidget(parking_brake_container)
+        indicator_row_layout.addWidget(self.cruise_label, 1)
         
         # === 中央：檔位(左) + 時速(右) ===
         speed_gear_widget = QWidget()
@@ -7340,7 +7376,7 @@ class Dashboard(QWidget):
         speed_gear_layout.addWidget(speed_container, 1)
         
         # 組合中央區域佈局
-        center_layout.addWidget(self.cruise_label)
+        center_layout.addWidget(indicator_row)
         center_layout.addWidget(speed_gear_widget, 1)
         center_layout.addSpacing(20)
         
@@ -7546,6 +7582,9 @@ class Dashboard(QWidget):
         self.cruise_switch = False   # 開關是否開啟（白色）
         self.cruise_engaged = False  # 是否作動中（綠色）
         
+        # 手煞車狀態
+        self.parking_brake = False   # 手煞車是否拉起
+        
         # 網路狀態
         self.is_offline = False  # 是否斷線
         
@@ -7619,6 +7658,7 @@ class Dashboard(QWidget):
         # === 初始化 GPIO 按鈕（樹莓派實體按鈕）===
         # GPIO19: 按鈕 A (短按=切換左卡片, 長按=詳細視圖)
         # GPIO26: 按鈕 B (短按=切換右卡片, 長按=重置Trip)
+        # GPIO17: 手煞車感測器 (ESP32 數位輸出)
         self._gpio_handler = setup_gpio_buttons(self)
         if self._gpio_handler:
             print("GPIO 按鈕已啟用 - 可使用實體按鈕控制")
@@ -9457,6 +9497,44 @@ class Dashboard(QWidget):
                 background: transparent;
                 letter-spacing: 2px;
             """)
+
+    def update_parking_brake_display(self):
+        """更新手煞車顯示"""
+        if self.parking_brake:
+            # 紅色 - 手煞車拉起
+            self.parking_brake_label.setText("P")
+            self.parking_brake_label.setStyleSheet("""
+                color: #f66;
+                font-size: 32px;
+                font-weight: bold;
+                font-family: Arial;
+                background: rgba(255, 100, 100, 0.2);
+                border: 2px solid #f66;
+                border-radius: 25px;
+            """)
+        else:
+            # 不顯示
+            self.parking_brake_label.setText("")
+            self.parking_brake_label.setStyleSheet("""
+                color: #f66;
+                font-size: 32px;
+                font-weight: bold;
+                font-family: Arial;
+                background: transparent;
+                border: none;
+            """)
+
+    def _slot_update_parking_brake(self, is_engaged: bool):
+        """Slot: 更新手煞車狀態（從 GPIO 訊號）"""
+        print(f"[Dashboard] 收到手煞車信號: {is_engaged}")
+        self.parking_brake = is_engaged
+        self.update_parking_brake_display()
+
+    def set_parking_brake(self, is_engaged: bool):
+        """設定手煞車狀態 - 供外部呼叫"""
+        print(f"[Dashboard] 設定手煞車: {is_engaged}")
+        self.parking_brake = is_engaged
+        self.update_parking_brake_display()
 
     def update_display(self):
         """更新所有儀表顯示"""
