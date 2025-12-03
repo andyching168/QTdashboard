@@ -58,6 +58,9 @@ from spotify_integration import setup_spotify
 from spotify_auth import SpotifyAuthManager
 from spotify_qr_auth import SpotifyQRAuthDialog
 
+# GPIO 按鈕 Imports（樹莓派實體按鈕）
+from gpio_buttons import setup_gpio_buttons, get_gpio_handler
+
 
 # === 效能監控 ===
 class PerformanceMonitor:
@@ -7457,6 +7460,15 @@ class Dashboard(QWidget):
         self.network_check_timer.start(5000)  # 5 秒
         # 立即檢查一次
         QTimer.singleShot(2000, self._check_network_status)
+        
+        # === 初始化 GPIO 按鈕（樹莓派實體按鈕）===
+        # GPIO19: 按鈕 A (短按=切換左卡片, 長按=詳細視圖)
+        # GPIO26: 按鈕 B (短按=切換右卡片, 長按=重置Trip)
+        self._gpio_handler = setup_gpio_buttons(self)
+        if self._gpio_handler:
+            print("GPIO 按鈕已啟用 - 可使用實體按鈕控制")
+        else:
+            print("GPIO 按鈕不可用 - 請使用鍵盤 F1/F2 控制")
         
         print("儀表板邏輯已啟動")
     
