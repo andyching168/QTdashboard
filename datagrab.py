@@ -339,8 +339,9 @@ def unified_receiver(bus, db, signals):
     fuel_sample_size = 10  # 保留最近 10 個樣本
     fuel_smoothed = None  # 平滑後的油量值
     fuel_last_update_time = 0  # 上次更新時間
-    fuel_min_update_interval = 2.0  # 最少 2 秒更新一次 UI
+    fuel_min_update_interval = 180.0  # 正常情況下每 3 分鐘更新一次 UI
     fuel_change_threshold = 0.5  # 油量變化閾值 (0.5%)
+    fuel_rapid_rise_threshold = 3.0  # 快速上升閾值 (3%)，檢測加油情況
     
     # 檔位切換狀態追蹤
     last_gear_str = None
@@ -567,18 +568,36 @@ def unified_receiver(bus, db, signals):
                         signals.update_fuel.emit(fuel_smoothed)
                         fuel_last_update_time = current_time
                     else:
-                        # 4. 變化率限制：每次最多變化 0.5%
+                        # 4. 檢測快速上升（加油情況）
                         fuel_diff = fuel_avg - fuel_smoothed
-                        if abs(fuel_diff) > fuel_change_threshold:
+                        is_rapid_rise = fuel_diff >= fuel_rapid_rise_threshold
+                        
+                        # 5. 變化率限制：每次最多變化 0.5%（除非是快速上升）
+                        if is_rapid_rise:
+                            # 快速上升時直接更新到新值
+                            fuel_smoothed = fuel_avg
+                        elif abs(fuel_diff) > fuel_change_threshold:
                             # 限制變化幅度
                             fuel_smoothed += fuel_change_threshold if fuel_diff > 0 else -fuel_change_threshold
                         else:
                             fuel_smoothed = fuel_avg
                         
-                        # 5. 只在變化足夠大且間隔足夠長時更新 UI
+                        # 6. 更新 UI 的條件：
+                        #    - 快速上升（加油）：立即更新
+                        #    - 正常情況：每 3 分鐘更新一次
                         fuel_int = int(fuel_smoothed)
                         time_since_update = current_time - fuel_last_update_time
-                        if (abs(fuel_int - last_fuel_int) >= 1) or (time_since_update > 5.0 and abs(fuel_smoothed - last_fuel_int) > 0.3):
+                        
+                        should_update = False
+                        if is_rapid_rise:
+                            # 快速上升（加油）時立即更新
+                            should_update = True
+                            logger.info(f"偵測到油量快速上升 (加油): {last_fuel_int}% -> {fuel_int}%")
+                        elif time_since_update >= fuel_min_update_interval:
+                            # 正常情況下每 3 分鐘更新一次
+                            should_update = True
+                        
+                        if should_update:
                             signals.update_fuel.emit(fuel_smoothed)
                             last_fuel_int = fuel_int
                             fuel_last_update_time = current_time
