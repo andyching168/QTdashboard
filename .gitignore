@@ -38,3 +38,6 @@ wheels/
 Thumbs.db
 spotify_config.json
 .spotify_cache
+
+
+qtdashboard.log
