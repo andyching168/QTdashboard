@@ -1,82 +1,60 @@
 #!/usr/bin/env python3
 """
-演示模式 - 不需要 CAN Bus 硬體
-使用 main.py 的統一啟動流程，確保與主程式保持同步
-
-效能監控：
-    PERF_MONITOR=1 python demo_mode.py
-    
-    或使用 --perf 參數：
-    python demo_mode.py --perf
+演示模式：無需 CAN Bus 硬體
+- 預設自動模擬怠速/加速/巡航/減速
+- --control-data 可改為鍵盤直接調整數據，停用自動場景
+- PERF_MONITOR=1 或 --perf 可開啟效能監控
 """
 
-import sys
-import os
-import time
-import random
-import math
 import argparse
 import logging
-from PyQt6.QtCore import QTimer, pyqtSignal, QObject
+import os
+import random
+import sys
+import time
+from PyQt6.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
 
-# 使用 main.py 的統一啟動流程
 from main import run_dashboard
-from shutdown_monitor import get_shutdown_monitor
-
-# Spotify 整合（可選）
-try:
-    from spotify_auth import SpotifyAuthManager
-    from spotify_listener import SpotifyListener
-    SPOTIFY_AVAILABLE = True
-except ImportError:
-    SPOTIFY_AVAILABLE = False
-    logging.warning("Spotify 模組未安裝，將使用模擬音樂資料")
-
-
-class SpotifySignals(QObject):
-    """Spotify 訊號橋接器 (用於跨執行緒更新 UI)"""
-    track_changed = pyqtSignal(dict)
-    album_art_loaded = pyqtSignal(object)
-    progress_updated = pyqtSignal(dict)
 
 
 class VehicleSignals(QObject):
-    """車輛資料訊號橋接器 (用於一致的 Signal/Slot 架構)"""
+    """Dashboard 所需的數據訊號"""
+
     update_rpm = pyqtSignal(float)
     update_speed = pyqtSignal(float)
     update_temp = pyqtSignal(float)
     update_fuel = pyqtSignal(float)
     update_gear = pyqtSignal(str)
-    update_turbo = pyqtSignal(float)  # 渦輪增壓 (bar)
-    update_battery = pyqtSignal(float)  # 電瓶電壓 (V)
+    update_turbo = pyqtSignal(float)
+    update_battery = pyqtSignal(float)
 
 
 class VehicleSimulator:
     """車輛狀態模擬器"""
-    
-    def __init__(self, test_shutdown_mode=False, shutdown_delay=5.0):
+
+    def __init__(self, test_shutdown_mode: bool = False, shutdown_delay: float = 5.0) -> None:
         self.speed = 0.0
         self.rpm = 0.8  # 千轉
         self.fuel = 65.0
         self.temp = 45.0  # 儀表百分比
         self.gear = "P"
-        self.actual_gear = 1  # 實際檔位 (1-5)
-        self.turbo = -0.7  # 渦輪增壓 (bar)，待速時為負壓
-        self.battery = 12.6  # 電瓶電壓 (V)
-        
+        self.actual_gear = 1
+        self.turbo = -0.7
+        self.battery = 12.6
+
         self.mode = "idle"
-        self.time = 0
-        self.target_speed = 0
-        
-        # 電壓歸零測試模式
+        self.time = 0.0
+        self.target_speed = 0.0
+
+        # 電壓歸零測試
         self.test_shutdown_mode = test_shutdown_mode
-        self.shutdown_delay = shutdown_delay  # 幾秒後觸發電壓歸零
+        self.shutdown_delay = shutdown_delay
         self.shutdown_triggered = False
         self.startup_time = time.time()
-        
-        # 音樂播放模擬
-        self.music_time = 0
-        self.song_duration = 182  # 3:02
+
+        # 音樂模擬（僅計時，方便和主程式一致）
+        self.music_time = 0.0
+        self.song_duration = 182
         self.playlist = [
             ("Drive My Car", "The Beatles", 182),
             ("Highway Star", "Deep Purple", 206),
@@ -85,12 +63,11 @@ class VehicleSimulator:
             ("Life is a Highway", "Tom Cochrane", 264),
         ]
         self.current_song_index = 0
-    
-    def update(self, dt=0.1):
-        """更新車輛狀態"""
+
+    def update(self, dt: float = 0.1, manual_override: bool = False) -> None:
         self.time += dt
-        
-        # === 電壓歸零測試模式 ===
+
+        # 測試模式：電壓歸零
         if self.test_shutdown_mode:
             elapsed = time.time() - self.startup_time
             if elapsed >= self.shutdown_delay and not self.shutdown_triggered:
@@ -98,129 +75,90 @@ class VehicleSimulator:
                 print(f"   電壓: {self.battery:.1f}V → 0.0V")
                 self.battery = 0.0
                 self.shutdown_triggered = True
-                return  # 提前返回，不再更新其他狀態
-        
-        # 模式切換
+                return
+
+        # 控制數據模式：僅做合理化處理
+        if manual_override:
+            self.speed = max(0.0, min(180.0, self.speed))
+            self.temp = max(40.0, min(120.0, self.temp + random.uniform(-0.1, 0.1)))
+            self.fuel = max(0.0, min(100.0, self.fuel))
+            self.battery = max(10.5, min(14.8, self.battery + random.uniform(-0.05, 0.05)))
+            self.rpm = max(0.6, min(7.0, 0.8 + (self.speed / 120.0) * 4.5))
+            self.turbo = max(-1.0, min(1.2, -0.6 + self.speed * 0.012 + random.uniform(-0.02, 0.02)))
+            self.music_time += dt
+            return
+
+        # 自動行駛場景
         if self.mode == "idle":
             if self.time > 5:
                 self.mode = "accelerating"
-                self.target_speed = random.uniform(60, 120)  # 最高巡航 120 km/h
+                self.target_speed = random.uniform(60, 120)
                 self.gear = "D"
                 self.time = 0
-                
-        elif self.mode == "accelerating":
-            if self.speed >= self.target_speed * 0.95:
-                self.mode = "cruising"
-                self.time = 0
-                
-        elif self.mode == "cruising":
-            if self.time > random.uniform(8, 15):
-                self.mode = "decelerating"
-                self.time = 0
-                
-        elif self.mode == "decelerating":
-            if self.speed < 5:
-                self.mode = "idle"
-                self.gear = "P"
-                self.time = 0
-        
-        # 更新速度
+        elif self.mode == "accelerating" and self.speed >= self.target_speed * 0.95:
+            self.mode = "cruising"
+            self.time = 0
+        elif self.mode == "cruising" and self.time > random.uniform(8, 15):
+            self.mode = "decelerating"
+            self.time = 0
+        elif self.mode == "decelerating" and self.speed < 5:
+            self.mode = "idle"
+            self.gear = "P"
+            self.time = 0
+
+        # 速度與轉速
         if self.mode == "idle":
-            self.speed = max(0, self.speed - 2 * dt)
-            self.rpm = 0.8  # 怠速
-            
+            self.speed = max(0.0, self.speed - 2 * dt)
+            self.rpm = 0.8
         elif self.mode == "accelerating":
             self.speed = min(self.target_speed, self.speed + 3 * dt)
             self.rpm = 0.8 + (self.speed / 100.0) * 4.5
-            
         elif self.mode == "cruising":
             self.speed += random.uniform(-0.5, 0.5) * dt
             self.rpm = 1.5 + (self.speed / 100.0) * 2.5
-            
         elif self.mode == "decelerating":
-            self.speed = max(0, self.speed - 4 * dt)
-            if self.speed < 5:
-                self.rpm = 0.8
-            else:
-                self.rpm = max(0.8, 1.0 + (self.speed / 100.0) * 3.0)
-        
-        # 限制範圍
-        self.speed = max(0, min(180, self.speed))
-        self.rpm = max(0, min(7, self.rpm))
-        
-        # 更新渦輪增壓 (跟轉速配合)
-        # 待速 (rpm < 1.0): -0.7 bar (進氣歧管負壓)
-        # 輕踩油門 (1.0-2.5): -0.5 ~ -0.2 bar (負壓減少)
-        # 渦輪介入 (2.5-4.0): 0 ~ 0.4 bar (開始增壓)
-        # 全油門 (4.0+): 0.4 ~ 0.8 bar (最大增壓)
-        if self.rpm < 1.0:
-            target_turbo = -0.7
-        elif self.rpm < 2.5:
-            # 從 -0.7 線性過渡到 -0.2
-            target_turbo = -0.7 + (self.rpm - 1.0) / 1.5 * 0.5
-        elif self.rpm < 4.0:
-            # 從 -0.2 過渡到 0.4 (渦輪介入)
-            target_turbo = -0.2 + (self.rpm - 2.5) / 1.5 * 0.6
+            self.speed = max(0.0, self.speed - 3 * dt)
+            self.rpm = 1.2 + (self.speed / 100.0) * 2.0
+
+        # 渦輪
+        if self.rpm < 2.5:
+            target_turbo = -0.6 if self.mode in ("idle", "decelerating") and self.speed < 5 else -0.2 + (self.rpm - 2.5) / 1.5 * 0.6
         else:
-            # 全油門增壓
             target_turbo = 0.4 + (self.rpm - 4.0) / 3.0 * 0.4
-        
-        # 渦輪有延遲，平滑過渡
-        turbo_response = 0.15  # 渦輪響應速度
-        self.turbo = self.turbo + (target_turbo - self.turbo) * turbo_response
-        
-        # 加一點小波動（模擬渦輪脆動）
+
+        self.turbo = self.turbo + (target_turbo - self.turbo) * 0.15
         if self.rpm > 2.0:
             self.turbo += random.uniform(-0.02, 0.02)
-        
-        # 限制範圍
         self.turbo = max(-1.0, min(1.0, self.turbo))
-        
-        # 更新電瓶電壓
-        # 怠速時電壓較低 (~12.4V)，行駛時發電機充電較高 (~13.8-14.2V)
+
+        # 電瓶
         if self.rpm < 1.0:
-            target_voltage = 12.4  # 怠速
+            target_voltage = 12.4
         elif self.rpm < 2.0:
-            target_voltage = 13.2  # 低轉速
+            target_voltage = 13.2
         else:
-            target_voltage = 13.8 + (self.rpm - 2.0) / 5.0 * 0.4  # 高轉速，最高約 14.2V
-        
-        # 平滑過渡
+            target_voltage = 13.8 + (self.rpm - 2.0) / 5.0 * 0.4
         self.battery = self.battery + (target_voltage - self.battery) * 0.1
-        # 加一點小波動
         self.battery += random.uniform(-0.05, 0.05)
-        # 限制範圍
         self.battery = max(11.0, min(14.5, self.battery))
-        
-        # 更新油量（緩慢減少）
+
+        # 油量
         if self.speed > 0:
-            self.fuel = max(5, self.fuel - 0.005 * dt)
-        
-        # 更新水溫
-        if self.rpm > 1.5:
-            target_temp = 50  # 正常工作溫度
-        else:
-            target_temp = 45
-        
+            self.fuel = max(5.0, self.fuel - 0.005 * dt)
+
+        # 水溫
+        target_temp = 50.0 if self.rpm > 1.5 else 45.0
         if self.temp < target_temp:
             self.temp += 0.5 * dt
         elif self.temp > target_temp:
             self.temp -= 0.3 * dt
-        
-        # 添加小波動
         self.temp += random.uniform(-0.1, 0.1)
-        self.temp = max(20, min(95, self.temp))
-        
-        # 檔位邏輯 - 根據速度模擬自排換檔
+        self.temp = max(20.0, min(95.0, self.temp))
+
+        # 檔位
         if self.mode == "idle" and self.speed < 1:
             self.gear = "P"
-        elif self.speed > 0 or self.mode in ["accelerating", "cruising", "decelerating"]:
-            # 根據速度決定檔位 (模擬 5 速自排)
-            # 1檔: 0-20 km/h
-            # 2檔: 20-40 km/h
-            # 3檔: 40-60 km/h
-            # 4檔: 60-80 km/h
-            # 5檔: 80+ km/h
+        else:
             if self.speed < 20:
                 self.actual_gear = 1
             elif self.speed < 40:
@@ -231,259 +169,163 @@ class VehicleSimulator:
                 self.actual_gear = 4
             else:
                 self.actual_gear = 5
-            
-            # 發送具體檔位數字 (與 datagrab.py 一致)
             self.gear = str(self.actual_gear)
-        
+
         # 音樂播放進度
         self.music_time += dt
         if self.music_time >= self.song_duration:
-            # 切換到下一首
             self.current_song_index = (self.current_song_index + 1) % len(self.playlist)
-            song_title, artist, duration = self.playlist[self.current_song_index]
+            _, _, duration = self.playlist[self.current_song_index]
             self.song_duration = duration
-            self.music_time = 0
+            self.music_time = 0.0
 
 
-def main():
-    """主程式"""
-    # 解析命令列參數
-    parser = argparse.ArgumentParser(description='Luxgen M7 儀表板演示模式')
-    parser.add_argument('--spotify', action='store_true', 
-                        help='啟用 Spotify Connect 整合（需要先設定 spotify_config.json）')
-    parser.add_argument('--perf', action='store_true',
-                        help='啟用效能監控模式（偵測卡頓並輸出診斷資訊）')
-    parser.add_argument('--test-shutdown', type=float, nargs='?', const=5.0, default=None,
-                        metavar='DELAY',
-                        help='電壓歸零關機測試模式，指定幾秒後觸發 (預設 5 秒)')
+class ControlEventFilter(QObject):
+    """鍵盤控制數據模式"""
+
+    def __init__(self, simulator: VehicleSimulator) -> None:
+        super().__init__()
+        self.simulator = simulator
+
+    def eventFilter(self, obj, event):  # noqa: N802 (Qt API naming)
+        if event.type() != QEvent.Type.KeyPress:
+            return False
+
+        key = event.key()
+        handled = True
+
+        if key == Qt.Key.Key_W:
+            self.simulator.speed += 5
+        elif key == Qt.Key.Key_S:
+            self.simulator.speed -= 5
+        elif key == Qt.Key.Key_Q:
+            self.simulator.temp += 2
+        elif key == Qt.Key.Key_E:
+            self.simulator.temp -= 2
+        elif key == Qt.Key.Key_A:
+            self.simulator.fuel -= 1
+        elif key == Qt.Key.Key_D:
+            self.simulator.fuel += 1
+        elif key == Qt.Key.Key_Z:
+            self.simulator.battery -= 0.1
+        elif key == Qt.Key.Key_X:
+            self.simulator.battery += 0.1
+        elif key in (Qt.Key.Key_P, Qt.Key.Key_0):
+            self.simulator.gear = "P"
+        elif key in (Qt.Key.Key_1, Qt.Key.Key_2, Qt.Key.Key_3, Qt.Key.Key_4, Qt.Key.Key_5, Qt.Key.Key_6):
+            self.simulator.gear = str(int(event.text()))
+        else:
+            handled = False
+
+        return handled
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Luxgen M7 儀表板演示模式")
+    parser.add_argument("--perf", action="store_true", help="啟用效能監控 (等同 PERF_MONITOR=1)")
+    parser.add_argument("--test-shutdown", type=float, nargs="?", const=5.0, default=None, metavar="DELAY", help="電壓歸零測試：幾秒後觸發 (預設 5 秒)")
+    parser.add_argument("--control-data", action="store_true", help="控制數據模式：鍵盤直接調整數值，停用自動模擬")
+    parser.add_argument("--spotify", action="store_true", help="啟用 Spotify Connect 整合（如未安裝模組則忽略）")
     args = parser.parse_args()
-    
-    # 如果指定了 --perf，設定環境變數
+
     if args.perf:
-        os.environ['PERF_MONITOR'] = '1'
+        os.environ["PERF_MONITOR"] = "1"
         print("🔍 效能監控模式已啟用")
-        print("   卡頓 (>50ms) 會顯示警告訊息")
-        print()
-    
-    # 電壓歸零測試模式
+
     test_shutdown_mode = args.test_shutdown is not None
     shutdown_delay = args.test_shutdown if test_shutdown_mode else 5.0
-    
-    if test_shutdown_mode:
-        print("⚡ 電壓歸零測試模式已啟用")
-        print(f"   {shutdown_delay} 秒後將模擬電壓歸零")
-        print("   系統將顯示關機倒數對話框")
-        print("   （非 RPi 環境會退出程式而非關機）")
-        print()
-    
-    # 設定日誌
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    # 降低第三方套件的日誌級別
-    logging.getLogger('urllib3').setLevel(logging.ERROR)
-    logging.getLogger('requests').setLevel(logging.ERROR)
-    logging.getLogger('spotify_listener').setLevel(logging.INFO)
-    
+
+    control_data_mode = args.control_data
+
+    if args.spotify:
+        try:
+            import spotify_auth  # noqa: F401
+            import spotify_listener  # noqa: F401
+            print("🎧 Spotify 旗標已啟用（此簡化 demo 僅接受旗標，不會連線）")
+        except Exception:
+            print("⚠️  Spotify 模組未安裝，略過 Spotify 整合")
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
     print("=" * 50)
     print("演示模式 - Luxgen M7 數位儀表板")
     print("無需 CAN Bus 硬體")
     print("=" * 50)
     print()
-    print("功能:")
-    print("  - 自動模擬車輛行駛狀態")
-    print("  - 怠速 → 加速 → 巡航 → 減速 循環")
-    
-    if test_shutdown_mode:
-        print(f"  - ⚡ 電壓歸零測試 ({shutdown_delay} 秒後觸發)")
-    
-    # Spotify 整合狀態
-    spotify_enabled = False
-    spotify_listener = None
-    
-    if args.spotify:
-        if not SPOTIFY_AVAILABLE:
-            print("\n⚠️  Spotify 模組未安裝")
-            print("   請執行: pip install spotipy requests Pillow")
-        else:
-            print("  - 🎵 Spotify Connect 整合 (即時播放資訊)")
-            try:
-                auth = SpotifyAuthManager()
-                
-                if not auth.is_authenticated():
-                    print("\n需要授權 Spotify...")
-                    print("選擇授權方式：")
-                    print("  [1] 瀏覽器授權（自動開啟瀏覽器）")
-                    print("  [2] QR Code 授權（使用手機掃描）")
-                    
-                    use_qr = input("請選擇 (預設 2): ").strip() or "2"
-                    
-                    if use_qr == "2":
-                        from spotify_qr_auth import show_qr_auth_dialog
-                        print("\n開啟 QR Code 授權視窗...")
-                        try:
-                            if not show_qr_auth_dialog(auth):
-                                print("\n❌ QR 授權失敗或已取消")
-                                auth = None
-                        except Exception as qr_error:
-                            print(f"\n❌ QR 授權過程錯誤: {qr_error}")
-                            auth = None
-                    else:
-                        if not auth.authenticate():
-                            print("\n❌ 瀏覽器授權失敗")
-                            auth = None
-                
-                if auth and auth.is_authenticated() and auth.get_client():
-                    spotify_listener = SpotifyListener(auth, update_interval=1.0)
-                    spotify_enabled = True
-                    print("\n✅ Spotify 認證成功")
-                else:
-                    print("\n將使用模擬音樂資料")
-                    auth = None
-                    
-            except Exception as e:
-                print(f"\n⚠️  Spotify 初始化失敗: {e}")
-                print("   將使用模擬音樂資料")
+    if control_data_mode:
+        print("控制數據模式：")
+        print("  W/S 調整速度  +5/-5")
+        print("  Q/E 調整水溫  +2/-2")
+        print("  A/D 調整油量  -1/+1")
+        print("  Z/X 調整電壓  -0.1/+0.1")
+        print("  1-6 選擇檔位，0 或 P 進入 P 檔")
+        print()
     else:
-        print("  - 模擬音樂播放器")
-        print("\n💡 提示: 使用 --spotify 參數啟用 Spotify Connect")
-    
-    print()
-    print("控制方式:")
-    print("  鍵盤:")
-    print("    W/S: 加速/減速")
-    print("    Q/E: 降低/升高水溫")
-    print("    A/D: 減少/增加油量")
-    print("    1-6: 切換檔位 (P/R/N/D/S/L)")
-    print("    ↑/↓: 切換列（第一列 ⇄ 第二列）")
-    print("    ←/→: 切換當前列的卡片")
-    print()
-    print("  觸控/滑鼠:")
-    print("    在右側區域上下滑動: 切換列")
-    print("    在右側區域左右滑動: 切換當前列的卡片")
-    print("    滾動滑輪: 切換卡片 (Shift+滾輪切換列)")
-    print()
-    print("按 Ctrl+C 或關閉視窗退出")
-    print("=" * 50)
-    
-    # 建立模擬器和信號
-    simulator = VehicleSimulator(
-        test_shutdown_mode=test_shutdown_mode,
-        shutdown_delay=shutdown_delay
-    )
-    vehicle_signals = VehicleSignals()
-    
-    def setup_demo_data_source(dashboard):
-        """設定 Demo 模式的資料來源 - 在 dashboard 準備好後呼叫"""
-        
-        # 連接車輛資料 Signals 到 Dashboard Slots
-        vehicle_signals.update_rpm.connect(dashboard.set_rpm)
-        vehicle_signals.update_speed.connect(dashboard.set_speed)
-        vehicle_signals.update_temp.connect(dashboard.set_temperature)
-        vehicle_signals.update_fuel.connect(dashboard.set_fuel)
-        vehicle_signals.update_gear.connect(dashboard.set_gear)
-        vehicle_signals.update_turbo.connect(dashboard.set_turbo)
-        # 使用 set_battery 方法，它會自動通知關機監控器
-        vehicle_signals.update_battery.connect(dashboard.set_battery)
-        
-        # 設定 Spotify 回調（如果啟用）
-        # 注意：demo_mode 有自己的 spotify_listener，所以要禁用 dashboard 內建的
-        if spotify_enabled and spotify_listener:
-            # 禁用 dashboard 內建的 Spotify 初始化，避免重複
-            dashboard._skip_spotify_init = True
-            dashboard.music_card.show_player_ui()
-            
-            spotify_signals = SpotifySignals()
-            
-            def update_track_info(track_info):
-                dashboard.music_card.set_song(
-                    track_info['name'], 
-                    track_info['artists'],
-                    track_info.get('album', '')
-                )
-                    
-            def update_album_art(album_art):
-                dashboard.music_card.set_album_art_from_pil(album_art)
-                
-            def update_progress(progress_data):
-                progress_ms = progress_data['progress_ms']
-                duration_ms = progress_data['duration_ms']
-                is_playing = progress_data.get('is_playing', True)
-                dashboard.music_card.set_progress(progress_ms / 1000, duration_ms / 1000, is_playing)
-            
-            spotify_signals.track_changed.connect(update_track_info)
-            spotify_signals.album_art_loaded.connect(update_album_art)
-            spotify_signals.progress_updated.connect(update_progress)
-            
-            def on_track_change(track_info):
-                logging.info(f"新歌曲: {track_info['name']} - {track_info['artists']}")
-                spotify_signals.track_changed.emit(track_info)
-            
-            def on_album_art_loaded(album_art):
-                logging.info("專輯封面已載入")
-                spotify_signals.album_art_loaded.emit(album_art)
-            
-            def on_progress_update(progress_data):
-                spotify_signals.progress_updated.emit(progress_data)
-            
-            spotify_listener.set_callback('on_track_change', on_track_change)
-            spotify_listener.set_callback('on_album_art_loaded', on_album_art_loaded)
-            spotify_listener.set_callback('on_progress_update', on_progress_update)
-            spotify_listener.start()
-            
-            logging.info("Spotify 監聯器已啟動（Demo 模式專用）")
-        else:
-            # 沒有 Spotify，讓 dashboard 自己處理
-            pass
-        
-        # 建立定時器更新數據
-        last_song_index = [None]  # 用 list 來允許閉包內修改
-        
-        def update_data():
-            simulator.update(0.1)
-            
-            # 使用 Signal 發送資料更新
-            vehicle_signals.update_speed.emit(simulator.speed)
-            vehicle_signals.update_rpm.emit(simulator.rpm)
-            vehicle_signals.update_fuel.emit(simulator.fuel)
-            vehicle_signals.update_temp.emit(simulator.temp)
-            vehicle_signals.update_gear.emit(simulator.gear)
-            vehicle_signals.update_turbo.emit(simulator.turbo)
-            vehicle_signals.update_battery.emit(simulator.battery)
-            
-            # 如果沒有啟用 Spotify，使用模擬音樂
-            if not spotify_enabled:
-                song_title, artist, _ = simulator.playlist[simulator.current_song_index]
-                if last_song_index[0] != simulator.current_song_index:
-                    dashboard.music_card.set_song(song_title, artist, "")
-                    last_song_index[0] = simulator.current_song_index
-                dashboard.music_card.set_progress(simulator.music_time, simulator.song_duration, True)
-        
+        print("自動場景：怠速 → 加速 → 巡航 → 減速 循環")
+        print()
+
+    signals = VehicleSignals()
+    simulator = VehicleSimulator(test_shutdown_mode=test_shutdown_mode, shutdown_delay=shutdown_delay)
+
+    def setup_demo_data(dashboard):
         timer = QTimer()
-        timer.timeout.connect(update_data)
+        last_time = time.time()
+
+        event_filter = ControlEventFilter(simulator) if control_data_mode else None
+
+        try:
+            from PyQt6.QtWidgets import QApplication
+
+            qt_app = QApplication.instance()
+        except Exception:
+            qt_app = None
+
+        if control_data_mode and qt_app and event_filter:
+            qt_app.installEventFilter(event_filter)
+
+        def tick():
+            nonlocal last_time
+            now = time.time()
+            dt = now - last_time
+            last_time = now
+            simulator.update(dt=dt, manual_override=control_data_mode)
+
+            signals.update_rpm.emit(simulator.rpm)
+            signals.update_speed.emit(simulator.speed)
+            signals.update_temp.emit(simulator.temp)
+            signals.update_fuel.emit(simulator.fuel)
+            signals.update_gear.emit(simulator.gear)
+            signals.update_turbo.emit(simulator.turbo)
+            signals.update_battery.emit(simulator.battery)
+
+        timer.timeout.connect(tick)
         timer.start(100)
-        
-        # 返回清理函數
+
+        # 連接 Dashboard 接收端
+        signals.update_rpm.connect(dashboard.set_rpm)
+        signals.update_speed.connect(dashboard.set_speed)
+        signals.update_temp.connect(dashboard.set_temperature)
+        signals.update_fuel.connect(dashboard.set_fuel)
+        signals.update_gear.connect(dashboard.set_gear)
+        signals.update_turbo.connect(dashboard.set_turbo)
+        signals.update_battery.connect(dashboard.set_battery)
+
         def cleanup():
-            print("\n正在清理資源...")
             timer.stop()
-            if spotify_listener:
-                spotify_listener.stop()
-        
+            if control_data_mode and qt_app and event_filter:
+                qt_app.removeEventFilter(event_filter)
+
         return cleanup
-    
-    # 使用 main.py 的統一啟動流程
+
     window_title = "Luxgen M7 儀表板 - 演示模式"
-    if spotify_enabled:
-        window_title += " [Spotify Connected]"
-    
+    if control_data_mode:
+        window_title += " (控制數據)"
+
     run_dashboard(
         window_title=window_title,
-        setup_data_source=setup_demo_data_source
+        setup_data_source=setup_demo_data,
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

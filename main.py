@@ -9177,9 +9177,6 @@ class Dashboard(QWidget):
         
         # 清除四宮格焦點
         self.quad_gauge_card.clear_focus()
-        # 解除該儀表的危險觸發鎖，允許再次自動進入詳情
-        if prev_index is not None and prev_index >= 0:
-            self.quad_gauge_card.reset_danger_latch(prev_index)
         
         # 切換回四宮格
         self.left_card_stack.setCurrentWidget(self.quad_gauge_card)

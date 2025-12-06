@@ -226,5 +226,6 @@ else
     echo ""
     
     # 使用 demo_mode.py 並自動輸入 Spotify 授權選項
-    echo "$SPOTIFY_AUTH_MODE" | $PYTHON_CMD demo_mode.py --spotify
+    # 傳遞使用者額外參數（例如 --control-data）
+    echo "$SPOTIFY_AUTH_MODE" | $PYTHON_CMD demo_mode.py --spotify "$@"
 fi
