@@ -18,6 +18,8 @@ import subprocess
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QWidget, QApplication
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
+import threading
+from location_notifier import notify_current_location
 
 
 def is_raspberry_pi():
@@ -356,6 +358,11 @@ class ShutdownMonitor(QObject):
             if self.low_voltage_count >= self.debounce_count and not self.power_lost_triggered:
                 self.power_lost_triggered = True
                 print(f"🔴 電源中斷偵測: {self.last_voltage:.1f}V → {voltage:.1f}V")
+                
+                # 啟動位置通知 (背景執行)
+                print("[ShutdownMonitor] 觸發位置通知...")
+                threading.Thread(target=notify_current_location, daemon=True).start()
+                
                 self.power_lost.emit()
         
         self.last_voltage = voltage

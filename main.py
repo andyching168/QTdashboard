@@ -7398,7 +7398,20 @@ class Dashboard(QWidget):
         )
         fuel_labels = {0: "E", 50: "½", 100: "F"}
         self.fuel_gauge = AnalogGauge(0, 100, fuel_style, labels=fuel_labels, title="FUEL")
-        self.fuel_gauge.setFixedSize(380, 380)
+        self.fuel_gauge.setFixedSize(340, 340)
+
+        # 油量卡片容器，附加百分比文字
+        self.fuel_card = QWidget()
+        fuel_layout = QVBoxLayout(self.fuel_card)
+        fuel_layout.setContentsMargins(0, 0, 0, 0)
+        fuel_layout.setSpacing(6)
+        fuel_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.fuel_percent_label = QLabel("--%")
+        self.fuel_percent_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.fuel_percent_label.setStyleSheet("color: #6af; font-size: 28px; font-weight: bold; background: transparent;")
+        fuel_layout.addWidget(self.fuel_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
+        fuel_layout.addWidget(self.fuel_percent_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        self.fuel_card.setFixedSize(380, 380)
         
         # 詳細視圖狀態
         self._in_detail_view = False
@@ -7413,7 +7426,7 @@ class Dashboard(QWidget):
         
         self.left_card_stack.addWidget(self.quad_gauge_card)    # index 0
         self.left_card_stack.addWidget(self.quad_gauge_detail)  # index 1 (詳細視圖)
-        self.left_card_stack.addWidget(self.fuel_gauge)         # index 2
+        self.left_card_stack.addWidget(self.fuel_card)          # index 2
         
         # 左側卡片指示器
         left_indicator_widget = QWidget()
@@ -9764,6 +9777,8 @@ class Dashboard(QWidget):
                 self.quad_gauge_detail.update_value(temp_celsius)
         
         self.fuel_gauge.set_value(self.fuel)
+        if hasattr(self, "fuel_percent_label"):
+            self.fuel_percent_label.setText(f"{self.fuel:.0f}%")
         self.speed_label.setText(str(int(self.speed)))
         
         # 更新檔位顯示顏色
