@@ -204,11 +204,13 @@ def find_gps_and_get_location(timeout=10):
     print("[-] Timeout and no coordinates found.")
     return None
 
-def notify_current_location():
+def notify_current_location(fuel_level=None):
     """
     Main entry point to be called by shutdown monitor.
+    Args:
+        fuel_level: float or None, current fuel percentage.
     """
-    print("[Notifier] Starting location notification sequence...")
+    print(f"[Notifier] Starting location notification sequence... (Fuel: {fuel_level})")
     
     config = load_config()
     if not config:
@@ -231,8 +233,9 @@ def notify_current_location():
         maps_url = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lon}"
         
         note = " (約略位置)" if is_approx else ""
+        fuel_str = f"⛽ 油量: {fuel_level:.0f}%\n" if fuel_level is not None else ""
         
-        message = f"🚗 車輛已熄火\n📍 位置: {lat:.6f}, {lon:.6f}{note}\n🔗 {maps_url}"
+        message = f"🚗 車輛已熄火\n{fuel_str}📍 位置: {lat:.6f}, {lon:.6f}{note}\n🔗 {maps_url}"
         send_telegram_message(token, chat_id, message)
     else:
         print("[GPS] 未找到 GPS 位置")

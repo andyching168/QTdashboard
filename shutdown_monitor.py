@@ -331,6 +331,13 @@ class ShutdownMonitor(QObject):
         
         # 關機對話框
         self.shutdown_dialog = None
+        
+        # 車輛狀態
+        self.current_fuel_level = None
+
+    def update_fuel_level(self, level: float):
+        """更新油量"""
+        self.current_fuel_level = level
     
     def update_voltage(self, voltage: float):
         """更新電壓值
@@ -361,7 +368,7 @@ class ShutdownMonitor(QObject):
                 
                 # 啟動位置通知 (背景執行)
                 print("[ShutdownMonitor] 觸發位置通知...")
-                threading.Thread(target=notify_current_location, daemon=True).start()
+                threading.Thread(target=notify_current_location, args=(self.current_fuel_level,), daemon=True).start()
                 
                 self.power_lost.emit()
         

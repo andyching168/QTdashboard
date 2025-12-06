@@ -8469,13 +8469,14 @@ class Dashboard(QWidget):
         # temp 是百分比 (0-100)，轉換為 40-120°C
         temp_celsius = 40 + (self.temp / 100) * 80
         get_max_value_logger().update_coolant(temp_celsius)
-        
         self.update_display()
     
     @pyqtSlot(float)
     def _slot_set_fuel(self, fuel):
         """Slot: 在主執行緒中更新油量顯示"""
         self.fuel = max(0, min(100, fuel))
+        # Update ShutdownMonitor
+        get_shutdown_monitor().update_fuel_level(self.fuel)
         self.update_display()
     
     @pyqtSlot(str)
