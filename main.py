@@ -41,7 +41,7 @@ os.environ.setdefault('QSG_RENDER_LOOP', 'basic')  # 使用基本渲染迴圈，
 os.environ.setdefault('QT_QPA_EGLFS_FORCE_VSYNC', '1')  # EGLFS 強制 VSync
 os.environ.setdefault('MESA_GL_VERSION_OVERRIDE', '3.3')  # Mesa OpenGL 版本
 
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton, QDialog, QGraphicsView, QGraphicsScene, QGraphicsProxyWidget, QMainWindow
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton, QDialog, QGraphicsView, QGraphicsScene, QGraphicsProxyWidget, QMainWindow, QSizePolicy
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot, QUrl, QObject
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QPixmap, QMouseEvent, QTransform
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -1026,32 +1026,25 @@ class QuadGaugeCard(QWidget):
         # 儲存各個儀表格子的 widget
         self.gauge_cells = []
         self.value_labels = []
+        self._flash_timers = [None] * 4  # 閃爍警示定時器
+        self._flash_state = [False] * 4  # 閃爍狀態
+        self._danger_latched = [False] * 4  # 危險值已觸發詳情的鎖
         
         self._init_ui()
     
     def _init_ui(self):
         """初始化 UI"""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(10)
-        
-        # 標題
-        title_label = QLabel("Engine Monitor")
-        title_label.setStyleSheet("""
-            color: #6af;
-            font-size: 16px;
-            font-weight: bold;
-            background: transparent;
-        """)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(title_label)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(8)
         
         # 四宮格容器
         grid_container = QWidget()
         grid_container.setStyleSheet("background: transparent;")
+        grid_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         grid_layout = QGridLayout(grid_container)
-        grid_layout.setContentsMargins(5, 5, 5, 5)
-        grid_layout.setSpacing(10)
+        grid_layout.setContentsMargins(0, 0, 0, 0)
+        grid_layout.setSpacing(8)
         
         # 創建四個儀表格子
         positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
@@ -1059,25 +1052,17 @@ class QuadGaugeCard(QWidget):
             cell = self._create_gauge_cell(i)
             self.gauge_cells.append(cell)
             grid_layout.addWidget(cell, row, col)
+            grid_layout.setRowStretch(row, 1)
+            grid_layout.setColumnStretch(col, 1)
         
         main_layout.addWidget(grid_container, 1)
-        
-        # 提示文字
-        hint_label = QLabel("點擊進入詳細視圖")
-        hint_label.setStyleSheet("""
-            color: #555;
-            font-size: 11px;
-            background: transparent;
-        """)
-        hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(hint_label)
     
     def _create_gauge_cell(self, index):
         """創建單個儀表格子"""
         data = self.gauge_data[index]
         
         cell = QWidget()
-        cell.setFixedSize(165, 145)
+        cell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         cell.setStyleSheet("""
             QWidget {
                 background: rgba(30, 30, 40, 0.5);
@@ -1087,43 +1072,39 @@ class QuadGaugeCard(QWidget):
         """)
         
         layout = QVBoxLayout(cell)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(3)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(5)
         
-        # 標題
-        title = QLabel(data["title"])
+        # 標題含單位（緊貼文字高度）
+        title = QLabel(f"{data['title']} ({data['unit']})")
         title.setStyleSheet("""
             color: #888;
             font-size: 12px;
             font-weight: bold;
             background: transparent;
             letter-spacing: 1px;
+            margin: 0px;
+            padding: 0px;
         """)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        title.setMargin(0)
+        title.setFixedHeight(title.sizeHint().height())
         
         # 數值
         value_label = QLabel(self._format_value(data["value"], data["decimals"]))
         value_label.setStyleSheet("""
             color: #6af;
-            font-size: 36px;
+            font-size: 54px;
             font-weight: bold;
             background: transparent;
         """)
         value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.value_labels.append(value_label)
         
-        # 單位
-        unit = QLabel(data["unit"])
-        unit.setStyleSheet("""
-            color: #666;
-            font-size: 11px;
-            background: transparent;
-        """)
-        unit.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
         # 進度條
         progress = QProgressBar()
-        progress.setFixedHeight(6)
+        progress.setFixedHeight(8)
         progress.setTextVisible(False)
         progress.setMinimum(0)
         progress.setMaximum(100)
@@ -1146,7 +1127,6 @@ class QuadGaugeCard(QWidget):
         
         layout.addWidget(title)
         layout.addWidget(value_label)
-        layout.addWidget(unit)
         layout.addWidget(progress)
         
         return cell
@@ -1201,6 +1181,55 @@ class QuadGaugeCard(QWidget):
             elif warning is not None and value >= warning:
                 return "#fa0"
         return "#6af"
+
+    def _set_label_style(self, index, color):
+        """套用數值字型樣式（統一字號/背景）"""
+        self.value_labels[index].setStyleSheet(f"""
+            color: {color};
+            font-size: 54px;
+            font-weight: bold;
+            background: transparent;
+        """)
+
+    def _update_flash(self, index, is_danger, danger_color):
+        """危險值時讓數字閃爍提醒"""
+        timer = self._flash_timers[index]
+
+        if not is_danger:
+            if timer:
+                timer.stop()
+                self._flash_timers[index] = None
+                self._flash_state[index] = False
+            self._set_label_style(index, danger_color)  # 恢復當前色
+            return
+
+        # 已在閃爍則不重建，僅確保當前色正確
+        if timer:
+            return
+
+        self._set_label_style(index, danger_color)
+
+        blink_timer = QTimer(self)
+        blink_timer.setInterval(400)
+
+        def toggle(idx=index, on_color=danger_color):
+            self._flash_state[idx] = not self._flash_state[idx]
+            if self._flash_state[idx]:
+                self._set_label_style(idx, on_color)
+            else:
+                self._set_label_style(idx, "#fff")
+
+        blink_timer.timeout.connect(toggle)
+        blink_timer.start()
+        self._flash_timers[index] = blink_timer
+
+    def reset_danger_latch(self, index=None):
+        """清除危險值觸發鎖（離開詳情時可呼叫）"""
+        if index is None:
+            self._danger_latched = [False] * 4
+            return
+        if 0 <= index < 4:
+            self._danger_latched[index] = False
     
     def set_rpm(self, value):
         """設置轉速"""
@@ -1241,12 +1270,30 @@ class QuadGaugeCard(QWidget):
         
         # 更新顏色
         color = self._get_value_color(index)
-        self.value_labels[index].setStyleSheet(f"""
-            color: {color};
-            font-size: 36px;
-            font-weight: bold;
-            background: transparent;
-        """)
+        # 危險判斷
+        is_danger = False
+        if value is not None:
+            warning = data.get("warning")
+            danger = data.get("danger")
+            warning_below = data.get("warning_below", False)
+            if warning_below:
+                if danger is not None and value <= danger:
+                    is_danger = True
+            else:
+                if danger is not None and value >= danger:
+                    is_danger = True
+
+        # 自動進入詳情（僅水溫 index=1 與電瓶 index=3）
+        if is_danger and index in (1, 3) and not self._danger_latched[index]:
+            self._danger_latched[index] = True
+            self.detail_requested.emit(index)
+        elif not is_danger:
+            self._danger_latched[index] = False
+
+        # 數值閃爍提示
+        self._update_flash(index, is_danger, color)
+        if not is_danger:
+            self._set_label_style(index, color)
         
         # 更新進度條
         cell = self.gauge_cells[index]
@@ -5710,6 +5757,7 @@ class ControlPanel(QWidget):
         # WiFi 狀態
         self.wifi_ssid = None
         self.wifi_signal = 0
+        self.speed_sync_state = False  # 速度同步按鈕狀態（UI 開關）
         
         # 主佈局
         layout = QVBoxLayout(self)
@@ -5776,6 +5824,12 @@ class ControlPanel(QWidget):
             self.buttons.append(btn)
             self.button_widgets[title] = btn
             button_layout.addWidget(btn)
+
+        # 速度同步（預設關閉，反向控制 gps_speed_mode）
+        speed_sync_btn = self.create_speed_sync_button()
+        self.buttons.append(speed_sync_btn)
+        self.button_widgets["速度同步"] = speed_sync_btn
+        button_layout.addWidget(speed_sync_btn)
         
         content_layout.addLayout(button_layout)
         content_layout.addStretch()
@@ -6140,8 +6194,7 @@ class ControlPanel(QWidget):
             }}
         """)
         btn.setText(icon)
-        btn.clicked.connect(lambda: self.on_button_clicked(title))
-        
+        btn.clicked.connect(lambda checked=False, t=title: self.on_button_clicked(t, checked))
         # 標籤
         label = QLabel(title)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -6157,6 +6210,39 @@ class ControlPanel(QWidget):
         layout.addWidget(label)
         
         return container
+
+    def create_speed_sync_button(self):
+        """創建速度同步開關按鈕（反向控制 gps_speed_mode）"""
+        container = QWidget()
+        container.setFixedSize(150, 150)
+        container.setCursor(Qt.CursorShape.PointingHandCursor)
+        container.setStyleSheet("background: transparent;")
+
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        btn = QPushButton()
+        btn.setCheckable(True)
+        btn.setFixedSize(120, 120)
+        btn.clicked.connect(lambda checked=False: self.on_button_clicked("速度同步", checked))
+
+        label = QLabel("速度同步")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 16px;
+                background: transparent;
+            }
+        """)
+
+        layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label)
+
+        # 套用預設狀態樣式
+        self._apply_speed_sync_style(btn, self.speed_sync_state)
+        return container
     
     def adjust_color(self, hex_color, factor):
         """調整顏色亮度"""
@@ -6167,7 +6253,47 @@ class ControlPanel(QWidget):
         b = min(255, int(b * factor))
         return f'#{r:02x}{g:02x}{b:02x}'
     
-    def on_button_clicked(self, title):
+    def _get_button_by_title(self, title):
+        """取得指定標題的 QPushButton 物件"""
+        if title not in self.button_widgets:
+            return None
+        container = self.button_widgets[title]
+        for child in container.findChildren(QPushButton):
+            return child
+        return None
+
+    def _apply_speed_sync_style(self, btn: QPushButton, enabled: bool):
+        """套用速度同步按鈕的樣式與文字"""
+        color = "#4CAF50" if enabled else "#555555"
+        text = "開" if enabled else "關"
+        btn.setText(text)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {color};
+                border: none;
+                border-radius: 20px;
+                font-size: 36px;
+                color: white;
+            }}
+            QPushButton:hover {{
+                background-color: {self.adjust_color(color, 1.15)};
+            }}
+            QPushButton:pressed {{
+                background-color: {self.adjust_color(color, 0.85)};
+            }}
+        """)
+
+    def set_speed_sync_state(self, enabled: bool):
+        """更新速度同步按鈕狀態（UI）"""
+        self.speed_sync_state = enabled
+        btn = self._get_button_by_title("速度同步")
+        if btn:
+            btn.blockSignals(True)
+            btn.setChecked(enabled)
+            self._apply_speed_sync_style(btn, enabled)
+            btn.blockSignals(False)
+
+    def on_button_clicked(self, title, checked=False):
         """按鈕點擊處理"""
         print(f"控制面板按鈕被點擊: {title}")
         # 這裡可以添加具體功能
@@ -6189,6 +6315,13 @@ class ControlPanel(QWidget):
             parent = self.parent()
             if parent and hasattr(parent, 'show_mqtt_settings'):
                 parent.show_mqtt_settings()  # type: ignore
+        elif title == "速度同步":
+            # 反相控制 datagrab.gps_speed_mode
+            parent = self.parent()
+            if parent and hasattr(parent, 'set_speed_sync_enabled'):
+                parent.set_speed_sync_enabled(bool(checked))  # type: ignore
+            else:
+                self.set_speed_sync_state(bool(checked))
     
     def do_time_sync(self):
         """執行 NTP 時間校正"""
@@ -6945,12 +7078,16 @@ class Dashboard(QWidget):
         self.panel_visible = False
         self.panel_touch_start = None
         self.panel_drag_active = False
+
+        # 速度同步開關（UI 開關反向控制 gps_speed_mode）
+        self.speed_sync_enabled = False
         
         # 亮度控制相關
         self.brightness_level = 0  # 0=100%, 1=75%, 2=50%
         self.brightness_overlay = None
 
         self.init_ui()
+        self.set_speed_sync_enabled(self.speed_sync_enabled)
         self.init_data()
         
         # 初始化關機監控器
@@ -7964,6 +8101,27 @@ class Dashboard(QWidget):
             print(f"[Navigation] 已更新導航資訊: {data.get('direction', '')}")
         else:
             print("[Navigation] 錯誤：nav_card 不存在")
+
+    def set_speed_sync_enabled(self, enabled: bool):
+        """設定速度同步按鈕狀態，並反相更新 gps_speed_mode"""
+        self.speed_sync_enabled = enabled
+        if self.control_panel:
+            self.control_panel.set_speed_sync_state(enabled)
+
+        try:
+            import datagrab
+        except ImportError:
+            print("[速度同步] datagrab 模組不存在，僅更新 UI 狀態")
+            return
+        except Exception as e:
+            print(f"[速度同步] 載入 datagrab 失敗: {e}")
+            return
+
+        try:
+            datagrab.gps_speed_mode = not enabled
+            print(f"[速度同步] {'開啟' if enabled else '關閉'}，gps_speed_mode 設為 {datagrab.gps_speed_mode}")
+        except Exception as e:
+            print(f"[速度同步] 更新 gps_speed_mode 失敗: {e}")
 
     def show_control_panel(self):
         """顯示下拉控制面板"""
@@ -9013,11 +9171,15 @@ class Dashboard(QWidget):
     
     def _on_hide_detail_finished(self):
         """詳細視圖滑出動畫完成"""
+        prev_index = self._detail_gauge_index
         self._in_detail_view = False
         self._detail_gauge_index = -1
         
         # 清除四宮格焦點
         self.quad_gauge_card.clear_focus()
+        # 解除該儀表的危險觸發鎖，允許再次自動進入詳情
+        if prev_index is not None and prev_index >= 0:
+            self.quad_gauge_card.reset_danger_latch(prev_index)
         
         # 切換回四宮格
         self.left_card_stack.setCurrentWidget(self.quad_gauge_card)
