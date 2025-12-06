@@ -60,7 +60,7 @@ data_store = {
 stop_threads = False
 console = Console()
 send_lock = threading.Lock() # 保護寫入操作
-
+gps_speed_mode=True
 # --- 1. 硬體連接 ---
 
 def detect_socketcan_interfaces():
@@ -330,7 +330,11 @@ def unified_receiver(bus, db, signals):
     # 速度平滑參數 (OBD)
     current_speed_smoothed = 0.0
     speed_alpha = 0.3  # 速度平滑係數
-    speed_correction = 1.05  # 速度校正係數 (+10%)，模擬原廠快樂表
+    
+    if gps_speed_mode == False:
+        speed_correction = 1.05  # 速度校正係數 (+10%)，模擬原廠快樂表
+    else:
+        speed_correction=1.01
     last_obd_speed_int = None  # OBD 速度緩存
     
     # 油量平滑演算法參數
@@ -412,8 +416,12 @@ def unified_receiver(bus, db, signals):
                         data_store["OBD"]["speed"] = raw_speed
                         data_store["OBD"]["last_update"] = time.time()
                         
+                        
                         # 套用校正係數後更新 UI（模擬原廠快樂表）
-                        corrected_speed = current_speed_smoothed*speed_correction+0.8
+                        if gps_speed_mode == False:
+                            corrected_speed = current_speed_smoothed*speed_correction+0.8
+                        else:
+                            corrected_speed = current_speed_smoothed*speed_correction
                         speed_int = int(corrected_speed)
                         if last_obd_speed_int is None or abs(speed_int - last_obd_speed_int) >= 1:
                             signals.update_speed.emit(corrected_speed)
