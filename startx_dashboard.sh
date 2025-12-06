@@ -17,7 +17,25 @@
 # =============================================================================
 
 SCRIPT_DIR="/home/ac/QTdashboard"
+STARTUP_LOG="/tmp/dashboard_startup.log"
 cd "$SCRIPT_DIR"
+
+# === 記錄啟動時間 ===
+echo "" >> "$STARTUP_LOG"
+echo "=============================================" >> "$STARTUP_LOG"
+echo "$(date): startx_dashboard.sh 開始執行" >> "$STARTUP_LOG"
+echo "=============================================" >> "$STARTUP_LOG"
+
+# === 錯誤處理函數 ===
+log_error() {
+    echo "❌ 錯誤: $1"
+    echo "$(date): ERROR - $1" >> "$STARTUP_LOG"
+}
+
+log_info() {
+    echo "$1"
+    echo "$(date): $1" >> "$STARTUP_LOG"
+}
 
 # === 建立 session 標記，防止關閉後自動重啟 ===
 touch /tmp/.dashboard_session_started
@@ -49,27 +67,46 @@ export __GL_SYNC_TO_VBLANK=1            # 開啟 NVIDIA VSync
 export QT_X11_NO_MITSHM=0               # 啟用共享記憶體 (提升效能)
 export LIBGL_DRI3_DISABLE=1             # 某些情況下可改善旋轉螢幕效能
 
-# 進度更新函數
+# --- 1. 顯示設定 ---
+# 旋轉螢幕 (向右旋轉 90 度) - 嘗試多種 HDMI 輸出名稱
+log_info "設定螢幕旋轉..."
+if xrandr --output HDMI-1 --rotate right 2>/dev/null; then
+    log_info "✅ 螢幕旋轉成功 (HDMI-1)"
+elif xrandr --output HDMI-A-1 --rotate right 2>/dev/null; then
+    log_info "✅ 螢幕旋轉成功 (HDMI-A-1)"
+elif xrandr --output HDMI-2 --rotate right 2>/dev/null; then
+    log_info "✅ 螢幕旋轉成功 (HDMI-2)"
+else
+    log_error "螢幕旋轉失敗，嘗試列出可用輸出..."
+    xrandr --listmonitors >> "$STARTUP_LOG" 2>&1
+fi
+
+# --- 檢查 venv 環境 ---
+if [ ! -f "$SCRIPT_DIR/venv/bin/python" ]; then
+    log_error "venv 環境不存在: $SCRIPT_DIR/venv/bin/python"
+    log_info "嘗試使用系統 Python..."
+    PYTHON_CMD="python3"
+else
+    PYTHON_CMD="$SCRIPT_DIR/venv/bin/python"
+    source "$SCRIPT_DIR/venv/bin/activate"
+fi
+
+# 進度更新函數 (必須在 PYTHON_CMD 設定後定義)
 update_progress() {
     local message="$1"
     local detail="$2"
     local progress="$3"
-    "$SCRIPT_DIR/venv/bin/python" "$SCRIPT_DIR/startup_progress.py" --update "$message" "$detail" "$progress" 2>/dev/null || true
+    "$PYTHON_CMD" "$SCRIPT_DIR/startup_progress.py" --update "$message" "$detail" "$progress" 2>/dev/null || true
 }
 
 # 關閉進度視窗函數
 close_progress() {
-    "$SCRIPT_DIR/venv/bin/python" "$SCRIPT_DIR/startup_progress.py" --close 2>/dev/null || true
+    "$PYTHON_CMD" "$SCRIPT_DIR/startup_progress.py" --close 2>/dev/null || true
     sleep 0.3
 }
 
-# --- 1. 顯示設定 ---
-# 旋轉螢幕 (向右旋轉 90 度)
-xrandr --output HDMI-1 --rotate right
-
 # --- 啟動進度視窗 ---
-source "$SCRIPT_DIR/venv/bin/activate"
-"$SCRIPT_DIR/venv/bin/python" "$SCRIPT_DIR/startup_progress.py" --serve &
+"$PYTHON_CMD" "$SCRIPT_DIR/startup_progress.py" --serve &
 PROGRESS_PID=$!
 sleep 0.5  # 等待視窗啟動
 
@@ -97,13 +134,12 @@ systemctl --user start pipewire.socket pipewire-pulse.socket 2>/dev/null || true
 sleep 0.5
 update_progress "🔊 初始化音訊服務" "PipeWire" 50
 
-# --- 6. 啟動 Python 環境 ---
-PYTHON_CMD="$SCRIPT_DIR/venv/bin/python"
+# --- 6. Python 環境已在前面設定 ---
 update_progress "🐍 載入 Python 環境" "虛擬環境已啟用" 55
 
-echo "=============================================="
-echo "  Luxgen M7 儀表板 - 自動啟動"
-echo "=============================================="
+log_info "=============================================="
+log_info "  Luxgen M7 儀表板 - 自動啟動"
+log_info "=============================================="
 echo ""
 
 # --- 7. 偵測 CAN Bus 裝置 ---
@@ -187,23 +223,31 @@ echo ""
 close_progress
 
 # --- 10. 根據 CAN Bus 偵測結果決定啟動模式 ---
+log_info "準備啟動儀表板應用程式..."
+
 if [ -n "$CAN_INTERFACE" ]; then
-    echo "=============================================="
-    echo "🚗 偵測到 CAN Bus 裝置"
-    echo "   介面: $CAN_INTERFACE ($CAN_TYPE)"
-    echo "   啟動 CAN Bus 模式 (datagrab.py)"
-    echo "=============================================="
+    log_info "=============================================="
+    log_info "🚗 偵測到 CAN Bus 裝置"
+    log_info "   介面: $CAN_INTERFACE ($CAN_TYPE)"
+    log_info "   啟動 CAN Bus 模式 (datagrab.py)"
+    log_info "=============================================="
     echo ""
     
     # 使用 datagrab.py (CAN Bus 模式)
-    $PYTHON_CMD "$SCRIPT_DIR/datagrab.py"
+    $PYTHON_CMD "$SCRIPT_DIR/datagrab.py" 2>&1 | tee -a "$STARTUP_LOG"
+    PYTHON_EXIT=${PIPESTATUS[0]}
 else
-    echo "=============================================="
-    echo "🎮 未偵測到 CAN Bus 裝置"
-    echo "   啟動演示模式 (demo_mode.py --spotify)"
-    echo "=============================================="
+    log_info "=============================================="
+    log_info "🎮 未偵測到 CAN Bus 裝置"
+    log_info "   啟動演示模式 (demo_mode.py --spotify)"
+    log_info "=============================================="
     echo ""
     
     # 使用 demo_mode.py 並自動輸入 Spotify 授權選項
-    echo "$SPOTIFY_AUTH_MODE" | $PYTHON_CMD "$SCRIPT_DIR/demo_mode.py" --spotify
+    echo "$SPOTIFY_AUTH_MODE" | $PYTHON_CMD "$SCRIPT_DIR/demo_mode.py" --spotify 2>&1 | tee -a "$STARTUP_LOG"
+    PYTHON_EXIT=${PIPESTATUS[0]}
 fi
+
+# 記錄結束狀態
+log_info "儀表板程式結束，退出碼: $PYTHON_EXIT"
+echo "$(date): startx_dashboard.sh 結束 (exit: $PYTHON_EXIT)" >> "$STARTUP_LOG"

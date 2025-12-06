@@ -53,6 +53,9 @@ from startup_progress import StartupProgressWindow
 # 關機監控
 from shutdown_monitor import get_shutdown_monitor, ShutdownMonitor
 
+# 最大值記錄器
+from max_value_logger import get_max_value_logger
+
 # Spotify Imports
 from spotify_integration import setup_spotify
 from spotify_auth import SpotifyAuthManager
@@ -1009,13 +1012,13 @@ class QuadGaugeCard(QWidget):
         # 儀表數據 (value=None 表示未連線，顯示 "--")
         self.gauge_data = [
             {"title": "ENGINE", "unit": "RPM", "value": None, "min": 0, "max": 8000, 
-             "warning": 5500, "danger": 6500, "decimals": 0},
+             "warning": 5500, "danger": 6000, "decimals": 0},
             {"title": "COOLANT", "unit": "°C", "value": None, "min": 0, "max": 120, 
-             "warning": 95, "danger": 105, "decimals": 0},
+             "warning": 100, "danger": 110, "decimals": 0},
             {"title": "TURBO", "unit": "bar", "value": None, "min": -1.0, "max": 1.0, 
              "warning": 0.8, "danger": 0.95, "decimals": 2},
             {"title": "BATTERY", "unit": "V", "value": None, "min": 10, "max": 16, 
-             "warning": 11.5, "danger": 11.0, "decimals": 1, "warning_below": True},
+             "warning": 12.0, "danger": 11.0, "decimals": 1, "warning_below": True},
         ]
         
 
@@ -1284,7 +1287,9 @@ class QuadGaugeCard(QWidget):
                     is_danger = True
 
         # 自動進入詳情（僅水溫 index=1 與電瓶 index=3）
-        if is_danger and index in (1, 3) and not self._danger_latched[index]:
+        # 電壓 0V 視為未連線/熄火，不觸發緊急警示
+        skip_danger_popup = (index == 3 and value is not None and value <= 0.5)
+        if is_danger and index in (1, 3) and not self._danger_latched[index] and not skip_danger_popup:
             self._danger_latched[index] = True
             self.detail_requested.emit(index)
         elif not is_danger:
@@ -6973,31 +6978,63 @@ class ControlPanel(QWidget):
         QApplication.processEvents()
     
     def _restart_application(self, script_dir):
-        """重新啟動應用程式"""
+        """重新啟動應用程式
+        
+        重啟策略：
+        1. 如果是從 datagrab.py 或 demo_mode.py 啟動的，重啟原始入口腳本
+        2. 如果 DASHBOARD_ENTRY 環境變數有設定，使用它來判斷入口點
+        3. 否則直接重啟當前入口腳本
+        """
         import subprocess
         import sys
         import os
         
-        # 在 X11 環境中，直接重新啟動 Python 程式（不需要重啟整個 X Server）
-        # 這樣可以保持 X11 session 不中斷
         python_exe = sys.executable
-        main_script = os.path.join(script_dir, 'main.py')
+        env = os.environ.copy()
         
-        if os.path.exists(main_script):
-            print(f"[更新] 正在重新啟動 {main_script}...")
-            # 使用當前的 Python 解釋器重新啟動 main.py
-            # 繼承當前的環境變數（包括 DISPLAY 等 X11 設定）
-            env = os.environ.copy()
+        # 檢查入口點
+        # 方法 1: 檢查 sys.argv[0] (啟動腳本)
+        entry_script = os.path.basename(sys.argv[0]) if sys.argv else ''
+        
+        # 方法 2: 檢查環境變數 (由啟動腳本設定)
+        main_entry = os.environ.get('DASHBOARD_ENTRY', '')
+        
+        print(f"[重啟] 偵測入口點: argv[0]={entry_script}, DASHBOARD_ENTRY={main_entry}")
+        
+        restart_script = None
+        restart_args = []
+        
+        if 'datagrab' in entry_script or main_entry == 'datagrab':
+            restart_script = os.path.join(script_dir, 'datagrab.py')
+            print(f"[重啟] 使用 CAN Bus 模式: {restart_script}")
+        elif 'demo_mode' in entry_script or main_entry == 'demo':
+            restart_script = os.path.join(script_dir, 'demo_mode.py')
+            restart_args = ['--spotify']
+            print(f"[重啟] 使用演示模式: {restart_script}")
+        else:
+            # 無法判斷入口點，嘗試使用 sys.argv[0] 的完整路徑
+            if sys.argv and os.path.exists(sys.argv[0]):
+                restart_script = os.path.abspath(sys.argv[0])
+                print(f"[重啟] 使用原始啟動腳本: {restart_script}")
+            else:
+                # 最後手段：直接啟動 demo_mode.py (有完整功能)
+                restart_script = os.path.join(script_dir, 'demo_mode.py')
+                restart_args = ['--spotify']
+                print(f"[重啟] 找不到入口點，使用演示模式: {restart_script}")
+        
+        if restart_script and os.path.exists(restart_script):
+            print(f"[重啟] 正在啟動 {restart_script} {restart_args}...")
+            
+            # 給新程序一點時間啟動
             subprocess.Popen(
-                [python_exe, main_script],
+                [python_exe, restart_script] + restart_args,
                 cwd=script_dir,
                 env=env,
                 start_new_session=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+                stdin=subprocess.DEVNULL  # 避免等待輸入
             )
         else:
-            print(f"[更新] 找不到 main.py: {main_script}")
+            print(f"[重啟] 錯誤: 找不到重啟腳本 {restart_script}")
         
         # 關閉當前應用
         from PyQt6.QtWidgets import QApplication
@@ -8396,6 +8433,9 @@ class Dashboard(QWidget):
         target = max(0, min(8, rpm))
         old_rpm = self.rpm
         
+        # 追蹤最大 RPM (原始值×1000)
+        get_max_value_logger().update_rpm(target * 1000)
+        
         # GUI 端二次平滑：使用 EMA 讓指針移動更絲滑
         if self.rpm == 0:
             self.rpm = target  # 首次直接設定
@@ -8411,6 +8451,12 @@ class Dashboard(QWidget):
     def _slot_set_temperature(self, temp):
         """Slot: 在主執行緒中更新水溫顯示"""
         self.temp = max(0, min(100, temp))
+        
+        # 追蹤最大水溫 (轉換為攝氏度)
+        # temp 是百分比 (0-100)，轉換為 40-120°C
+        temp_celsius = 40 + (self.temp / 100) * 80
+        get_max_value_logger().update_coolant(temp_celsius)
+        
         self.update_display()
     
     @pyqtSlot(float)
@@ -10075,6 +10121,13 @@ def run_dashboard(
             storage.save_now()
         except Exception as e:
             print(f"儲存里程資料時發生錯誤: {e}")
+        
+        # 儲存最大值記錄
+        try:
+            max_logger = get_max_value_logger()
+            max_logger.save()
+        except Exception as e:
+            print(f"儲存最大值記錄時發生錯誤: {e}")
         
         # 執行所有清理函數
         for cleanup in cleanup_funcs:

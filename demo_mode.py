@@ -12,6 +12,10 @@ import os
 import random
 import sys
 import time
+
+# 設定入口點環境變數 (供程式重啟時判斷)
+os.environ['DASHBOARD_ENTRY'] = 'demo'
+
 from PyQt6.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
 
 from main import run_dashboard

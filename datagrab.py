@@ -4,12 +4,16 @@ import sys
 import logging
 import platform
 import subprocess
+import os
 import can
 import cantools
 import serial.tools.list_ports
 from rich.console import Console
 from rich.panel import Panel
 from rich.align import Align
+
+# 設定入口點環境變數 (供程式重啟時判斷)
+os.environ['DASHBOARD_ENTRY'] = 'datagrab'
 
 # PyQt6 Imports (只需要 Signal 相關)
 from PyQt6.QtCore import QObject, pyqtSignal

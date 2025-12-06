@@ -39,5 +39,8 @@ Thumbs.db
 spotify_config.json
 .spotify_cache
 
+# Log files
+log/
+
 
 qtdashboard.log
