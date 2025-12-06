@@ -413,7 +413,7 @@ def unified_receiver(bus, db, signals):
                         data_store["OBD"]["last_update"] = time.time()
                         
                         # 套用校正係數後更新 UI（模擬原廠快樂表）
-                        corrected_speed = current_speed_smoothed * speed_correction
+                        corrected_speed = current_speed_smoothed
                         speed_int = int(corrected_speed)
                         if last_obd_speed_int is None or abs(speed_int - last_obd_speed_int) >= 1:
                             signals.update_speed.emit(corrected_speed)
