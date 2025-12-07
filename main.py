@@ -7058,6 +7058,7 @@ class GPSMonitorThread(QThread):
     - 監控是否定位完成 (Fix)
     """
     gps_fixed_changed = pyqtSignal(bool)
+    gps_speed_changed = pyqtSignal(float)
     
     def __init__(self):
         super().__init__()
@@ -7138,12 +7139,21 @@ class GPSMonitorThread(QThread):
                                 has_status = True
                                 is_fixed = (parts[6] != '0')
                                 
-                        elif line_str.startswith('$GNRMC') or line_str.startswith('$GPRMC'):
+                        if line_str.startswith('$GNRMC') or line_str.startswith('$GPRMC'):
                             parts = line_str.split(',')
                             if len(parts) >= 3:
                                 # Status: A=Active, V=Void
                                 has_status = True
                                 is_fixed = (parts[2] == 'A')
+                                
+                                # Parse Speed (Field 7, in Knots)
+                                if is_fixed and len(parts) >= 8:
+                                    try:
+                                        speed_knots = float(parts[7])
+                                        speed_kmh = speed_knots * 1.852
+                                        self.gps_speed_changed.emit(speed_kmh)
+                                    except (ValueError, IndexError):
+                                        pass
                         
                         if has_status:
                             self._update_status(is_fixed)
@@ -7194,6 +7204,10 @@ class Dashboard(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("儀表板 - F1:翻左卡片/焦點 Shift+F1:詳細視圖 F2:翻右卡片 Shift+F2:重置Trip")
+        
+        # GPS 速度優先邏輯變數 (必須在 init_data 之前初始化)
+        self.is_gps_fixed = False
+        self.current_gps_speed = 0.0
         
         # 連接 Signals 到 Slots
         self.signal_update_rpm.connect(self._slot_set_rpm)
@@ -7254,6 +7268,7 @@ class Dashboard(QWidget):
         # 初始化 GPS 監控器
         self.gps_monitor_thread = GPSMonitorThread()
         self.gps_monitor_thread.gps_fixed_changed.connect(self._update_gps_status)
+        self.gps_monitor_thread.gps_speed_changed.connect(self._update_gps_speed)
         self.gps_monitor_thread.start()
         
         # 創建亮度覆蓋層（必須在 init_ui 之後，確保在最上層）
@@ -7261,6 +7276,8 @@ class Dashboard(QWidget):
     
     def _update_gps_status(self, is_fixed):
         """更新 GPS 狀態圖示"""
+        self.is_gps_fixed = is_fixed
+        
         if is_fixed:
             # 綠色 (Fix)
             self.gps_icon_label.setText("GPS") 
@@ -7277,6 +7294,21 @@ class Dashboard(QWidget):
         self.gps_icon_label.style().polish(self.gps_icon_label)
         self.gps_icon_label.update()
 
+    def _update_gps_speed(self, speed_kmh):
+        """更新 GPS 速度"""
+        self.current_gps_speed = speed_kmh
+        
+        # 檢查是否應該顯示 GPS 速度
+        # 條件: 速度同步開啟(datagrab.gps_speed_mode) AND GPS 定位完成 AND OBD速度 >= 20
+        import datagrab
+        use_gps = (datagrab.gps_speed_mode and 
+                   self.is_gps_fixed and 
+                   self.speed >= 20.0)
+                   
+        if use_gps:
+            # 直接更新顯示，覆蓋 CAN 速度
+            self.speed_label.setText(f"{int(speed_kmh)}")
+    
     def create_status_bar(self):
         """創建頂部狀態欄，包含方向燈指示"""
         status_bar = QWidget()
@@ -8570,6 +8602,20 @@ class Dashboard(QWidget):
     @perf_track
     def _slot_set_speed(self, speed):
         """Slot: 在主執行緒中更新速度顯示"""
+        # 如果 GPS 速度優先且已定位且且速度 >= 20，則忽略 CAN 速度更新 (顯示部分)
+        import datagrab
+        use_gps = (datagrab.gps_speed_mode and 
+                   self.is_gps_fixed and 
+                   speed >= 20.0) # 這裡用傳入的 speed (即 OBD 速度)
+                   
+        if use_gps:
+            # 仍然更新後台數據 (如 trip 計算)，但不更新主顯示
+            # 這裡假設 trip/odo 應該繼續使用 CAN 數據累計
+            pass
+        else:
+            # 只有在非 GPS 模式下才刷新顯示變數
+            pass
+
         new_speed = max(0, min(200, speed))
         # 里程計算已改由 _physics_tick() 驅動，這裡只需記錄速度
         self.trip_card.current_speed = speed
@@ -9944,7 +9990,21 @@ class Dashboard(QWidget):
         self.fuel_gauge.set_value(self.fuel)
         if hasattr(self, "fuel_percent_label"):
             self.fuel_percent_label.setText(f"{self.fuel:.0f}%")
-        self.speed_label.setText(str(int(self.speed)))
+        
+        # 決定顯示哪個速度
+        import datagrab
+        # 邏輯: 僅當 (速度同步開啟 AND GPS定位完成 AND OBD速度 >= 20) 時使用 GPS 速度
+        # 這是為了避免低速時的 GPS 漂移
+        use_gps = (datagrab.gps_speed_mode and 
+                   self.is_gps_fixed and 
+                   self.speed >= 20.0)
+                   
+        if use_gps:
+            # 使用 GPS 速度
+            self.speed_label.setText(str(int(self.current_gps_speed)))
+        else:
+            # 使用 CAN/Sim 速度
+            self.speed_label.setText(str(int(self.speed)))
         
         # 更新檔位顯示顏色
         gear_colors = {
