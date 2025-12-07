@@ -339,7 +339,8 @@ class OdometerStorage:
                 self._last_save_time = time.time()
             
             # 在鎖外執行 I/O 操作，避免阻塞其他操作
-            temp_file = self.data_file.with_suffix('.tmp')
+            import uuid
+            temp_file = self.data_file.with_suffix(f'.{uuid.uuid4().hex}.tmp')
             with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump(data_copy, f, indent=2, ensure_ascii=False)
             temp_file.replace(self.data_file)
