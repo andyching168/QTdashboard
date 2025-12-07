@@ -5,6 +5,9 @@ import platform
 import time
 import json
 import gc
+import glob
+import serial
+import threading
 from pathlib import Path
 from functools import wraps
 from collections import deque
@@ -42,7 +45,7 @@ os.environ.setdefault('QT_QPA_EGLFS_FORCE_VSYNC', '1')  # EGLFS 強制 VSync
 os.environ.setdefault('MESA_GL_VERSION_OVERRIDE', '3.3')  # Mesa OpenGL 版本
 
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QStackedWidget, QProgressBar, QPushButton, QDialog, QGraphicsView, QGraphicsScene, QGraphicsProxyWidget, QMainWindow, QSizePolicy
-from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot, QUrl, QObject
+from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint, pyqtSlot, QUrl, QObject, QThread
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QPolygonF, QBrush, QLinearGradient, QRadialGradient, QPainterPath, QPixmap, QMouseEvent, QTransform
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
@@ -7047,6 +7050,124 @@ class ControlPanel(QWidget):
             parent.hide_control_panel()  # type: ignore
 
 
+class GPSMonitorThread(QThread):
+    """
+    GPS 狀態監控執行緒
+    - 掃描 /dev/ttyUSB* 和 /dev/ttyACM*
+    - 使用 38400 baud detection
+    - 監控是否定位完成 (Fix)
+    """
+    gps_fixed_changed = pyqtSignal(bool)
+    
+    def __init__(self):
+        super().__init__()
+        self.running = True
+        self.baud_rate = 38400
+        self._last_fix_status = False
+        self._current_port = None
+        
+    def run(self):
+        print("[GPS] Starting monitor thread...")
+        while self.running:
+            # 1. 如果沒有鎖定 port，進行掃描
+            if not self._current_port:
+                ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
+                if not ports:
+                    self._update_status(False)
+                    time.sleep(2)
+                    continue
+                
+                # 簡單策略：嘗試每一個 port
+                found = False
+                for port in ports:
+                    if self._try_connect(port):
+                        self._current_port = port
+                        found = True
+                        break
+                
+                if not found:
+                    time.sleep(2)
+            else:
+                # 2. 已鎖定 port，持續讀取
+                if not self._read_loop():
+                    # 讀取失敗（斷線），重置 port
+                    print(f"[GPS] Connection lost on {self._current_port}")
+                    self._current_port = None
+                    self._update_status(False)
+                    time.sleep(1)
+                    
+    def _try_connect(self, port):
+        """測試連接"""
+        try:
+            with serial.Serial(port, self.baud_rate, timeout=1.0) as ser:
+                # 讀取幾行看看是不是 NMEA
+                for _ in range(5):
+                    line = ser.readline()
+                    try:
+                        line_str = line.decode('ascii', errors='ignore').strip()
+                        if line_str.startswith('$'):
+                            print(f"[GPS] Found GPS on {port} @ {self.baud_rate}")
+                            return True
+                    except:
+                        pass
+        except:
+            pass
+        return False
+        
+    def _read_loop(self):
+        """持續讀取迴圈"""
+        try:
+            with serial.Serial(self._current_port, self.baud_rate, timeout=1.0) as ser:
+                while self.running:
+                    line = ser.readline()
+                    if not line:
+                        # Timeout，可能沒資料，但不一定斷線
+                        continue
+                        
+                    try:
+                        line_str = line.decode('ascii', errors='ignore').strip()
+                        
+                        # 簡單解析 Fix 狀態
+                        is_fixed = False
+                        has_status = False
+                        
+                        if line_str.startswith('$GNGGA') or line_str.startswith('$GPGGA'):
+                            parts = line_str.split(',')
+                            if len(parts) >= 7:
+                                # Quality: 0=Invalid, 1=GPS, 2=DGPS...
+                                has_status = True
+                                is_fixed = (parts[6] != '0')
+                                
+                        elif line_str.startswith('$GNRMC') or line_str.startswith('$GPRMC'):
+                            parts = line_str.split(',')
+                            if len(parts) >= 3:
+                                # Status: A=Active, V=Void
+                                has_status = True
+                                is_fixed = (parts[2] == 'A')
+                        
+                        if has_status:
+                            self._update_status(is_fixed)
+                            
+                    except ValueError:
+                        pass
+        except serial.SerialException as e:
+            print(f"[GPS] Serial error: {e}")
+            return False # 斷線
+        except Exception as e:
+            print(f"[GPS] Error: {e}")
+            return False
+            
+        return True
+
+    def _update_status(self, is_fixed):
+        if is_fixed != self._last_fix_status:
+            self._last_fix_status = is_fixed
+            self.gps_fixed_changed.emit(is_fixed)
+    
+    def stop(self):
+        self.running = False
+        self.wait()
+
 class Dashboard(QWidget):
     # 定義 Qt Signals，用於從背景執行緒安全地更新 UI
     signal_update_rpm = pyqtSignal(float)
@@ -7130,9 +7251,32 @@ class Dashboard(QWidget):
         # 初始化關機監控器
         self._init_shutdown_monitor()
         
+        # 初始化 GPS 監控器
+        self.gps_monitor_thread = GPSMonitorThread()
+        self.gps_monitor_thread.gps_fixed_changed.connect(self._update_gps_status)
+        self.gps_monitor_thread.start()
+        
         # 創建亮度覆蓋層（必須在 init_ui 之後，確保在最上層）
         self._create_brightness_overlay()
     
+    def _update_gps_status(self, is_fixed):
+        """更新 GPS 狀態圖示"""
+        if is_fixed:
+            # 綠色 (Fix)
+            self.gps_icon_label.setText("GPS") 
+            self.gps_icon_label.setStyleSheet("color: #4ade80; font-size: 18px; font-weight: bold; background: transparent;")
+            self.gps_icon_label.setToolTip("GPS: Fixed (3D)")
+        else:
+            # 灰色 (No Fix)
+            self.gps_icon_label.setText("GPS") 
+            self.gps_icon_label.setStyleSheet("color: #444; font-size: 18px; font-weight: bold; background: transparent;")
+            self.gps_icon_label.setToolTip("GPS: Searching...")
+            
+        # Force Style Update
+        self.gps_icon_label.style().unpolish(self.gps_icon_label)
+        self.gps_icon_label.style().polish(self.gps_icon_label)
+        self.gps_icon_label.update()
+
     def create_status_bar(self):
         """創建頂部狀態欄，包含方向燈指示"""
         status_bar = QWidget()
@@ -7178,10 +7322,17 @@ class Dashboard(QWidget):
         # === 中間區域 - 時間顯示 ===
         center_container = QWidget()
         center_container.setStyleSheet("background: transparent;")
-        center_layout = QVBoxLayout(center_container)
+        center_layout = QHBoxLayout(center_container)
         center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(10) # 間距
         center_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
+        # 1. 左側平衡佔位符 (與 GPS Icon 等寬)
+        left_spacer_label = QLabel("")
+        left_spacer_label.setFixedWidth(40)
+        left_spacer_label.setStyleSheet("background: transparent;")
+        
+        # 2. 時間顯示 (中央)
         self.time_label = QLabel("--:--")
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.time_label.setStyleSheet("""
@@ -7193,7 +7344,20 @@ class Dashboard(QWidget):
                 letter-spacing: 2px;
             }
         """)
+        
+        # 3. GPS 狀態 (右側)
+        self.gps_icon_label = QLabel("GPS") 
+        self.gps_icon_label.setFixedWidth(40)
+        self.gps_icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.gps_icon_label.setStyleSheet("color: #444; font-size: 18px; font-weight: bold; background: transparent;")
+        self.gps_icon_label.setToolTip("GPS: Searching...")
+        
+        # 使用 Stretch 確保整體置中
+        center_layout.addStretch()
+        center_layout.addWidget(left_spacer_label)
         center_layout.addWidget(self.time_label)
+        center_layout.addWidget(self.gps_icon_label)
+        center_layout.addStretch()
         
         # 更新時間
         self.time_timer = QTimer()

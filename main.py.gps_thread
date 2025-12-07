@@ -1,0 +1,120 @@
+class GPSMonitorThread(QThread):
+    """
+    GPS 狀態監控執行緒
+    - 掃描 /dev/ttyUSB* 和 /dev/ttyACM*
+    - 使用 38400 baud detection
+    - 監控是否定位完成 (Fix)
+    """
+    gps_fixed_changed = pyqtSignal(bool)
+    
+    def __init__(self):
+        super().__init__()
+        self.running = True
+        self.baud_rate = 38400
+        self._last_fix_status = False
+        self._current_port = None
+        
+    def run(self):
+        print("[GPS] Starting monitor thread...")
+        while self.running:
+            # 1. 如果沒有鎖定 port，進行掃描
+            if not self._current_port:
+                ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
+                if not ports:
+                    self._update_status(False)
+                    time.sleep(2)
+                    continue
+                
+                # 簡單策略：嘗試每一個 port
+                found = False
+                for port in ports:
+                    if self._try_connect(port):
+                        self._current_port = port
+                        found = True
+                        break
+                
+                if not found:
+                    time.sleep(2)
+            else:
+                # 2. 已鎖定 port，持續讀取
+                if not self._read_loop():
+                    # 讀取失敗（斷線），重置 port
+                    print(f"[GPS] Connection lost on {self._current_port}")
+                    self._current_port = None
+                    self._update_status(False)
+                    time.sleep(1)
+                    
+    def _try_connect(self, port):
+        """測試連接"""
+        try:
+            with serial.Serial(port, self.baud_rate, timeout=1.0) as ser:
+                # 讀取幾行看看是不是 NMEA
+                for _ in range(5):
+                    line = ser.readline()
+                    try:
+                        line_str = line.decode('ascii', errors='ignore').strip()
+                        if line_str.startswith('$'):
+                            print(f"[GPS] Found GPS on {port} @ {self.baud_rate}")
+                            return True
+                    except:
+                        pass
+        except:
+            pass
+        return False
+        
+    def _read_loop(self):
+        """持續讀取迴圈"""
+        try:
+            with serial.Serial(self._current_port, self.baud_rate, timeout=1.0) as ser:
+                while self.running:
+                    line = ser.readline()
+                    if not line:
+                        # Timeout，可能沒資料，但不一定斷線
+                        continue
+                        
+                    try:
+                        line_str = line.decode('ascii', errors='ignore').strip()
+                        
+                        # 簡單解析 Fix 狀態
+                        is_fixed = False
+                        has_status = False
+                        
+                        if line_str.startswith('$GNGGA') or line_str.startswith('$GPGGA'):
+                            parts = line_str.split(',')
+                            if len(parts) >= 7:
+                                # Quality: 0=Invalid, 1=GPS, 2=DGPS...
+                                has_status = True
+                                is_fixed = (parts[6] != '0')
+                                
+                        elif line_str.startswith('$GNRMC') or line_str.startswith('$GPRMC'):
+                            parts = line_str.split(',')
+                            if len(parts) >= 3:
+                                # Status: A=Active, V=Void
+                                has_status = True
+                                is_fixed = (parts[2] == 'A')
+                        
+                        if has_status:
+                            self._update_status(is_fixed)
+                            
+                    except ValueError:
+                        pass
+        except serial.SerialException as e:
+            print(f"[GPS] Serial error: {e}")
+            return False # 斷線
+        except Exception as e:
+            print(f"[GPS] Error: {e}")
+            return False
+            
+        return True
+
+    def _update_status(self, is_fixed):
+        if is_fixed != self._last_fix_status:
+            self._last_fix_status = is_fixed
+            self.gps_fixed_changed.emit(is_fixed)
+            # print(f"[GPS] Fix status changed: {is_fixed}")
+    
+    def stop(self):
+        self.running = False
+        self.wait()
+
+class Dashboard(QWidget):

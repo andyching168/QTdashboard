@@ -45,3 +45,4 @@ log/
 
 qtdashboard.log
 config.json
+gps_debug.log
