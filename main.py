@@ -7072,7 +7072,7 @@ class GPSMonitorThread(QThread):
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
             if not self._current_port:
-                ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
+                ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*') + glob.glob('/dev/pts/*')
                 if not ports:
                     self._update_status(False)
                     time.sleep(2)
@@ -7168,6 +7168,12 @@ class GPSMonitorThread(QThread):
             return False
             
         return True
+
+    def stop(self):
+        """停止監控並釋放資源"""
+        self.running = False
+        self.wait() # 等待執行緒結束
+        print("[GPS] Monitor thread stopped.")
 
     def _update_status(self, is_fixed):
         if is_fixed != self._last_fix_status:
@@ -7900,6 +7906,11 @@ class Dashboard(QWidget):
     def _on_power_lost(self):
         """電源中斷時顯示關機對話框"""
         print("⚠️ 偵測到電源中斷，顯示關機對話框")
+        
+        # 釋放 GPS 資源，讓 location_notifier 可以接手
+        if hasattr(self, 'gps_monitor_thread'):
+            self.gps_monitor_thread.stop()
+            
         self._shutdown_monitor.show_shutdown_dialog(self)
     
     def _on_power_restored(self):

@@ -118,10 +118,11 @@ def find_gps_and_get_location(timeout=10):
     If timeout reached without fix, returns last non-zero coords (approximate).
     Returns (lat, lon, is_approx) or None.
     """
-    potential_ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
+    # 掃描可能的連接埠
+    potential_ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*') + glob.glob('/dev/pts/*')
     baud_rates = [38400, 9600, 115200, 4800]
     
-    print(f"[*] Scanning ports: {potential_ports}")
+    # print(f"[*] Scanning ports: {potential_ports}")
     
     total_start_time = time.time()
     
@@ -181,7 +182,15 @@ def find_gps_and_get_location(timeout=10):
                 line = ser.readline()
                 if not line: continue
                 
+                # print(f"DEBUG RAW: {line}")
                 result = parse_nmea_coords(line)
+                if result:
+                    lat, lon, is_fixed = result
+                    # print(f"DEBUG PARSED: {lat}, {lon}, Fix={is_fixed}")
+                else:
+                    pass
+                    # print("DEBUG PARSED: None")
+                
                 if result:
                     lat, lon, is_fixed = result
                     
