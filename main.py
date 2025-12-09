@@ -5766,7 +5766,7 @@ class ControlPanel(QWidget):
         # WiFi 狀態
         self.wifi_ssid = None
         self.wifi_signal = 0
-        self.speed_sync_state = False  # 速度同步按鈕狀態（UI 開關）
+        self.speed_sync_mode = "calibrated"  # 速度同步初始模式
         
         # 主佈局
         layout = QVBoxLayout(self)
@@ -5819,6 +5819,10 @@ class ControlPanel(QWidget):
         
         self.buttons = []
         self.button_widgets = {}  # 用於存取特定按鈕
+        # 三段速度模式：校正 / 固定1.05 / OBD+GPS
+        self.speed_sync_modes = ["calibrated", "fixed", "gps"]
+        self.speed_sync_mode_index = 0
+        self.speed_sync_mode = self.speed_sync_modes[self.speed_sync_mode_index]
         button_configs = [
             ("WiFi", "📶", "#1DB954"),
             ("時間", "🕐", "#4285F4"),
@@ -5834,7 +5838,7 @@ class ControlPanel(QWidget):
             self.button_widgets[title] = btn
             button_layout.addWidget(btn)
 
-        # 速度同步（預設關閉，反向控制 gps_speed_mode）
+        # 速度同步（三段模式）
         speed_sync_btn = self.create_speed_sync_button()
         self.buttons.append(speed_sync_btn)
         self.button_widgets["速度同步"] = speed_sync_btn
@@ -6232,7 +6236,6 @@ class ControlPanel(QWidget):
         layout.setSpacing(10)
 
         btn = QPushButton()
-        btn.setCheckable(True)
         btn.setFixedSize(120, 120)
         btn.clicked.connect(lambda checked=False: self.on_button_clicked("速度同步", checked))
 
@@ -6250,7 +6253,7 @@ class ControlPanel(QWidget):
         layout.addWidget(label)
 
         # 套用預設狀態樣式
-        self._apply_speed_sync_style(btn, self.speed_sync_state)
+        self._apply_speed_sync_style(btn, self.speed_sync_mode)
         return container
     
     def adjust_color(self, hex_color, factor):
@@ -6271,17 +6274,27 @@ class ControlPanel(QWidget):
             return child
         return None
 
-    def _apply_speed_sync_style(self, btn: QPushButton, enabled: bool):
+    def _apply_speed_sync_style(self, btn: QPushButton, mode: str):
         """套用速度同步按鈕的樣式與文字"""
-        color = "#4CAF50" if enabled else "#555555"
-        text = "開" if enabled else "關"
+        label_map = {
+            "calibrated": "OBD(校正)",
+            "fixed": "OBD(同步)",
+            "gps": "OBD(GPS)",
+        }
+        color_map = {
+            "calibrated": "#4CAF50",
+            "fixed": "#FF9800",
+            "gps": "#2196F3",
+        }
+        text = label_map.get(mode, mode)
+        color = color_map.get(mode, "#555555")
         btn.setText(text)
         btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {color};
                 border: none;
                 border-radius: 20px;
-                font-size: 36px;
+                font-size: 28px;
                 color: white;
             }}
             QPushButton:hover {{
@@ -6292,14 +6305,13 @@ class ControlPanel(QWidget):
             }}
         """)
 
-    def set_speed_sync_state(self, enabled: bool):
+    def set_speed_sync_state(self, mode: str):
         """更新速度同步按鈕狀態（UI）"""
-        self.speed_sync_state = enabled
+        self.speed_sync_mode = mode
         btn = self._get_button_by_title("速度同步")
         if btn:
             btn.blockSignals(True)
-            btn.setChecked(enabled)
-            self._apply_speed_sync_style(btn, enabled)
+            self._apply_speed_sync_style(btn, mode)
             btn.blockSignals(False)
 
     def on_button_clicked(self, title, checked=False):
@@ -6325,12 +6337,12 @@ class ControlPanel(QWidget):
             if parent and hasattr(parent, 'show_mqtt_settings'):
                 parent.show_mqtt_settings()  # type: ignore
         elif title == "速度同步":
-            # 反相控制 datagrab.gps_speed_mode
             parent = self.parent()
-            if parent and hasattr(parent, 'set_speed_sync_enabled'):
-                parent.set_speed_sync_enabled(bool(checked))  # type: ignore
+            if parent and hasattr(parent, 'cycle_speed_sync_mode'):
+                parent.cycle_speed_sync_mode()  # type: ignore
             else:
-                self.set_speed_sync_state(bool(checked))
+                # 後備：僅更新當前模式的 UI 樣式
+                self.set_speed_sync_state(getattr(self, "speed_sync_mode", "calibrated"))
     
     def do_time_sync(self):
         """執行 NTP 時間校正"""
@@ -7258,15 +7270,16 @@ class Dashboard(QWidget):
         self.panel_touch_start = None
         self.panel_drag_active = False
 
-        # 速度同步開關（UI 開關反向控制 gps_speed_mode）
-        self.speed_sync_enabled = False
+        # 速度同步模式（calibrated -> fixed -> gps）
+        self.speed_sync_modes = ["calibrated", "fixed", "gps"]
+        self.speed_sync_mode = "calibrated"
         
         # 亮度控制相關
         self.brightness_level = 0  # 0=100%, 1=75%, 2=50%
         self.brightness_overlay = None
 
         self.init_ui()
-        self.set_speed_sync_enabled(self.speed_sync_enabled)
+        self.set_speed_sync_mode(self.speed_sync_mode)
         self.init_data()
         
         # 初始化關機監控器
@@ -7911,6 +7924,14 @@ class Dashboard(QWidget):
         # 釋放 GPS 資源，讓 location_notifier 可以接手
         if hasattr(self, 'gps_monitor_thread'):
             self.gps_monitor_thread.stop()
+
+        # 儲存最新速度校正係數，便於下次啟動沿用
+        try:
+            import datagrab
+            datagrab.persist_speed_correction()
+            print(f"[速度校正] 已儲存校正係數 {datagrab.get_speed_correction():.3f}")
+        except Exception as e:
+            print(f"[速度校正] 儲存校正係數失敗: {e}")
             
         self._shutdown_monitor.show_shutdown_dialog(self)
     
@@ -7982,6 +8003,11 @@ class Dashboard(QWidget):
         
         # 網路狀態
         self.is_offline = False  # 是否斷線
+
+        # 速度校正狀態
+        import datagrab
+        self.speed_correction = datagrab.get_speed_correction()
+        self._last_speed_cali_ts = 0
         
         # RPM 動畫平滑 (GUI 端二次平滑)
         self.target_rpm = 0.0  # 目標轉速
@@ -8360,26 +8386,30 @@ class Dashboard(QWidget):
         else:
             print("[Navigation] 錯誤：nav_card 不存在")
 
-    def set_speed_sync_enabled(self, enabled: bool):
-        """設定速度同步按鈕狀態，並反相更新 gps_speed_mode"""
-        self.speed_sync_enabled = enabled
+    def set_speed_sync_mode(self, mode: str):
+        """設定速度同步三段模式並同步 datagrab"""
+        if mode not in self.speed_sync_modes:
+            print(f"[速度同步] 無效模式: {mode}")
+            return
+        self.speed_sync_mode = mode
         if self.control_panel:
-            self.control_panel.set_speed_sync_state(enabled)
+            self.control_panel.set_speed_sync_state(mode)
 
         try:
             import datagrab
-        except ImportError:
-            print("[速度同步] datagrab 模組不存在，僅更新 UI 狀態")
-            return
+            datagrab.set_speed_sync_mode(mode)
         except Exception as e:
-            print(f"[速度同步] 載入 datagrab 失敗: {e}")
-            return
+            print(f"[速度同步] 更新 datagrab 失敗: {e}")
+        print(f"[速度同步] 模式切換為 {mode}")
 
+    def cycle_speed_sync_mode(self):
+        """依序切換速度模式 calibrated -> fixed -> gps"""
         try:
-            datagrab.gps_speed_mode = not enabled
-            print(f"[速度同步] {'開啟' if enabled else '關閉'}，gps_speed_mode 設為 {datagrab.gps_speed_mode}")
-        except Exception as e:
-            print(f"[速度同步] 更新 gps_speed_mode 失敗: {e}")
+            idx = self.speed_sync_modes.index(self.speed_sync_mode)
+        except ValueError:
+            idx = 0
+        next_mode = self.speed_sync_modes[(idx + 1) % len(self.speed_sync_modes)]
+        self.set_speed_sync_mode(next_mode)
 
     def show_control_panel(self):
         """顯示下拉控制面板"""
@@ -8628,6 +8658,14 @@ class Dashboard(QWidget):
             # 只有在非 GPS 模式下才刷新顯示變數
             pass
 
+        # 動態校正速度權重：僅在 GPS 已鎖定且兩者差距小時逐步調整
+        raw_obd_speed = None
+        try:
+            raw_obd_speed = datagrab.data_store.get("OBD", {}).get("speed_smoothed") or datagrab.data_store.get("OBD", {}).get("speed")
+        except Exception:
+            raw_obd_speed = None
+        self._maybe_update_speed_correction(raw_obd_speed)
+
         new_speed = max(0, min(200, speed))
         # 里程計算已改由 _physics_tick() 驅動，這裡只需記錄速度
         self.trip_card.current_speed = speed
@@ -8639,6 +8677,40 @@ class Dashboard(QWidget):
             self.update_display()
         else:
             self.speed = new_speed
+
+    def _maybe_update_speed_correction(self, obd_speed):
+        """根據 GPS 與 OBD 速度差逐步修正校正係數"""
+        if obd_speed is None or not self.is_gps_fixed:
+            return
+        try:
+            import datagrab
+            if getattr(datagrab, "speed_sync_mode", "calibrated") == "fixed":
+                return
+            if hasattr(datagrab, "is_speed_calibration_enabled") and not datagrab.is_speed_calibration_enabled():
+                return
+        except Exception:
+            pass
+        gps_speed = self.current_gps_speed
+        if gps_speed <= 5 or obd_speed <= 5:
+            return
+        now = time.time()
+        if now - self._last_speed_cali_ts < 1.0:
+            return
+        diff = abs(gps_speed - obd_speed)
+        if diff > 10:
+            return
+
+        ratio = gps_speed / max(obd_speed, 0.1)
+        ratio = max(0.7, min(1.3, ratio))
+
+        import datagrab
+        prev = datagrab.get_speed_correction()
+        alpha = 0.05  # 漸進式更新，避免瞬間跳動
+        new_value = (1 - alpha) * prev + alpha * ratio
+        datagrab.set_speed_correction(new_value)
+        self.speed_correction = new_value
+        self._last_speed_cali_ts = now
+        print(f"[速度校正] GPS 已鎖定，係數 {prev:.3f} -> {new_value:.3f} (比例 {ratio:.3f}，差 {diff:.1f} km/h)")
     
     def _physics_tick(self):
         """物理心跳：每 100ms 根據當前速度累積里程"""

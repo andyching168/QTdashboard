@@ -14,7 +14,11 @@
 SCRIPT_DIR="/home/ac/QTdashboard"
 PERF_MODE=0
 WATCH_MODE=0
+RESET_SPEED_CAL=0
+ENABLE_SPEED_CAL=0
 LOG_FILE="/tmp/dashboard_perf.log"
+SPEED_CAL_FILE="$HOME/.config/qtdashboard/speed_calibration.json"
+CAL_MARKER="/tmp/.dashboard_speed_calibrate"
 
 # 解析參數
 while [[ $# -gt 0 ]]; do
@@ -28,12 +32,22 @@ while [[ $# -gt 0 ]]; do
             WATCH_MODE=1
             shift
             ;;
+        -c|--reset-speed-calibration)
+            RESET_SPEED_CAL=1
+            shift
+            ;;
+        -a|--calibrate-speed-once)
+            ENABLE_SPEED_CAL=1
+            shift
+            ;;
         -h|--help)
             echo "使用方式: $0 [選項]"
             echo ""
             echo "選項:"
             echo "  -p, --perf   啟用效能監控模式"
             echo "  -w, --watch  效能監控 + 持續觀察 log"
+            echo "  -c, --reset-speed-calibration  清除速度校正檔，啟動時重新以預設值計算"
+            echo "  -a, --calibrate-speed-once     啟用單次速度校正會話（啟動後允許自動校正，熄火寫回）"
             echo "  -h, --help   顯示此說明"
             exit 0
             ;;
@@ -52,6 +66,12 @@ if [[ $PERF_MODE -eq 1 ]]; then
 fi
 if [[ $WATCH_MODE -eq 1 ]]; then
     echo "  👁️  持續觀察 log 模式"
+fi
+if [[ $RESET_SPEED_CAL -eq 1 ]]; then
+    echo "  🔄  將重置速度校正檔 (使用預設係數)"
+fi
+if [[ $ENABLE_SPEED_CAL -eq 1 ]]; then
+    echo "  🛠️  啟用單次速度校正會話"
 fi
 echo "=============================================="
 
@@ -80,6 +100,20 @@ if [[ $PERF_MODE -eq 1 ]]; then
     echo "📊 效能監控已啟用，log 輸出到: $LOG_FILE"
 else
     rm -f /tmp/.dashboard_perf_mode
+fi
+
+# 清除速度校正檔 (可選)
+if [[ $RESET_SPEED_CAL -eq 1 ]]; then
+    if [[ -f "$SPEED_CAL_FILE" ]]; then
+        rm -f "$SPEED_CAL_FILE" && echo "🔄 已清除速度校正檔: $SPEED_CAL_FILE" || echo "⚠️  無法刪除速度校正檔: $SPEED_CAL_FILE"
+    else
+        echo "ℹ️  未找到速度校正檔，使用預設值"
+    fi
+fi
+
+# 啟用單次速度校正（建立標記檔，啟動後會自動刪除）
+if [[ $ENABLE_SPEED_CAL -eq 1 ]]; then
+    echo "1" > "$CAL_MARKER" && echo "🛠️  已建立校正標記檔：$CAL_MARKER"
 fi
 
 # 重新啟動 getty@tty1 服務，觸發 autologin -> .bashrc -> startx

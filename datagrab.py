@@ -5,6 +5,7 @@ import logging
 import platform
 import subprocess
 import os
+import json
 import can
 import cantools
 import serial.tools.list_ports
@@ -59,12 +60,101 @@ class WorkerSignals(QObject):
 current_mode = "HYBRID" 
 data_store = {
     "CAN": {"rpm": 0, "speed": 0, "fuel": 0, "hz": 0, "last_update": 0},
-    "OBD": {"rpm": 0, "speed": 0, "temp": 0, "turbo": 0, "battery": 0, "hz": 0, "last_update": 0}
+    "OBD": {"rpm": 0, "speed": 0, "speed_smoothed": 0, "temp": 0, "turbo": 0, "battery": 0, "hz": 0, "last_update": 0}
 }
 stop_threads = False
 console = Console()
 send_lock = threading.Lock() # 保護寫入操作
-gps_speed_mode=True
+gps_speed_mode=False  # True: GPS 顯示優先 (OBD+GPS 混合)，False: OBD 顯示
+speed_sync_mode = "calibrated"  # calibrated | fixed | gps
+
+# 校正會話控制
+CALIBRATION_MARKER = "/tmp/.dashboard_speed_calibrate"
+calibration_enabled = False  # 僅手動啟用時才允許自動校正
+# 速度校正設定
+SPEED_CALIBRATION_DIR = os.path.join(os.path.expanduser("~"), ".config", "qtdashboard")
+SPEED_CALIBRATION_FILE = os.path.join(SPEED_CALIBRATION_DIR, "speed_calibration.json")
+SPEED_CORRECTION_DEFAULT = 1.01
+SPEED_CORRECTION_MIN = 0.7
+SPEED_CORRECTION_MAX = 1.3
+_speed_correction_lock = threading.Lock()
+_speed_correction_value = SPEED_CORRECTION_DEFAULT
+
+def _load_speed_correction(default=SPEED_CORRECTION_DEFAULT):
+    """讀取速度校正係數"""
+    global _speed_correction_value
+    value = default
+    try:
+        with open(SPEED_CALIBRATION_FILE, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+            candidate = float(payload.get("speed_correction", value))
+            candidate = max(SPEED_CORRECTION_MIN, min(SPEED_CORRECTION_MAX, candidate))
+            value = candidate
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        logger.warning(f"讀取速度校正檔失敗，使用預設值: {e}")
+    _speed_correction_value = value
+    return value
+
+def get_speed_correction():
+    """取得目前速度校正係數"""
+    with _speed_correction_lock:
+        return _speed_correction_value
+
+def set_speed_correction(new_value, persist=False):
+    """更新速度校正係數，必要時寫回檔案"""
+    global _speed_correction_value
+    clamped = max(SPEED_CORRECTION_MIN, min(SPEED_CORRECTION_MAX, float(new_value)))
+    with _speed_correction_lock:
+        _speed_correction_value = clamped
+    if persist:
+        persist_speed_correction()
+    return clamped
+
+def persist_speed_correction():
+    """將目前速度校正係數寫入磁碟"""
+    value = get_speed_correction()
+    try:
+        os.makedirs(SPEED_CALIBRATION_DIR, exist_ok=True)
+        with open(SPEED_CALIBRATION_FILE, "w", encoding="utf-8") as f:
+            json.dump({"speed_correction": value, "updated_at": time.time()}, f)
+    except Exception as e:
+        logger.warning(f"寫入速度校正檔失敗: {e}")
+
+# 初始化校正係數
+_load_speed_correction()
+
+# 讀取校正啟用標記（單次會話）
+if os.environ.get("SPEED_CALIBRATE_ONCE") == "1" or os.path.exists(CALIBRATION_MARKER):
+    calibration_enabled = True
+    try:
+        if os.path.exists(CALIBRATION_MARKER):
+            os.remove(CALIBRATION_MARKER)  # 單次使用
+    except Exception:
+        pass
+else:
+    calibration_enabled = False
+
+def is_speed_calibration_enabled():
+    return calibration_enabled
+
+def set_speed_calibration_enabled(enabled: bool):
+    global calibration_enabled
+    calibration_enabled = bool(enabled)
+    logger.info(f"速度校正模式 {'啟用' if calibration_enabled else '停用'}")
+
+def set_speed_sync_mode(mode: str):
+    """設定速度同步模式，並同步 gps_speed_mode 旗標"""
+    global speed_sync_mode, gps_speed_mode
+    allowed = {"calibrated", "fixed", "gps"}
+    if mode not in allowed:
+        logger.warning(f"無效速度模式: {mode}")
+        return speed_sync_mode
+    speed_sync_mode = mode
+    gps_speed_mode = (mode == "gps")
+    logger.info(f"速度模式切換為 {mode}，gps_speed_mode={gps_speed_mode}")
+    return speed_sync_mode
 # --- 1. 硬體連接 ---
 
 def detect_socketcan_interfaces():
@@ -334,11 +424,6 @@ def unified_receiver(bus, db, signals):
     # 速度平滑參數 (OBD)
     current_speed_smoothed = 0.0
     speed_alpha = 0.3  # 速度平滑係數
-    
-    if gps_speed_mode == False:
-        speed_correction = 1.05  # 速度校正係數 (+10%)，模擬原廠快樂表
-    else:
-        speed_correction=1.01
     last_obd_speed_int = None  # OBD 速度緩存
     
     # 油量平滑演算法參數
@@ -418,14 +503,18 @@ def unified_receiver(bus, db, signals):
                             current_speed_smoothed = (current_speed_smoothed * (1 - speed_alpha)) + (raw_speed * speed_alpha)
                         
                         data_store["OBD"]["speed"] = raw_speed
+                        data_store["OBD"]["speed_smoothed"] = current_speed_smoothed
                         data_store["OBD"]["last_update"] = time.time()
                         
                         
-                        # 套用校正係數後更新 UI（模擬原廠快樂表）
-                        if gps_speed_mode == False:
-                            corrected_speed = current_speed_smoothed*speed_correction+0.8
+                        # 套用校正係數後更新 UI（依據速度模式）
+                        mode = speed_sync_mode
+                        if mode == "fixed":
+                            speed_correction = 1.05
+                            corrected_speed = current_speed_smoothed * speed_correction + 0.8
                         else:
-                            corrected_speed = current_speed_smoothed*speed_correction
+                            speed_correction = get_speed_correction()
+                            corrected_speed = current_speed_smoothed * speed_correction
                         speed_int = int(corrected_speed)
                         if last_obd_speed_int is None or abs(speed_int - last_obd_speed_int) >= 1:
                             signals.update_speed.emit(corrected_speed)
