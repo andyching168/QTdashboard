@@ -8061,6 +8061,7 @@ class Dashboard(QWidget):
     def init_data(self):
         """初始化儀表數據，可以從外部數據源更新"""
         self.speed = 0
+        self.distance_speed = 0.0  # OBD 原始速度用於里程累積
         self.rpm = 0
         self.temp = None  # None = OBD 未回應，顯示 "--"
         self.fuel = 60  # 稍微偏上的油量
@@ -8736,16 +8737,22 @@ class Dashboard(QWidget):
 
         # 動態校正速度權重：僅在 GPS 已鎖定且兩者差距小時逐步調整
         raw_obd_speed = None
+        smoothed_obd_speed = None
         try:
-            raw_obd_speed = datagrab.data_store.get("OBD", {}).get("speed_smoothed") or datagrab.data_store.get("OBD", {}).get("speed")
+            obd_data = datagrab.data_store.get("OBD", {})
+            raw_obd_speed = obd_data.get("speed")
+            smoothed_obd_speed = obd_data.get("speed_smoothed")
         except Exception:
             raw_obd_speed = None
-        self._maybe_update_speed_correction(raw_obd_speed)
+            smoothed_obd_speed = None
+        self._maybe_update_speed_correction(smoothed_obd_speed or raw_obd_speed)
 
         new_speed = max(0, min(200, speed))
+        distance_speed = raw_obd_speed if raw_obd_speed is not None else new_speed
+        self.distance_speed = max(0.0, distance_speed)
         # 里程計算已改由 _physics_tick() 驅動，這裡只需記錄速度
-        self.trip_card.current_speed = speed
-        self.odo_card.current_speed = speed
+        self.trip_card.current_speed = self.distance_speed
+        self.odo_card.current_speed = self.distance_speed
         
         # 只在顯示數字變化時才更新 UI（整數部分變化）
         if int(new_speed) != int(self.speed):
@@ -8799,7 +8806,7 @@ class Dashboard(QWidget):
             return
         
         # 使用當前速度計算里程
-        current_speed = self.speed
+        current_speed = max(0.0, getattr(self, "distance_speed", self.speed))
         if current_speed > 0:
             # 距離 = 速度 * 時間 (km/h * hours = km)
             distance_increment = (current_speed / 3600.0) * time_delta
@@ -9854,10 +9861,12 @@ class Dashboard(QWidget):
         # W/S: 速度與轉速
         if key == Qt.Key.Key_W:
             self.speed = min(180, self.speed + 5)
+            self.distance_speed = self.speed
             # 轉速與速度成比例，但不超過紅區
             self.rpm = min(7, 0.8 + (self.speed / 180.0) * 5.0)
         elif key == Qt.Key.Key_S:
             self.speed = max(0, self.speed - 5)
+            self.distance_speed = self.speed
             # 減速時轉速下降到怠速
             if self.speed < 5:
                 self.rpm = 0.8  # 怠速
