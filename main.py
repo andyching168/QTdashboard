@@ -6279,24 +6279,29 @@ class ControlPanel(QWidget):
         try:
             import datagrab
             current_enabled = datagrab.is_speed_calibration_enabled()
+            current_val = datagrab.get_speed_correction()
         except Exception:
             current_enabled = False
+            current_val = 1.01
         
         # 彈出確認對話框
         from PyQt6.QtWidgets import QMessageBox
         
         msg = QMessageBox()
-        msg.setWindowTitle("速度校正模式")
         
         if current_enabled:
-            msg.setText("速度校正模式目前已啟用\n\n是否要關閉？")
+            # 已開啟 → 長按 = 存檔並關閉
+            msg.setWindowTitle("💾 儲存速度校正")
+            msg.setText(f"速度校正模式執行中\n\n目前校正係數：{current_val:.4f}\n\n是否儲存並關閉校正模式？")
             msg.setIcon(QMessageBox.Icon.Question)
         else:
-            msg.setText("是否啟用速度校正模式？\n\n啟用後，系統會根據 GPS 速度\n逐漸修正 OBD 速度係數。\n\n熄火時會自動儲存校正值。")
+            # 未開啟 → 長按 = 開啟校正模式
+            msg.setWindowTitle("🔧 速度校正模式")
+            msg.setText(f"是否啟用速度校正模式？\n\n目前校正係數：{current_val:.4f}\n\n啟用後，系統會根據 GPS 速度\n逐漸修正 OBD 速度係數。\n\n💡 再次長按可手動儲存")
             msg.setIcon(QMessageBox.Icon.Question)
         
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        msg.setDefaultButton(QMessageBox.StandardButton.No)
+        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
         msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         
         result = msg.exec()
@@ -6309,16 +6314,17 @@ class ControlPanel(QWidget):
                 
                 # 顯示結果
                 status_msg = QMessageBox()
-                status_msg.setWindowTitle("速度校正模式")
                 if new_state:
-                    current_val = datagrab.get_speed_correction()
-                    status_msg.setText(f"✅ 速度校正模式已啟用\n\n目前校正係數：{current_val:.4f}\n\n請在 GPS 訊號良好的情況下行駛，\n系統會自動調整校正值。")
+                    # 開啟校正模式
+                    status_msg.setWindowTitle("🔧 校正模式已啟用")
+                    status_msg.setText(f"✅ 速度校正模式已啟用\n\n目前校正係數：{current_val:.4f}\n\n請在 GPS 訊號良好的情況下行駛，\n系統會自動調整校正值。\n\n💡 完成後長按此按鈕可儲存")
                     status_msg.setIcon(QMessageBox.Icon.Information)
                 else:
-                    current_val = datagrab.get_speed_correction()
-                    # 關閉時儲存
+                    # 關閉並儲存
                     datagrab.persist_speed_correction()
-                    status_msg.setText(f"❌ 速度校正模式已關閉\n\n校正係數已儲存：{current_val:.4f}")
+                    final_val = datagrab.get_speed_correction()
+                    status_msg.setWindowTitle("💾 校正已儲存")
+                    status_msg.setText(f"✅ 速度校正係數已儲存！\n\n最終校正係數：{final_val:.4f}\n\n校正模式已關閉")
                     status_msg.setIcon(QMessageBox.Icon.Information)
                 status_msg.setWindowFlags(status_msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
                 status_msg.exec()
@@ -7379,11 +7385,16 @@ class Dashboard(QWidget):
             self.gps_icon_label.setText("GPS") 
             self.gps_icon_label.setStyleSheet("color: #4ade80; font-size: 18px; font-weight: bold; background: transparent;")
             self.gps_icon_label.setToolTip("GPS: Fixed (3D)")
+            # GPS 速度標籤也變綠色
+            self.gps_speed_label.setStyleSheet("color: #4ade80; font-size: 16px; font-weight: bold; background: transparent;")
         else:
             # 灰色 (No Fix)
             self.gps_icon_label.setText("GPS") 
             self.gps_icon_label.setStyleSheet("color: #444; font-size: 18px; font-weight: bold; background: transparent;")
             self.gps_icon_label.setToolTip("GPS: Searching...")
+            # GPS 速度標籤顯示 "--" 並變灰色
+            self.gps_speed_label.setText("--")
+            self.gps_speed_label.setStyleSheet("color: #444; font-size: 16px; font-weight: bold; background: transparent;")
             
         # Force Style Update
         self.gps_icon_label.style().unpolish(self.gps_icon_label)
@@ -7393,6 +7404,12 @@ class Dashboard(QWidget):
     def _update_gps_speed(self, speed_kmh):
         """更新 GPS 速度"""
         self.current_gps_speed = speed_kmh
+        
+        # 更新左上角的 GPS 速度顯示
+        if self.is_gps_fixed:
+            self.gps_speed_label.setText(f"{int(speed_kmh)}")
+        else:
+            self.gps_speed_label.setText("--")
         
         # 檢查是否應該顯示 GPS 速度
         # 條件: 速度同步開啟(datagrab.gps_speed_mode) AND GPS 定位完成 AND OBD速度 >= 20
@@ -7455,10 +7472,12 @@ class Dashboard(QWidget):
         center_layout.setSpacing(10) # 間距
         center_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # 1. 左側平衡佔位符 (與 GPS Icon 等寬)
-        left_spacer_label = QLabel("")
-        left_spacer_label.setFixedWidth(40)
-        left_spacer_label.setStyleSheet("background: transparent;")
+        # 1. 左側 GPS 速度顯示 (與右側 GPS Icon 平衡)
+        self.gps_speed_label = QLabel("--")
+        self.gps_speed_label.setFixedWidth(50)
+        self.gps_speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.gps_speed_label.setStyleSheet("color: #444; font-size: 16px; font-weight: bold; background: transparent;")
+        self.gps_speed_label.setToolTip("GPS 速度")
         
         # 2. 時間顯示 (中央)
         self.time_label = QLabel("--:--")
@@ -7482,7 +7501,7 @@ class Dashboard(QWidget):
         
         # 使用 Stretch 確保整體置中
         center_layout.addStretch()
-        center_layout.addWidget(left_spacer_label)
+        center_layout.addWidget(self.gps_speed_label)
         center_layout.addWidget(self.time_label)
         center_layout.addWidget(self.gps_icon_label)
         center_layout.addStretch()
@@ -10022,7 +10041,8 @@ class Dashboard(QWidget):
             return
         
         print("⚡ [測試] 按鍵觸發電壓歸零測試")
-        print(f"   電壓: {self.battery:.1f}V → 0.0V")
+        current_battery = self.battery if self.battery is not None else 0.0
+        print(f"   電壓: {current_battery:.1f}V → 0.0V")
         
         # 鎖定電壓測試，忽略後續的正常電壓更新
         self._voltage_test_locked = True

@@ -17506,3 +17506,52 @@ cantools.database.errors.UnsupportedDatabaseFormatError: DBC: "The signals TRANS
 2025-12-09 23:42:28,662 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
 2025-12-09 23:42:28,663 - spotify_integration - INFO - Spotify 整合已啟用
 2025-12-09 23:42:53,068 - datagrab - INFO - 速度校正係數已儲存: 1.0200
+2025-12-10 01:46:08,638 - datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2025-12-10 01:48:27,443 - datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2025-12-10 01:48:35,520 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-10 01:48:35,697 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-10 01:48:35,697 - spotify_integration - INFO - Spotify 認證成功
+2025-12-10 01:48:35,697 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-10 01:48:35,697 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-10 01:50:48,254 - datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2025-12-10 01:52:55,830 - datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2025-12-10 01:53:03,910 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-10 01:53:04,006 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-10 01:53:04,006 - spotify_integration - INFO - Spotify 認證成功
+2025-12-10 01:53:04,007 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-10 01:53:04,007 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-10 01:56:14,217 - datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2025-12-10 01:56:22,276 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-10 01:56:22,391 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-10 01:56:22,391 - spotify_integration - INFO - Spotify 認證成功
+2025-12-10 01:56:22,391 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-10 01:56:22,392 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-10 01:58:13,515 - datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2025-12-10 01:58:48,354 - datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2025-12-10 01:58:56,410 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-10 01:58:56,525 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-10 01:58:56,525 - spotify_integration - INFO - Spotify 認證成功
+2025-12-10 01:58:56,525 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-10 01:58:56,527 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-10 01:59:47,268 - datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2025-12-10 01:59:55,318 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-10 01:59:55,391 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-10 01:59:55,391 - spotify_integration - INFO - Spotify 認證成功
+2025-12-10 01:59:55,392 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-10 01:59:55,392 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-10 02:00:07,959 - datagrab - INFO - 速度校正模式 啟用
+2025-12-10 02:03:23,922 - datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2025-12-10 02:03:31,974 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-10 02:03:32,067 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-10 02:03:32,067 - spotify_integration - INFO - Spotify 認證成功
+2025-12-10 02:03:32,068 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-10 02:03:32,068 - spotify_integration - INFO - Spotify 整合已啟用
+2025-12-10 02:03:47,246 - datagrab - INFO - 速度校正模式 啟用
+2025-12-10 02:03:57,807 - datagrab - INFO - 速度校正模式 停用
+2025-12-10 02:03:57,812 - datagrab - INFO - 速度校正係數已儲存: 0.9592
+2025-12-10 02:06:55,309 - datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2025-12-10 02:07:03,400 - spotify_integration - INFO - 正在初始化 Spotify 連線...
+2025-12-10 02:07:03,485 - spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2025-12-10 02:07:03,485 - spotify_integration - INFO - Spotify 認證成功
+2025-12-10 02:07:03,486 - spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 2.0秒）
+2025-12-10 02:07:03,486 - spotify_integration - INFO - Spotify 整合已啟用
