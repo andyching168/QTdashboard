@@ -7407,9 +7407,25 @@ class Dashboard(QWidget):
         
         # 更新左上角的 GPS 速度顯示
         if self.is_gps_fixed:
-            self.gps_speed_label.setText(f"{int(speed_kmh)}")
+            # 檢查是否在校正模式
+            import datagrab
+            try:
+                calibration_enabled = datagrab.is_speed_calibration_enabled()
+            except:
+                calibration_enabled = False
+            
+            if calibration_enabled:
+                # 校正模式：顯示速度和校正係數
+                correction = datagrab.get_speed_correction()
+                self.gps_speed_label.setText(f"{int(speed_kmh)}({correction:.2f})")
+                self.gps_speed_label.setFixedWidth(90)  # 加寬以容納校正係數
+            else:
+                # 一般模式：只顯示速度
+                self.gps_speed_label.setText(f"{int(speed_kmh)}")
+                self.gps_speed_label.setFixedWidth(50)
         else:
             self.gps_speed_label.setText("--")
+            self.gps_speed_label.setFixedWidth(50)
         
         # 檢查是否應該顯示 GPS 速度
         # 條件: 速度同步開啟(datagrab.gps_speed_mode) AND GPS 定位完成 AND OBD速度 >= 20
