@@ -8035,14 +8035,6 @@ class Dashboard(QWidget):
         # 釋放 GPS 資源，讓 location_notifier 可以接手
         if hasattr(self, 'gps_monitor_thread'):
             self.gps_monitor_thread.stop()
-
-        # 儲存最新速度校正係數，便於下次啟動沿用
-        try:
-            import datagrab
-            datagrab.persist_speed_correction()
-            print(f"[速度校正] 已儲存校正係數 {datagrab.get_speed_correction():.3f}")
-        except Exception as e:
-            print(f"[速度校正] 儲存校正係數失敗: {e}")
             
         self._shutdown_monitor.show_shutdown_dialog(self)
     

@@ -68,8 +68,7 @@ send_lock = threading.Lock() # 保護寫入操作
 gps_speed_mode=False  # True: GPS 顯示優先 (OBD+GPS 混合)，False: OBD 顯示
 speed_sync_mode = "calibrated"  # calibrated | fixed | gps
 
-# 校正會話控制
-CALIBRATION_MARKER = "/tmp/.dashboard_speed_calibrate"
+# 校正會話控制（僅透過 UI 長按手動啟用）
 calibration_enabled = False  # 僅手動啟用時才允許自動校正
 # 速度校正設定
 SPEED_CALIBRATION_DIR = os.path.join(os.path.expanduser("~"), ".config", "qtdashboard")
@@ -127,17 +126,6 @@ def persist_speed_correction():
 
 # 初始化校正係數
 _load_speed_correction()
-
-# 讀取校正啟用標記（單次會話）
-if os.environ.get("SPEED_CALIBRATE_ONCE") == "1" or os.path.exists(CALIBRATION_MARKER):
-    calibration_enabled = True
-    try:
-        if os.path.exists(CALIBRATION_MARKER):
-            os.remove(CALIBRATION_MARKER)  # 單次使用
-    except Exception:
-        pass
-else:
-    calibration_enabled = False
 
 def is_speed_calibration_enabled():
     return calibration_enabled
