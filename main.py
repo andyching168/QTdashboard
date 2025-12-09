@@ -6238,6 +6238,22 @@ class ControlPanel(QWidget):
         btn = QPushButton()
         btn.setFixedSize(120, 120)
         btn.clicked.connect(lambda checked=False: self.on_button_clicked("速度同步", checked))
+        
+        # 長按檢測（1.5 秒）
+        btn._long_press_timer = QTimer()
+        btn._long_press_timer.setSingleShot(True)
+        btn._long_press_timer.timeout.connect(lambda: self._on_speed_sync_long_press(btn))
+        btn._is_long_press = False
+        
+        def on_pressed():
+            btn._is_long_press = False
+            btn._long_press_timer.start(1500)  # 1.5 秒長按
+        
+        def on_released():
+            btn._long_press_timer.stop()
+        
+        btn.pressed.connect(on_pressed)
+        btn.released.connect(on_released)
 
         label = QLabel("速度同步")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -6255,6 +6271,60 @@ class ControlPanel(QWidget):
         # 套用預設狀態樣式
         self._apply_speed_sync_style(btn, self.speed_sync_mode)
         return container
+    
+    def _on_speed_sync_long_press(self, btn):
+        """速度同步按鈕長按：切換速度校正模式"""
+        btn._is_long_press = True
+        
+        try:
+            import datagrab
+            current_enabled = datagrab.is_speed_calibration_enabled()
+        except Exception:
+            current_enabled = False
+        
+        # 彈出確認對話框
+        from PyQt6.QtWidgets import QMessageBox
+        
+        msg = QMessageBox()
+        msg.setWindowTitle("速度校正模式")
+        
+        if current_enabled:
+            msg.setText("速度校正模式目前已啟用\n\n是否要關閉？")
+            msg.setIcon(QMessageBox.Icon.Question)
+        else:
+            msg.setText("是否啟用速度校正模式？\n\n啟用後，系統會根據 GPS 速度\n逐漸修正 OBD 速度係數。\n\n熄火時會自動儲存校正值。")
+            msg.setIcon(QMessageBox.Icon.Question)
+        
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.setDefaultButton(QMessageBox.StandardButton.No)
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        
+        result = msg.exec()
+        
+        if result == QMessageBox.StandardButton.Yes:
+            try:
+                import datagrab
+                new_state = not current_enabled
+                datagrab.set_speed_calibration_enabled(new_state)
+                
+                # 顯示結果
+                status_msg = QMessageBox()
+                status_msg.setWindowTitle("速度校正模式")
+                if new_state:
+                    current_val = datagrab.get_speed_correction()
+                    status_msg.setText(f"✅ 速度校正模式已啟用\n\n目前校正係數：{current_val:.4f}\n\n請在 GPS 訊號良好的情況下行駛，\n系統會自動調整校正值。")
+                    status_msg.setIcon(QMessageBox.Icon.Information)
+                else:
+                    current_val = datagrab.get_speed_correction()
+                    # 關閉時儲存
+                    datagrab.persist_speed_correction()
+                    status_msg.setText(f"❌ 速度校正模式已關閉\n\n校正係數已儲存：{current_val:.4f}")
+                    status_msg.setIcon(QMessageBox.Icon.Information)
+                status_msg.setWindowFlags(status_msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+                status_msg.exec()
+                
+            except Exception as e:
+                print(f"[速度校正] 切換失敗: {e}")
     
     def adjust_color(self, hex_color, factor):
         """調整顏色亮度"""
@@ -6337,6 +6407,12 @@ class ControlPanel(QWidget):
             if parent and hasattr(parent, 'show_mqtt_settings'):
                 parent.show_mqtt_settings()  # type: ignore
         elif title == "速度同步":
+            # 檢查是否為長按（長按已處理，不要觸發普通點擊）
+            btn = self._get_button_by_title("速度同步")
+            if btn and hasattr(btn, '_is_long_press') and btn._is_long_press:
+                btn._is_long_press = False
+                return  # 長按已處理，跳過
+            
             parent = self.parent()
             if parent and hasattr(parent, 'cycle_speed_sync_mode'):
                 parent.cycle_speed_sync_mode()  # type: ignore

@@ -276,6 +276,21 @@ class ShutdownDialog(QDialog):
     
     def _do_shutdown(self):
         """執行關機或退出程式"""
+        # 關機前再次儲存速度校正係數（確保最新值被保存）
+        try:
+            import datagrab
+            datagrab.persist_speed_correction()
+            print(f"[速度校正] 關機前儲存校正係數 {datagrab.get_speed_correction():.3f}")
+        except Exception as e:
+            print(f"[速度校正] 儲存失敗: {e}")
+        
+        # 強制同步檔案系統，確保資料寫入磁碟
+        try:
+            os.sync()
+            print("[Sync] 檔案系統已同步")
+        except Exception as e:
+            print(f"[Sync] 同步失敗: {e}")
+        
         if self.test_mode:
             print("🟡 [測試模式] 退出程式...")
             self.exit_app.emit()

@@ -119,6 +119,9 @@ def persist_speed_correction():
         os.makedirs(SPEED_CALIBRATION_DIR, exist_ok=True)
         with open(SPEED_CALIBRATION_FILE, "w", encoding="utf-8") as f:
             json.dump({"speed_correction": value, "updated_at": time.time()}, f)
+            f.flush()
+            os.fsync(f.fileno())  # 確保寫入磁碟
+        logger.info(f"速度校正係數已儲存: {value:.4f}")
     except Exception as e:
         logger.warning(f"寫入速度校正檔失敗: {e}")
 
