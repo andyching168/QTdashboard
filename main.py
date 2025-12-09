@@ -6277,9 +6277,9 @@ class ControlPanel(QWidget):
     def _apply_speed_sync_style(self, btn: QPushButton, mode: str):
         """套用速度同步按鈕的樣式與文字"""
         label_map = {
-            "calibrated": "OBD(校正)",
-            "fixed": "OBD(同步)",
-            "gps": "OBD(GPS)",
+            "calibrated": "OBD\n(校正)",
+            "fixed": "OBD\n(同步)",
+            "gps": "OBD\n(GPS)",
         }
         color_map = {
             "calibrated": "#4CAF50",
