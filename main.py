@@ -8767,15 +8767,19 @@ class Dashboard(QWidget):
         smoothed_obd_speed = None
         try:
             obd_data = datagrab.data_store.get("OBD", {})
-            raw_obd_speed = obd_data.get("speed")
-            smoothed_obd_speed = obd_data.get("speed_smoothed")
+            last_update = obd_data.get("last_update", 0)
+            # 只有在 OBD 資料是「新鮮」的（5 秒內有更新）才使用
+            if time.time() - last_update < 5.0:
+                raw_obd_speed = obd_data.get("speed")
+                smoothed_obd_speed = obd_data.get("speed_smoothed")
         except Exception:
             raw_obd_speed = None
             smoothed_obd_speed = None
         self._maybe_update_speed_correction(smoothed_obd_speed or raw_obd_speed)
 
         new_speed = max(0, min(200, speed))
-        distance_speed = raw_obd_speed if raw_obd_speed is not None else new_speed
+        # 里程計算：使用平滑後的 OBD 速度（未經校正模式處理），若無有效 OBD 資料則使用顯示速度
+        distance_speed = smoothed_obd_speed if smoothed_obd_speed is not None else new_speed
         self.distance_speed = max(0.0, distance_speed)
         # 里程計算已改由 _physics_tick() 驅動，這裡只需記錄速度
         self.trip_card.current_speed = self.distance_speed
