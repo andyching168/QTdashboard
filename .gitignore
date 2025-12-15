@@ -46,3 +46,4 @@ log/
 qtdashboard.log
 config.json
 gps_debug.log
+mqtt_config.json
