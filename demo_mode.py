@@ -12,7 +12,7 @@ import os
 import random
 import sys
 import time
-
+sys.path.append('/mnt/mmcblk0p2/python_libs')
 # 設定入口點環境變數 (供程式重啟時判斷)
 os.environ['DASHBOARD_ENTRY'] = 'demo'
 

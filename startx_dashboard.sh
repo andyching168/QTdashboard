@@ -16,9 +16,13 @@
 #   8. 啟動儀表板應用程式
 # =============================================================================
 
-SCRIPT_DIR="/home/ac/QTdashboard"
+SCRIPT_DIR="/home/tc/projects/QTdashboard"
 STARTUP_LOG="/tmp/dashboard_startup.log"
 cd "$SCRIPT_DIR"
+
+
+export DISPLAY=:0
+xhost +local: 2>/dev/null || true
 
 # === 記錄啟動時間 ===
 echo "" >> "$STARTUP_LOG"

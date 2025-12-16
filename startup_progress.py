@@ -19,7 +19,7 @@ import time
 import socket
 import json
 import threading
-
+sys.path.append('/mnt/mmcblk0p2/python_libs')
 # === 垂直同步 (VSync) 設定 ===
 # 針對 480x1920 直式螢幕旋轉 90 度使用 (1920x480)
 os.environ.setdefault('QSG_RENDER_LOOP', 'basic')

@@ -12,7 +12,7 @@ import serial.tools.list_ports
 from rich.console import Console
 from rich.panel import Panel
 from rich.align import Align
-
+sys.path.append('/mnt/mmcblk0p2/python_libs')
 # 設定入口點環境變數 (供程式重啟時判斷)
 os.environ['DASHBOARD_ENTRY'] = 'datagrab'
 

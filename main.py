@@ -16,7 +16,7 @@ from collections import deque
 # 在 RPi4 等低效能裝置上，Python 的垃圾回收可能導致週期性卡頓
 # 調整 GC 閾值，減少全量 GC 的頻率
 gc.set_threshold(50000, 500, 100)  # 預設 (700, 10, 10)，大幅提高閾值
-
+sys.path.append('/mnt/mmcblk0p2/python_libs')
 # 抑制 Qt 多媒體 FFmpeg 音訊格式解析警告
 os.environ.setdefault('QT_LOGGING_RULES', '*.debug=false;qt.multimedia.ffmpeg=false')
 
@@ -859,7 +859,7 @@ class DigitalGaugeCard(QWidget):
             color: #6af;
             font-size: 72px;
             font-weight: bold;
-            font-family: 'Arial', 'Helvetica', sans-serif;
+            font-family: 'Arial','Dejavu Sans', 'Helvetica', sans-serif;
             background: transparent;
         """)
         
@@ -965,7 +965,7 @@ class DigitalGaugeCard(QWidget):
             color: {color};
             font-size: 72px;
             font-weight: bold;
-            font-family: 'Arial', 'Helvetica', sans-serif;
+            font-family: 'Arial','Dejavu Sans', 'Helvetica', sans-serif;
             background: transparent;
         """)
         self.progress_bar.setStyleSheet(bar_style)
@@ -2176,7 +2176,7 @@ class OdometerCard(QWidget):
         btn_ok.setStyleSheet("""
             QPushButton {
                 background-color: #6af;
-                color: white;
+[6~                color: white;
                 border: none;
                 border-radius: 8px;
                 font-size: 14px;
@@ -7864,7 +7864,7 @@ class Dashboard(QWidget):
             color: white;
             font-size: 140px;
             font-weight: bold;
-            font-family: 'Arial', 'Helvetica', sans-serif;
+            font-family: 'Arial','Dejavu Sans', 'Helvetica', sans-serif;
             background: transparent;
         """)
         self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -10437,7 +10437,6 @@ def run_dashboard(
         run_dashboard(startup_info=startup_steps)
     """
     app = QApplication(sys.argv)
-    
     # 檢測環境
     is_production = is_production_environment()
     env_name = "生產環境（樹莓派）" if is_production else "開發環境（Mac/Windows）"
