@@ -310,12 +310,22 @@ class ShutdownDialog(QDialog):
 
 
 class ShutdownMonitor(QObject):
-    """關機監控器 - 監測電壓變化"""
+    """關機監控器 - 監測電壓變化
+    
+    功能：
+    1. 電壓掉落偵測：當電壓從正常值掉到接近 0 時，觸發關機
+    2. 無訊號超時偵測：當 OBD 連續 3 分鐘沒有收到電壓訊號時，觸發關機
+       （用於儀表開機但車子從未發動的情況）
+    """
     
     # 信號
     power_lost = pyqtSignal()      # 電源中斷
     power_restored = pyqtSignal()  # 電源恢復
     exit_app = pyqtSignal()        # 退出程式（測試模式用）
+    no_signal_timeout = pyqtSignal()  # 無訊號超時
+    
+    # 無電壓訊號超時時間（秒）
+    NO_VOLTAGE_SIGNAL_TIMEOUT = 180  # 3 分鐘
     
     def __init__(self, 
                  voltage_threshold=10.0,      # 正常電壓閾值
@@ -344,6 +354,11 @@ class ShutdownMonitor(QObject):
         self.low_voltage_count = 0
         self.power_lost_triggered = False
         
+        # === 無電壓訊號超時監控 ===
+        self.last_voltage_received_time = None  # 上次收到電壓訊號的時間
+        self.no_signal_triggered = False        # 是否已觸發無訊號超時
+        self._no_signal_check_timer = None      # 檢查計時器
+        
         # 關機對話框
         self.shutdown_dialog = None
         
@@ -354,12 +369,75 @@ class ShutdownMonitor(QObject):
         """更新油量"""
         self.current_fuel_level = level
     
+    def start_no_signal_monitoring(self):
+        """啟動無電壓訊號監控
+        
+        應在 Dashboard 啟動後呼叫，開始監控是否收到電壓訊號。
+        如果 3 分鐘內沒有收到任何電壓訊號，將觸發關機流程。
+        """
+        import time
+        
+        # 記錄啟動時間作為初始參考點
+        self.last_voltage_received_time = time.time()
+        self.no_signal_triggered = False
+        
+        # 建立並啟動檢查計時器（每 30 秒檢查一次）
+        if self._no_signal_check_timer is None:
+            self._no_signal_check_timer = QTimer()
+            self._no_signal_check_timer.timeout.connect(self._check_no_signal_timeout)
+        
+        self._no_signal_check_timer.start(30000)  # 30 秒檢查一次
+        print(f"[ShutdownMonitor] 無訊號監控已啟動 (超時: {self.NO_VOLTAGE_SIGNAL_TIMEOUT}秒)")
+    
+    def stop_no_signal_monitoring(self):
+        """停止無電壓訊號監控"""
+        if self._no_signal_check_timer:
+            self._no_signal_check_timer.stop()
+            print("[ShutdownMonitor] 無訊號監控已停止")
+    
+    def _check_no_signal_timeout(self):
+        """檢查是否超過無訊號超時時間"""
+        import time
+        
+        if self.last_voltage_received_time is None:
+            return
+        
+        # 如果已經觸發過，不重複觸發
+        if self.no_signal_triggered:
+            return
+        
+        # 如果關機對話框正在顯示，不重複觸發
+        if self.shutdown_dialog and self.shutdown_dialog.isVisible():
+            return
+        
+        elapsed = time.time() - self.last_voltage_received_time
+        remaining = self.NO_VOLTAGE_SIGNAL_TIMEOUT - elapsed
+        
+        if elapsed >= self.NO_VOLTAGE_SIGNAL_TIMEOUT:
+            self.no_signal_triggered = True
+            print(f"⚠️ [ShutdownMonitor] 無電壓訊號超時！已 {elapsed:.0f} 秒未收到 OBD 電壓數據")
+            print("   原因: OBD 可能未連接或車輛從未發動")
+            self.no_signal_timeout.emit()
+        elif remaining <= 60:
+            # 最後 60 秒時顯示警告
+            print(f"⚠️ [ShutdownMonitor] 無電壓訊號警告: 還剩 {remaining:.0f} 秒將自動關機")
+    
     def update_voltage(self, voltage: float):
         """更新電壓值
         
         Args:
             voltage: 當前電壓 (V)
         """
+        import time
+        
+        # === 更新收到訊號的時間（關鍵：任何電壓值都代表有收到訊號）===
+        self.last_voltage_received_time = time.time()
+        
+        # 如果之前因無訊號而觸發，現在收到訊號了，重置狀態
+        if self.no_signal_triggered:
+            print("🟢 [ShutdownMonitor] 收到電壓訊號，重置無訊號超時狀態")
+            self.no_signal_triggered = False
+        
         # 記錄是否曾經有過正常電壓
         if voltage >= self.voltage_threshold:
             self.was_powered = True
@@ -419,10 +497,15 @@ class ShutdownMonitor(QObject):
     
     def _on_shutdown_cancelled(self):
         """使用者取消關機"""
+        import time
         print("🟡 使用者取消關機")
         # 重置狀態，允許再次觸發
         self.power_lost_triggered = False
         self.low_voltage_count = 0
+        
+        # 也重置無訊號超時狀態，重新計時
+        self.no_signal_triggered = False
+        self.last_voltage_received_time = time.time()  # 重新計時
 
 
 # === 全域單例 ===

@@ -8026,7 +8026,13 @@ class Dashboard(QWidget):
         self._shutdown_monitor.power_lost.connect(self._on_power_lost)
         self._shutdown_monitor.power_restored.connect(self._on_power_restored)
         
-        print("[ShutdownMonitor] 關機監控器已初始化")
+        # 連接無電壓訊號超時信號（3 分鐘沒收到 OBD 電壓數據）
+        self._shutdown_monitor.no_signal_timeout.connect(self._on_no_voltage_signal_timeout)
+        
+        # 啟動無訊號監控
+        self._shutdown_monitor.start_no_signal_monitoring()
+        
+        print("[ShutdownMonitor] 關機監控器已初始化（含無訊號超時監控）")
     
     def _on_power_lost(self):
         """電源中斷時顯示關機對話框"""
@@ -8041,6 +8047,22 @@ class Dashboard(QWidget):
     def _on_power_restored(self):
         """電源恢復"""
         print("✅ 電源已恢復")
+    
+    def _on_no_voltage_signal_timeout(self):
+        """無電壓訊號超時（3 分鐘沒收到 OBD 電壓數據）
+        
+        這表示儀表開機了，但車子從未發動（OBD 沒有回應）。
+        為了節省電力，觸發關機流程。
+        """
+        print("⚠️ 無電壓訊號超時（3 分鐘未收到 OBD 電壓數據）")
+        print("   可能原因: 儀表開機但車輛從未發動，OBD 無回應")
+        
+        # 釋放 GPS 資源
+        if hasattr(self, 'gps_monitor_thread'):
+            self.gps_monitor_thread.stop()
+        
+        # 顯示關機對話框（與電源中斷相同的處理）
+        self._shutdown_monitor.show_shutdown_dialog(self)
     
     def _create_brightness_overlay(self):
         """創建亮度調節覆蓋層"""
