@@ -8840,8 +8840,7 @@ class Dashboard(QWidget):
         current_speed = max(0.0, getattr(self, "distance_speed", self.speed))
         if current_speed > 0:
             # 距離 = 速度 * 時間 (km/h * hours = km)
-            # 里程校正係數 0.833（根據實測：OBD 速度計算出的里程偏多約 20%）
-            distance_correction = 0.833
+            distance_correction = 1.0
             distance_increment = (current_speed / 3600.0) * time_delta * distance_correction
             
             # 更新 Trip 卡片里程
