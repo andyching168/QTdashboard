@@ -8773,18 +8773,30 @@ class Dashboard(QWidget):
                 raw_obd_speed = obd_data.get("speed")
                 smoothed_obd_speed = obd_data.get("speed_smoothed")
         except Exception:
-            raw_obd_speed = None
-            smoothed_obd_speed = None
+            pass
+        
+        # --- 修改點 A: 分離顯示速度與物理計算速度 ---
+        # 顯示用：如果有平滑值就用平滑值 (視覺不跳動)
+        display_speed_candidate = smoothed_obd_speed if smoothed_obd_speed is not None else speed
+        
+        # 物理計算用：優先使用 RAW 數據 (積分更準)，如果沒有才用平滑或傳入值
+        physics_speed_candidate = raw_obd_speed if raw_obd_speed is not None else display_speed_candidate
+        
+        # 存入變數供 physics_tick 使用
+        self.calc_speed_source = max(0.0, physics_speed_candidate if physics_speed_candidate is not None else 0.0)
+
+        # 更新顯示邏輯
+        new_speed = max(0, min(200, display_speed_candidate if display_speed_candidate is not None else speed))
+        # 兼容性：保留 distance_speed 供其他模擬/測試使用 (例如鍵盤模擬)
+        self.distance_speed = max(0.0, display_speed_candidate if display_speed_candidate is not None else 0.0)
+        
+        # 里程/卡片顯示使用顯示速度（實際累積由 _physics_tick 驅動）
+        self.trip_card.current_speed = new_speed
+        self.odo_card.current_speed = new_speed
+        
+        # 更新速度校正（維持原本邏輯）
         self._maybe_update_speed_correction(smoothed_obd_speed or raw_obd_speed)
 
-        new_speed = max(0, min(200, speed))
-        # 里程計算：使用平滑後的 OBD 速度（未經校正模式處理），若無有效 OBD 資料則使用顯示速度
-        distance_speed = smoothed_obd_speed if smoothed_obd_speed is not None else new_speed
-        self.distance_speed = max(0.0, distance_speed)
-        # 里程計算已改由 _physics_tick() 驅動，這裡只需記錄速度
-        self.trip_card.current_speed = self.distance_speed
-        self.odo_card.current_speed = self.distance_speed
-        
         # 只在顯示數字變化時才更新 UI（整數部分變化）
         if int(new_speed) != int(self.speed):
             self.speed = new_speed
@@ -8827,26 +8839,42 @@ class Dashboard(QWidget):
         print(f"[速度校正] GPS 已鎖定，係數 {prev:.3f} -> {new_value:.3f} (比例 {ratio:.3f}，差 {diff:.1f} km/h)")
     
     def _physics_tick(self):
-        """物理心跳：每 100ms 根據當前速度累積里程"""
+        """物理心跳：每 100ms 根據當前速度累積里程 (梯形積分法)"""
         current_time = time.time()
-        time_delta = current_time - self.last_physics_time
+        time_delta = current_time - getattr(self, "last_physics_time", current_time)
+        
+        # 安全檢查
+        if time_delta <= 0 or time_delta > 1.0:
+            self.last_physics_time = current_time # 重置時間，避免跳變
+            return
+            
         self.last_physics_time = current_time
         
-        # 安全檢查：忽略異常的時間間隔（例如系統休眠後喚醒）
-        if time_delta <= 0 or time_delta > 1.0:
-            return
+        # 取得當前速度 (來自 _slot_set_speed 的最新 raw 值)
+        # 如果還沒初始化過，就預設為 0
+        current_speed = getattr(self, "calc_speed_source", 0.0)
         
-        # 使用當前速度計算里程
-        current_speed = max(0.0, getattr(self, "distance_speed", self.speed))
-        if current_speed > 0:
-            # 距離 = 速度 * 時間 (km/h * hours = km)
-            distance_correction = 1.0
-            distance_increment = (current_speed / 3600.0) * time_delta * distance_correction
+        # 取得上一次計算時的速度 (用於梯形公式)
+        prev_speed = getattr(self, "_prev_physics_speed", current_speed)
+        
+        # --- 修改點 B: 梯形積分公式 ---
+        # 距離 = ((上一次速度 + 這一次速度) / 2) * 時間
+        avg_speed = (prev_speed + current_speed) / 2.0
+        
+        if avg_speed > 0:
+            # --- 修改點 C: 更新校正係數 ---
+            # 根據你 101.2 vs 102.7 的數據，這裡應該接近 0.985
+            # 先設 0.985 試試看，或者乾脆 1.0
+            DISTANCE_CORRECTION = 0.985 
             
-            # 更新 Trip 卡片里程
+            # (km/h -> km/s) * s = km
+            distance_increment = (avg_speed / 3600.0) * time_delta * DISTANCE_CORRECTION
+            
             self.trip_card.add_distance(distance_increment)
-            # 更新 ODO 卡片里程
             self.odo_card.add_distance(distance_increment)
+            
+        # 記錄這次速度供下次梯形計算使用
+        self._prev_physics_speed = current_speed
     
     @pyqtSlot(float)
     @perf_track
