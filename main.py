@@ -7335,6 +7335,9 @@ class Dashboard(QWidget):
     
     # 手煞車 Signal
     signal_update_parking_brake = pyqtSignal(bool)  # 傳遞手煞車狀態 (is_engaged)
+    
+    # MQTT telemetry Signal (用於跨執行緒啟動 timer)
+    signal_start_mqtt_telemetry = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -7367,6 +7370,9 @@ class Dashboard(QWidget):
         
         # 連接手煞車 Signal
         self.signal_update_parking_brake.connect(self._slot_update_parking_brake)
+        
+        # 連接 MQTT telemetry Signal
+        self.signal_start_mqtt_telemetry.connect(self._start_mqtt_telemetry_timer)
         
         # 適配 1920x480 螢幕
         self.setFixedSize(1920, 480)
@@ -8644,8 +8650,8 @@ class Dashboard(QWidget):
                     client.subscribe(topic)
                     print(f"[MQTT] 已訂閱主題: {topic}")
                     print(f"[MQTT] 發布主題: {mqtt_publish_topic}")
-                    # 啟動數據上傳計時器
-                    dashboard._start_mqtt_telemetry_timer()
+                    # 透過 Signal 在主執行緒啟動數據上傳計時器
+                    dashboard.signal_start_mqtt_telemetry.emit()
                 else:
                     dashboard._mqtt_connected = False
                     print(f"[MQTT] ❌ 連線失敗，錯誤碼: {rc}")
