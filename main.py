@@ -8736,23 +8736,26 @@ class Dashboard(QWidget):
             trip1_distance, _ = storage.get_trip1()
             trip2_distance, _ = storage.get_trip2()
             
-            # 取得門狀態
+            # 取得門狀態 (開門 = "on", 關門 = "off")
             door_status = {}
             if hasattr(self, 'door_card'):
                 door_status = {
-                    'FL': self.door_card.door_fl_closed,
-                    'FR': self.door_card.door_fr_closed,
-                    'RL': self.door_card.door_rl_closed,
-                    'RR': self.door_card.door_rr_closed,
-                    'BK': self.door_card.door_bk_closed
+                    'FL': 'off' if self.door_card.door_fl_closed else 'on',
+                    'FR': 'off' if self.door_card.door_fr_closed else 'on',
+                    'RL': 'off' if self.door_card.door_rl_closed else 'on',
+                    'RR': 'off' if self.door_card.door_rr_closed else 'on',
+                    'BK': 'off' if self.door_card.door_bk_closed else 'on'
                 }
+            
+            # 水溫轉換：self.temp 是百分比 (0-100)，轉換為攝氏度 (40-120°C)
+            coolant_celsius = 40 + (self.temp / 100) * 80 if self.temp is not None else None
             
             # 組裝數據
             telemetry = {
                 'timestamp': time.time(),
                 'speed': self.speed,
-                'rpm': self.rpm,
-                'coolant_temp': self.temp,
+                'rpm': int(self.rpm * 1000) if self.rpm else 0,  # 轉換為整數 RPM
+                'coolant_temp': coolant_celsius,
                 'fuel': self.fuel,
                 'gear': self.gear,
                 'turbo': self.turbo,
