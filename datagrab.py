@@ -146,6 +146,59 @@ def set_speed_sync_mode(mode: str):
     gps_speed_mode = (mode == "gps")
     logger.info(f"速度模式切換為 {mode}，gps_speed_mode={gps_speed_mode}")
     return speed_sync_mode
+
+
+def quick_read_gear(bus, timeout=1.0):
+    """
+    快速讀取當前檔位（用於啟動時判斷是否跳過開機動畫）
+    
+    Args:
+        bus: CAN Bus 實例
+        timeout: 超時時間（秒）
+    
+    Returns:
+        str: 檔位字串 ("P", "N", "R", "1"-"5") 或 None（超時）
+    """
+    if bus is None:
+        return None
+    
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout:
+        try:
+            msg = bus.recv(timeout=0.1)
+            
+            if msg is None:
+                continue
+            
+            # 只處理 ENGINE_RPM1 (ID 0x340) - 包含檔位資訊
+            if msg.arbitration_id == 0x340:
+                # 取得檔位模式 (Byte 0 bits 0-4)
+                trans_mode = msg.data[0] & 0x1F
+                
+                if trans_mode == 0x00:  # P/N 檔
+                    # 區分 P 和 N (根據 Byte 1)
+                    if (msg.data[1] & 0x0F) == 4:
+                        return "N"
+                    else:
+                        return "P"
+                elif trans_mode == 0x07:  # R 檔
+                    return "R"
+                elif 0x01 <= trans_mode <= 0x05:  # D 檔 1-5 檔
+                    return str(trans_mode)
+                else:
+                    # 其他值（6 以上），視為非 P 檔
+                    return "D"
+                    
+        except Exception as e:
+            logger.debug(f"快速讀取檔位錯誤: {e}")
+            continue
+    
+    # 超時，返回 None
+    logger.warning(f"快速讀取檔位超時 ({timeout}秒)")
+    return None
+
+
 # --- 1. 硬體連接 ---
 
 def detect_socketcan_interfaces():
@@ -970,7 +1023,20 @@ def main():
         
         logger.info(f"CAN Bus 連線模式: {interface_type}")
         
-        # 2. 載入 DBC 檔案
+        # 2. 快速檔位檢測（決定是否跳過開機動畫）
+        console.print("[cyan]檢測當前檔位...[/cyan]")
+        current_gear = quick_read_gear(bus, timeout=1.0)
+        skip_splash = False
+        
+        if current_gear is None:
+            console.print("[yellow]⚠️  無法讀取檔位，將播放開機動畫[/yellow]")
+        elif current_gear == "P":
+            console.print(f"[green]檔位: P（停車檔），播放開機動畫[/green]")
+        else:
+            console.print(f"[yellow]🚗 檔位: {current_gear}（非停車檔），跳過開機動畫[/yellow]")
+            skip_splash = True
+        
+        # 3. 載入 DBC 檔案
         try:
             logger.info("正在載入 DBC 檔案...")
             db = cantools.database.load_file('luxgen_m7_2009.dbc')
@@ -979,7 +1045,7 @@ def main():
             console.print("[red]DBC 檔案遺失！將無法解碼 CAN 訊號[/red]")
             return
 
-        # 3. 建立信號物件
+        # 4. 建立信號物件
         signals = WorkerSignals()
         
         def setup_can_data_source(dashboard):
@@ -1031,7 +1097,7 @@ def main():
             
             return cleanup
         
-        # 4. 使用統一啟動流程
+        # 5. 使用統一啟動流程
         console.print("[green]啟動儀表板前端...[/green]")
         
         # 根據連線模式設定視窗標題
@@ -1039,7 +1105,8 @@ def main():
         
         run_dashboard(
             window_title=window_title,
-            setup_data_source=setup_can_data_source
+            setup_data_source=setup_can_data_source,
+            skip_splash=skip_splash  # 非 P 檔時跳過開機動畫
         )
 
     except KeyboardInterrupt:

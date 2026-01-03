@@ -125,7 +125,18 @@ update_progress "🔋 設定電源管理" "已禁用螢幕保護" 30
 
 # --- 4. 視窗管理器 ---
 openbox &
+OPENBOX_PID=$!
 update_progress "🪟 啟動視窗管理器" "openbox" 40
+
+# 等待 openbox 就緒 (最多 5 秒)
+log_info "等待 openbox 就緒..."
+for i in {1..10}; do
+    if pgrep -x "openbox" > /dev/null; then
+        log_info "✅ openbox 已就緒 (嘗試 $i)"
+        break
+    fi
+    sleep 0.5
+done
 
 # --- 5. 音訊服務 ---
 # PipeWire 由 systemd --user 自動管理，不需要手動啟動
@@ -134,8 +145,25 @@ systemctl --user start pipewire.socket pipewire-pulse.socket 2>/dev/null || true
 sleep 0.5
 update_progress "🔊 初始化音訊服務" "PipeWire" 50
 
-# --- 6. Python 環境已在前面設定 ---
-update_progress "🐍 載入 Python 環境" "虛擬環境已啟用" 55
+# --- 6. Python 環境驗證 ---
+update_progress "🐍 載入 Python 環境" "驗證中..." 55
+
+# 驗證 Python 環境可用
+log_info "驗證 Python 環境..."
+if ! "$PYTHON_CMD" -c "import sys; print(f'Python {sys.version}')" >> "$STARTUP_LOG" 2>&1; then
+    log_error "Python 環境驗證失敗！"
+    # 嘗試使用系統 Python
+    PYTHON_CMD="python3"
+    log_info "切換到系統 Python: $PYTHON_CMD"
+fi
+
+# 驗證必要模組
+log_info "檢查 PyQt6 模組..."
+if ! "$PYTHON_CMD" -c "from PyQt6.QtWidgets import QApplication" >> "$STARTUP_LOG" 2>&1; then
+    log_error "PyQt6 模組載入失敗！"
+fi
+
+update_progress "🐍 載入 Python 環境" "虛擬環境已驗證" 60
 
 log_info "=============================================="
 log_info "  Luxgen M7 儀表板 - 自動啟動"
@@ -225,6 +253,46 @@ close_progress
 # --- 10. 根據 CAN Bus 偵測結果決定啟動模式 ---
 log_info "準備啟動儀表板應用程式..."
 
+# === 啟動重試機制 ===
+MAX_RETRIES=3
+RETRY_DELAY=2
+
+launch_dashboard() {
+    local mode="$1"
+    local retries=0
+    local success=false
+    
+    while [ $retries -lt $MAX_RETRIES ] && [ "$success" = "false" ]; do
+        retries=$((retries + 1))
+        log_info "啟動嘗試 $retries/$MAX_RETRIES (模式: $mode)"
+        
+        if [ "$mode" = "can" ]; then
+            # CAN Bus 模式
+            $PYTHON_CMD "$SCRIPT_DIR/datagrab.py" 2>&1 | tee -a "$STARTUP_LOG"
+            PYTHON_EXIT=${PIPESTATUS[0]}
+        else
+            # Demo 模式
+            echo "$SPOTIFY_AUTH_MODE" | $PYTHON_CMD "$SCRIPT_DIR/demo_mode.py" --spotify 2>&1 | tee -a "$STARTUP_LOG"
+            PYTHON_EXIT=${PIPESTATUS[0]}
+        fi
+        
+        # 檢查退出碼
+        # 0 = 正常退出, 其他 = 錯誤
+        # 如果程式正常結束（使用者手動關閉），不重試
+        if [ $PYTHON_EXIT -eq 0 ]; then
+            success=true
+            log_info "儀表板正常結束 (exit: 0)"
+        elif [ $retries -lt $MAX_RETRIES ]; then
+            log_error "儀表板異常退出 (exit: $PYTHON_EXIT)，${RETRY_DELAY} 秒後重試..."
+            sleep $RETRY_DELAY
+        else
+            log_error "儀表板啟動失敗，已達最大重試次數"
+        fi
+    done
+    
+    return $PYTHON_EXIT
+}
+
 if [ -n "$CAN_INTERFACE" ]; then
     log_info "=============================================="
     log_info "🚗 偵測到 CAN Bus 裝置"
@@ -233,9 +301,8 @@ if [ -n "$CAN_INTERFACE" ]; then
     log_info "=============================================="
     echo ""
     
-    # 使用 datagrab.py (CAN Bus 模式)
-    $PYTHON_CMD "$SCRIPT_DIR/datagrab.py" 2>&1 | tee -a "$STARTUP_LOG"
-    PYTHON_EXIT=${PIPESTATUS[0]}
+    launch_dashboard "can"
+    PYTHON_EXIT=$?
 else
     log_info "=============================================="
     log_info "🎮 未偵測到 CAN Bus 裝置"
@@ -243,9 +310,8 @@ else
     log_info "=============================================="
     echo ""
     
-    # 使用 demo_mode.py 並自動輸入 Spotify 授權選項
-    echo "$SPOTIFY_AUTH_MODE" | $PYTHON_CMD "$SCRIPT_DIR/demo_mode.py" --spotify 2>&1 | tee -a "$STARTUP_LOG"
-    PYTHON_EXIT=${PIPESTATUS[0]}
+    launch_dashboard "demo"
+    PYTHON_EXIT=$?
 fi
 
 # 記錄結束狀態

@@ -55,9 +55,43 @@ fi
 
 # 只在 tty1 且沒有 X 執行時啟動儀表板
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
+    BOOT_LOG="/tmp/dashboard_boot.log"
+    echo "" >> "$BOOT_LOG"
+    echo "=============================================" >> "$BOOT_LOG"
+    echo "$(date): .bash_profile 開始執行" >> "$BOOT_LOG"
+    echo "=============================================" >> "$BOOT_LOG"
+    
     echo "🚗 Luxgen M7 儀表板自動啟動中..."
-    sleep 2  # 等待系統穩定
-    exec startx /home/ac/QTdashboard/startx_dashboard.sh -- -nocursor 2>/dev/null
+    
+    # 等待系統穩定 (GPU, 檔案系統等)
+    echo "$(date): 等待系統穩定..." >> "$BOOT_LOG"
+    sleep 3
+    
+    # 檢查 GPU 是否就緒 (最多等待 10 秒)
+    echo "$(date): 檢查 GPU 狀態..." >> "$BOOT_LOG"
+    GPU_READY=false
+    for i in {1..20}; do
+        if [ -e /dev/dri/card0 ] || [ -e /dev/dri/card1 ]; then
+            GPU_READY=true
+            echo "$(date): GPU 就緒 (嘗試 $i)" >> "$BOOT_LOG"
+            break
+        fi
+        sleep 0.5
+    done
+    
+    if [ "$GPU_READY" = "false" ]; then
+        echo "$(date): 警告: GPU 未就緒，仍嘗試啟動" >> "$BOOT_LOG"
+    fi
+    
+    # 檢查啟動腳本是否存在
+    STARTX_SCRIPT="/home/ac/QTdashboard/startx_dashboard.sh"
+    if [ ! -f "$STARTX_SCRIPT" ]; then
+        echo "$(date): 錯誤: 啟動腳本不存在: $STARTX_SCRIPT" >> "$BOOT_LOG"
+        exit 1
+    fi
+    
+    echo "$(date): 執行 startx..." >> "$BOOT_LOG"
+    exec startx "$STARTX_SCRIPT" -- -nocursor 2>&1 | tee -a "$BOOT_LOG"
 fi
 EOF
 
@@ -85,8 +119,20 @@ echo "📝 檢查腳本權限..."
 
 chmod +x $SCRIPT_DIR/startx_dashboard.sh
 chmod +x $SCRIPT_DIR/startup_progress.py 2>/dev/null || true
+chmod +x $SCRIPT_DIR/dashboard_watchdog.sh 2>/dev/null || true
 
 echo "   ✅ 腳本權限已設定"
+
+# --- 4.5. 設定 Watchdog (cron) ---
+echo "📝 設定 Watchdog 監控..."
+
+# 移除舊的 watchdog cron 任務
+crontab -u $USERNAME -l 2>/dev/null | grep -v "dashboard_watchdog.sh" | crontab -u $USERNAME - 2>/dev/null || true
+
+# 新增 watchdog cron 任務 (每分鐘執行)
+(crontab -u $USERNAME -l 2>/dev/null; echo "* * * * * $SCRIPT_DIR/dashboard_watchdog.sh >> /tmp/dashboard_watchdog.log 2>&1") | crontab -u $USERNAME -
+
+echo "   ✅ Watchdog cron 已設定"
 
 # --- 5. 設定系統為 multi-user (CLI) 模式 ---
 echo "📝 設定系統為 CLI 模式..."

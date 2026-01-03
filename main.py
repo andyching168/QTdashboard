@@ -7151,9 +7151,11 @@ class GPSMonitorThread(QThread):
     - 掃描 /dev/ttyUSB* 和 /dev/ttyACM*
     - 使用 38400 baud detection
     - 監控是否定位完成 (Fix)
+    - 提取座標資訊
     """
     gps_fixed_changed = pyqtSignal(bool)
     gps_speed_changed = pyqtSignal(float)
+    gps_position_changed = pyqtSignal(float, float)  # lat, lon
     
     def __init__(self):
         super().__init__()
@@ -7161,6 +7163,8 @@ class GPSMonitorThread(QThread):
         self.baud_rate = 38400
         self._last_fix_status = False
         self._current_port = None
+        self._last_lat = None
+        self._last_lon = None
         
     def run(self):
         print("[GPS] Starting monitor thread...")
@@ -7247,6 +7251,36 @@ class GPSMonitorThread(QThread):
                                         speed_knots = float(parts[7])
                                         speed_kmh = speed_knots * 1.852
                                         self.gps_speed_changed.emit(speed_kmh)
+                                    except (ValueError, IndexError):
+                                        pass
+                                
+                                # Parse Position (Fields 3-6: lat, N/S, lon, E/W)
+                                if is_fixed and len(parts) >= 7:
+                                    try:
+                                        lat_raw = parts[3]  # DDMM.MMMM
+                                        lat_dir = parts[4]  # N or S
+                                        lon_raw = parts[5]  # DDDMM.MMMM
+                                        lon_dir = parts[6]  # E or W
+                                        
+                                        if lat_raw and lon_raw:
+                                            # Convert NMEA format to decimal degrees
+                                            lat_deg = float(lat_raw[:2])
+                                            lat_min = float(lat_raw[2:])
+                                            lat = lat_deg + lat_min / 60.0
+                                            if lat_dir == 'S':
+                                                lat = -lat
+                                            
+                                            lon_deg = float(lon_raw[:3])
+                                            lon_min = float(lon_raw[3:])
+                                            lon = lon_deg + lon_min / 60.0
+                                            if lon_dir == 'W':
+                                                lon = -lon
+                                            
+                                            # 只在座標變化時發送（避免頻繁更新）
+                                            if self._last_lat != lat or self._last_lon != lon:
+                                                self._last_lat = lat
+                                                self._last_lon = lon
+                                                self.gps_position_changed.emit(lat, lon)
                                     except (ValueError, IndexError):
                                         pass
                         
@@ -7371,6 +7405,7 @@ class Dashboard(QWidget):
         self.gps_monitor_thread = GPSMonitorThread()
         self.gps_monitor_thread.gps_fixed_changed.connect(self._update_gps_status)
         self.gps_monitor_thread.gps_speed_changed.connect(self._update_gps_speed)
+        self.gps_monitor_thread.gps_position_changed.connect(self._update_gps_position)
         self.gps_monitor_thread.start()
         
         # 創建亮度覆蓋層（必須在 init_ui 之後，確保在最上層）
@@ -7437,6 +7472,11 @@ class Dashboard(QWidget):
         if use_gps:
             # 直接更新顯示，覆蓋 CAN 速度
             self.speed_label.setText(f"{int(speed_kmh)}")
+    
+    def _update_gps_position(self, lat, lon):
+        """更新 GPS 座標"""
+        self.gps_lat = lat
+        self.gps_lon = lon
     
     def create_status_bar(self):
         """創建頂部狀態欄，包含方向燈指示"""
@@ -8127,8 +8167,19 @@ class Dashboard(QWidget):
         # 手煞車狀態
         self.parking_brake = False   # 手煞車是否拉起
         
+        # GPS 座標
+        self.gps_lat = None
+        self.gps_lon = None
+        
         # 網路狀態
         self.is_offline = False  # 是否斷線
+        self._was_offline = True  # 記錄上次網路狀態（初始假設離線，連上後觸發初始化）
+        
+        # 服務連線狀態追蹤
+        self._spotify_connected = False
+        self._spotify_init_attempts = 0
+        self._mqtt_connected = False
+        self._mqtt_reconnect_timer = None
 
         # 速度校正狀態
         import datagrab
@@ -8202,6 +8253,11 @@ class Dashboard(QWidget):
         # 立即檢查一次
         QTimer.singleShot(2000, self._check_network_status)
         
+        # 啟動服務健康檢查（每 60 秒檢查一次）
+        self.service_health_timer = QTimer()
+        self.service_health_timer.timeout.connect(self._check_service_health)
+        self.service_health_timer.start(60000)  # 60 秒
+        
         # === 初始化 GPIO 按鈕（樹莓派實體按鈕）===
         # GPIO19: 按鈕 A (短按=切換左卡片, 長按=詳細視圖)
         # GPIO26: 按鈕 B (短按=切換右卡片, 長按=重置Trip)
@@ -8261,9 +8317,17 @@ class Dashboard(QWidget):
             def init_spotify():
                 result = setup_spotify(self)
                 if result:
+                    self._spotify_connected = True
+                    self._spotify_init_attempts = 0
                     print("Spotify 初始化成功")
                 else:
-                    print("Spotify 初始化失敗")
+                    self._spotify_connected = False
+                    self._spotify_init_attempts += 1
+                    print(f"Spotify 初始化失敗 (嘗試 {self._spotify_init_attempts})")
+                    # 如果初始化失敗，30 秒後重試（最多 3 次）
+                    if self._spotify_init_attempts < 3 and not self.is_offline:
+                        print(f"[Spotify] 將在 30 秒後重試...")
+                        QTimer.singleShot(30000, self._retry_spotify_init)
             threading.Thread(target=init_spotify, daemon=True).start()
         else:
             if not os.path.exists(config_path):
@@ -8271,6 +8335,30 @@ class Dashboard(QWidget):
             else:
                 print("未發現授權快取，顯示綁定介面")
             self.music_card.show_bind_ui()
+    
+    def _retry_spotify_init(self):
+        """重試 Spotify 初始化"""
+        if self._spotify_connected or self.is_offline:
+            return
+        
+        print(f"[Spotify] 重試初始化 (嘗試 {self._spotify_init_attempts + 1}/3)...")
+        
+        import threading
+        def init_spotify():
+            result = setup_spotify(self)
+            if result:
+                self._spotify_connected = True
+                self._spotify_init_attempts = 0
+                print("[Spotify] ✅ 重試成功")
+            else:
+                self._spotify_connected = False
+                self._spotify_init_attempts += 1
+                print(f"[Spotify] ❌ 重試失敗 (嘗試 {self._spotify_init_attempts})")
+                # 繼續重試
+                if self._spotify_init_attempts < 3 and not self.is_offline:
+                    QTimer.singleShot(30000, self._retry_spotify_init)
+        
+        threading.Thread(target=init_spotify, daemon=True).start()
 
     def start_spotify_auth(self):
         """啟動 Spotify 授權流程"""
@@ -8309,8 +8397,16 @@ class Dashboard(QWidget):
             # 在背景執行緒初始化 Spotify，避免阻塞 UI
             def _init_spotify_async():
                 try:
-                    setup_spotify(self)
+                    result = setup_spotify(self)
+                    if result:
+                        self._spotify_connected = True
+                        self._spotify_init_attempts = 0
+                        print("[Spotify] ✅ 初始化成功")
+                    else:
+                        self._spotify_connected = False
+                        print("[Spotify] ❌ 初始化失敗")
                 except Exception as e:
+                    self._spotify_connected = False
                     print(f"Spotify 初始化失敗: {e}")
             
             import threading
@@ -8419,6 +8515,8 @@ class Dashboard(QWidget):
                 print("[網路] ⚠️ 網路已斷線")
             else:
                 print("[網路] ✅ 網路已恢復連線")
+                # 網路恢復時嘗試重新連接服務
+                self._on_network_restored()
         
         # 更新音樂卡片和導航卡片的離線狀態
         self.music_card.set_offline(self.is_offline)
@@ -8427,6 +8525,90 @@ class Dashboard(QWidget):
         # 更新下拉面板的「更新」按鈕狀態
         if self.control_panel:
             self.control_panel.set_update_button_enabled(is_connected)
+    
+    def _on_network_restored(self):
+        """網路恢復時的重連邏輯"""
+        print("[重連] 網路已恢復，檢查服務狀態...")
+        
+        # 延遲 2 秒後重連，避免網路剛恢復就馬上連接
+        QTimer.singleShot(2000, self._attempt_reconnect_services)
+    
+    def _attempt_reconnect_services(self):
+        """嘗試重新連接各項服務"""
+        # 如果目前仍是離線狀態，取消重連
+        if self.is_offline:
+            print("[重連] 網路仍未恢復，取消重連")
+            return
+        
+        # 1. 重連 Spotify（如果尚未連線且有設定檔）
+        if not self._spotify_connected:
+            config_path = "spotify_config.json"
+            cache_path = ".spotify_cache"
+            if os.path.exists(config_path) and os.path.exists(cache_path):
+                print("[重連] 嘗試重新連接 Spotify...")
+                self._reconnect_spotify()
+        
+        # 2. 重連 MQTT（如果有設定檔但客戶端未連線）
+        config_file = "mqtt_config.json"
+        if os.path.exists(config_file):
+            if not hasattr(self, 'mqtt_client') or self.mqtt_client is None or not self._mqtt_connected:
+                print("[重連] 嘗試重新連接 MQTT...")
+                self._reconnect_mqtt()
+    
+    def _reconnect_spotify(self):
+        """重新連接 Spotify"""
+        def _init_spotify_async():
+            try:
+                result = setup_spotify(self)
+                if result:
+                    self._spotify_connected = True
+                    self._spotify_init_attempts = 0
+                    print("[Spotify] ✅ 重新連接成功")
+                else:
+                    self._spotify_init_attempts += 1
+                    print(f"[Spotify] ❌ 重新連接失敗 (嘗試 {self._spotify_init_attempts})")
+            except Exception as e:
+                self._spotify_init_attempts += 1
+                print(f"[Spotify] ❌ 重新連接錯誤: {e}")
+        
+        import threading
+        threading.Thread(target=_init_spotify_async, daemon=True).start()
+    
+    def _reconnect_mqtt(self):
+        """重新連接 MQTT"""
+        # 先清理舊的連線
+        if hasattr(self, 'mqtt_client') and self.mqtt_client is not None:
+            try:
+                self.mqtt_client.disconnect()
+                self.mqtt_client.loop_stop()
+            except Exception:
+                pass
+            self.mqtt_client = None
+            self._mqtt_connected = False
+        
+        # 重新初始化
+        self._init_mqtt_client()
+    
+    def _check_service_health(self):
+        """定時檢查服務健康狀態，必要時重連"""
+        # 如果離線，跳過檢查
+        if self.is_offline:
+            return
+        
+        # 檢查 Spotify 狀態
+        config_path = "spotify_config.json"
+        cache_path = ".spotify_cache"
+        if os.path.exists(config_path) and os.path.exists(cache_path):
+            if not self._spotify_connected and self._spotify_init_attempts < 3:
+                print("[健康檢查] Spotify 未連線，嘗試重連...")
+                self._reconnect_spotify()
+        
+        # 檢查 MQTT 狀態
+        config_file = "mqtt_config.json"
+        if os.path.exists(config_file):
+            if not self._mqtt_connected:
+                print("[健康檢查] MQTT 未連線，嘗試重連...")
+                self._reconnect_mqtt()
     
     def _check_mqtt_config(self):
         """檢查 MQTT 設定並自動連線"""
@@ -8438,7 +8620,7 @@ class Dashboard(QWidget):
             print("[MQTT] 未發現設定檔，可從下拉面板進行設定")
     
     def _init_mqtt_client(self):
-        """初始化 MQTT 客戶端"""
+        """初始化 MQTT 客戶端（支援自動重連）"""
         config_file = "mqtt_config.json"
         if not os.path.exists(config_file):
             print("[MQTT] 設定檔不存在")
@@ -8450,15 +8632,34 @@ class Dashboard(QWidget):
             
             import paho.mqtt.client as mqtt
             
+            dashboard = self  # 保存 dashboard 參考
+            mqtt_publish_topic = config.get('publish_topic', 'car/telemetry')  # 上傳用的主題
+            
             def on_connect(client, userdata, flags, rc, properties=None):
                 if rc == 0:
-                    print(f"[MQTT] 已連接到 {config['broker']}:{config['port']}")
+                    dashboard._mqtt_connected = True
+                    print(f"[MQTT] ✅ 已連接到 {config['broker']}:{config['port']}")
                     # 訂閱主題
                     topic = config.get('topic', 'car/#')
                     client.subscribe(topic)
                     print(f"[MQTT] 已訂閱主題: {topic}")
+                    print(f"[MQTT] 發布主題: {mqtt_publish_topic}")
+                    # 啟動數據上傳計時器
+                    dashboard._start_mqtt_telemetry_timer()
                 else:
-                    print(f"[MQTT] 連線失敗，錯誤碼: {rc}")
+                    dashboard._mqtt_connected = False
+                    print(f"[MQTT] ❌ 連線失敗，錯誤碼: {rc}")
+            
+            def on_disconnect(client, userdata, rc, properties=None, reason_code=None):
+                dashboard._mqtt_connected = False
+                # 停止遙測上傳
+                if hasattr(dashboard, '_mqtt_telemetry_timer') and dashboard._mqtt_telemetry_timer:
+                    dashboard._mqtt_telemetry_timer.stop()
+                    print("[MQTT] 遙測上傳已暫停")
+                if rc != 0:
+                    print(f"[MQTT] ⚠️ 意外斷線 (rc={rc})，將自動重連...")
+                else:
+                    print("[MQTT] 已斷線")
             
             def on_message(client, userdata, msg):
                 try:
@@ -8469,14 +8670,18 @@ class Dashboard(QWidget):
                     # 處理導航訊息 - 使用 Signal 確保在主執行緒更新 UI
                     if 'navigation' in msg.topic or 'nav' in msg.topic:
                         # 透過 Signal 傳遞資料到主執行緒
-                        self.signal_update_navigation.emit(data)
+                        dashboard.signal_update_navigation.emit(data)
                     
                 except Exception as e:
                     print(f"[MQTT] 處理訊息錯誤: {e}")
             
             self.mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
             self.mqtt_client.on_connect = on_connect
+            self.mqtt_client.on_disconnect = on_disconnect
             self.mqtt_client.on_message = on_message
+            
+            # 啟用自動重連
+            self.mqtt_client.reconnect_delay_set(min_delay=1, max_delay=60)
             
             # 設定認證
             username = config.get('username', '').strip()
@@ -8489,9 +8694,11 @@ class Dashboard(QWidget):
             def connect_mqtt():
                 try:
                     self.mqtt_client.connect(config['broker'], config['port'], keepalive=60)
-                    self.mqtt_client.loop_forever()
+                    # 使用 loop_forever 會自動處理重連
+                    self.mqtt_client.loop_forever(retry_first_connection=True)
                 except Exception as e:
                     print(f"[MQTT] 連線錯誤: {e}")
+                    dashboard._mqtt_connected = False
             
             mqtt_thread = threading.Thread(target=connect_mqtt, daemon=True)
             mqtt_thread.start()
@@ -8500,6 +8707,83 @@ class Dashboard(QWidget):
             print("[MQTT] paho-mqtt 未安裝")
         except Exception as e:
             print(f"[MQTT] 初始化失敗: {e}")
+    
+    def _start_mqtt_telemetry_timer(self):
+        """啟動 MQTT 車輛數據上傳計時器"""
+        if hasattr(self, '_mqtt_telemetry_timer') and self._mqtt_telemetry_timer is not None:
+            self._mqtt_telemetry_timer.stop()
+        
+        self._mqtt_telemetry_timer = QTimer()
+        self._mqtt_telemetry_timer.timeout.connect(self._publish_telemetry)
+        self._mqtt_telemetry_timer.start(10000)  # 每 10 秒上傳一次
+        print("[MQTT] 車輛數據上傳已啟動 (每 10 秒)")
+    
+    def _publish_telemetry(self):
+        """發布車輛遙測數據到 MQTT"""
+        if not self._mqtt_connected or not hasattr(self, 'mqtt_client') or self.mqtt_client is None:
+            return
+        
+        try:
+            # 取得 ODO 和 Trip 資料
+            storage = OdometerStorage()
+            odo_total = storage.get_odo()
+            trip1_distance, _ = storage.get_trip1()
+            trip2_distance, _ = storage.get_trip2()
+            
+            # 取得門狀態
+            door_status = {}
+            if hasattr(self, 'door_card'):
+                door_status = {
+                    'FL': self.door_card.door_fl_closed,
+                    'FR': self.door_card.door_fr_closed,
+                    'RL': self.door_card.door_rl_closed,
+                    'RR': self.door_card.door_rr_closed,
+                    'BK': self.door_card.door_bk_closed
+                }
+            
+            # 組裝數據
+            telemetry = {
+                'timestamp': time.time(),
+                'speed': self.speed,
+                'rpm': self.rpm,
+                'coolant_temp': self.temp,
+                'fuel': self.fuel,
+                'gear': self.gear,
+                'turbo': self.turbo,
+                'battery': self.battery,
+                'odo': odo_total,
+                'trip_a': trip1_distance,
+                'trip_b': trip2_distance,
+                'gps': {
+                    'lat': self.gps_lat,
+                    'lon': self.gps_lon,
+                    'fixed': getattr(self, 'is_gps_fixed', False)
+                },
+                'doors': door_status,
+                'cruise': {
+                    'switch': self.cruise_switch,
+                    'engaged': self.cruise_engaged
+                },
+                'parking_brake': self.parking_brake
+            }
+            
+            # 讀取發布主題
+            config_file = "mqtt_config.json"
+            publish_topic = "car/telemetry"
+            if os.path.exists(config_file):
+                try:
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                        publish_topic = config.get('publish_topic', 'car/telemetry')
+                except:
+                    pass
+            
+            # 發布數據
+            payload = json.dumps(telemetry, ensure_ascii=False)
+            self.mqtt_client.publish(publish_topic, payload, qos=0)
+            
+        except Exception as e:
+            print(f"[MQTT] 發布遙測數據錯誤: {e}")
     
     @pyqtSlot(dict)
     def _slot_update_navigation(self, data: dict):
@@ -10434,7 +10718,8 @@ def run_dashboard(
     on_dashboard_ready=None,
     window_title=None,
     setup_data_source=None,
-    startup_info=None
+    startup_info=None,
+    skip_splash=False
 ):
     """
     統一的儀表板啟動函數 - 所有入口點都應使用此函數
@@ -10457,6 +10742,7 @@ def run_dashboard(
                           這個會在 splash 結束後、start_dashboard 之前呼叫
         startup_info: 可選的啟動資訊列表，用於顯示進度視窗
                      格式: [(step_name, detail_text), ...]
+        skip_splash: 是否跳過開機動畫（例如：車輛不在 P 檔時）
     
     Returns:
         不返回（進入 Qt 事件循環）
@@ -10484,6 +10770,9 @@ def run_dashboard(
             ("🔊 初始化音訊服務", "PipeWire"),
         ]
         run_dashboard(startup_info=startup_steps)
+        
+        # 跳過開機動畫（例如車輛不在 P 檔）
+        run_dashboard(skip_splash=True)
     """
     app = QApplication(sys.argv)
     
@@ -10577,7 +10866,10 @@ def run_dashboard(
                 cleanup_funcs.append(cleanup)
     
     # 檢查是否有啟動影片（優先使用短版）
-    has_splash = os.path.exists("Splash_short.mp4")
+    has_splash = os.path.exists("Splash_short.mp4") and not skip_splash
+    
+    if skip_splash:
+        print("🚗 非 P 檔啟動，跳過開機動畫")
     
     if has_splash:
         splash = SplashScreen("Splash_short.mp4")
@@ -10591,8 +10883,9 @@ def run_dashboard(
             splash.resize(800, 200)  # 4:1 比例 (1920x480 影片的縮小版)
             splash.show()
     else:
-        print("未找到 Splash_short.mp4，跳過啟動畫面")
-        # 沒有 splash，直接執行啟動流程
+        if not skip_splash:
+            print("未找到 Splash_short.mp4，跳過啟動畫面")
+        # 沒有 splash 或要求跳過，直接執行啟動流程
         on_splash_finished()
     
     # 進入事件循環

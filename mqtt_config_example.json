@@ -3,5 +3,6 @@
   "port": 1883,
   "username": "",
   "password": "",
-  "topic": "navigation/info"
+  "topic": "navigation/info",
+  "publish_topic": "car/telemetry"
 }
