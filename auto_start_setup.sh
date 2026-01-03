@@ -37,6 +37,7 @@ cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --autologin $USERNAME --noclear %I \$TERM
+Type=idle
 EOF
 
 echo "   ✅ 已設定自動登入使用者: $USERNAME"
@@ -44,21 +45,19 @@ echo "   ✅ 已設定自動登入使用者: $USERNAME"
 # --- 2. 設定登入後自動啟動 X11 ---
 echo "📝 設定登入後自動啟動儀表板..."
 
-# 建立 .bash_profile (登入 shell 會讀取)
-cat > /home/$USERNAME/.bash_profile << 'EOF'
-# ~/.bash_profile - 登入時執行
-
-# 載入 .bashrc
-if [ -f ~/.bashrc ]; then
-    . ~/.bashrc
-fi
+# 建立啟動腳本 (在 .bashrc 末尾調用，確保 login 和 non-login shell 都能執行)
+DASHBOARD_AUTOSTART="/home/$USERNAME/.dashboard_autostart.sh"
+cat > $DASHBOARD_AUTOSTART << 'AUTOSTART_EOF'
+#!/bin/bash
+# 儀表板自動啟動腳本 - 由 .bashrc 調用
 
 # 只在 tty1 且沒有 X 執行時啟動儀表板
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
     BOOT_LOG="/tmp/dashboard_boot.log"
     echo "" >> "$BOOT_LOG"
     echo "=============================================" >> "$BOOT_LOG"
-    echo "$(date): .bash_profile 開始執行" >> "$BOOT_LOG"
+    echo "$(date): dashboard_autostart 開始執行" >> "$BOOT_LOG"
+    echo "TTY: $(tty), DISPLAY: $DISPLAY, USER: $USER" >> "$BOOT_LOG"
     echo "=============================================" >> "$BOOT_LOG"
     
     echo "🚗 Luxgen M7 儀表板自動啟動中..."
@@ -87,11 +86,49 @@ if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
     STARTX_SCRIPT="/home/ac/QTdashboard/startx_dashboard.sh"
     if [ ! -f "$STARTX_SCRIPT" ]; then
         echo "$(date): 錯誤: 啟動腳本不存在: $STARTX_SCRIPT" >> "$BOOT_LOG"
-        exit 1
+        echo "❌ 啟動腳本不存在: $STARTX_SCRIPT"
+        return 1
     fi
     
-    echo "$(date): 執行 startx..." >> "$BOOT_LOG"
-    exec startx "$STARTX_SCRIPT" -- -nocursor 2>&1 | tee -a "$BOOT_LOG"
+    echo "$(date): 執行 startx $STARTX_SCRIPT..." >> "$BOOT_LOG"
+    
+    # 執行 startx，記錄輸出
+    startx "$STARTX_SCRIPT" -- -nocursor >> "$BOOT_LOG" 2>&1
+    STARTX_EXIT=$?
+    echo "$(date): startx 結束，exit code: $STARTX_EXIT" >> "$BOOT_LOG"
+    
+    # 如果 startx 失敗，等待讓用戶看到錯誤
+    if [ $STARTX_EXIT -ne 0 ]; then
+        echo "❌ startx 失敗 (exit: $STARTX_EXIT)"
+        echo "   請檢查: cat /tmp/dashboard_boot.log"
+        sleep 30
+    fi
+fi
+AUTOSTART_EOF
+
+chown $USERNAME:$USERNAME $DASHBOARD_AUTOSTART
+chmod 755 $DASHBOARD_AUTOSTART
+
+echo "   ✅ 已建立 .dashboard_autostart.sh"
+
+# 在 .bashrc 末尾加入啟動調用 (如果還沒有)
+BASHRC="/home/$USERNAME/.bashrc"
+if ! grep -q "dashboard_autostart" "$BASHRC" 2>/dev/null; then
+    echo "" >> "$BASHRC"
+    echo "# 儀表板自動啟動 (tty1)" >> "$BASHRC"
+    echo "[ -f ~/.dashboard_autostart.sh ] && source ~/.dashboard_autostart.sh" >> "$BASHRC"
+    echo "   ✅ 已更新 .bashrc"
+else
+    echo "   ℹ️  .bashrc 已包含啟動調用"
+fi
+
+# 建立 .bash_profile (確保 login shell 也能執行)
+cat > /home/$USERNAME/.bash_profile << 'EOF'
+# ~/.bash_profile - 登入時執行
+
+# 載入 .bashrc (其中包含儀表板自動啟動邏輯)
+if [ -f ~/.bashrc ]; then
+    . ~/.bashrc
 fi
 EOF
 
