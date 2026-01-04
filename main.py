@@ -8186,6 +8186,10 @@ class Dashboard(QWidget):
         self._spotify_init_attempts = 0
         self._mqtt_connected = False
         self._mqtt_reconnect_timer = None
+        
+        # 引擎狀態追蹤 (用於 MQTT status)
+        self._engine_status = False  # 引擎運轉狀態
+        self._last_battery_for_status = 0.0  # 追蹤上一次電壓用於判斷熄火
 
         # 速度校正狀態
         import datagrab
@@ -8750,11 +8754,25 @@ class Dashboard(QWidget):
             # 水溫轉換：self.temp 是百分比 (0-100)，轉換為攝氏度 (40-120°C)
             coolant_celsius = 40 + (self.temp / 100) * 80 if self.temp is not None else None
             
+            # 計算引擎狀態 (status)
+            # RPM > 100 時，status 變成 true
+            # 電壓從 10 以上掉到 0 時，status 變成 false
+            current_rpm = int(self.rpm * 1000) if self.rpm else 0
+            current_battery = self.battery if self.battery is not None else 0.0
+            
+            if current_rpm > 100:
+                self._engine_status = True
+            elif self._last_battery_for_status >= 10 and current_battery == 0:
+                self._engine_status = False
+            
+            self._last_battery_for_status = current_battery
+            
             # 組裝數據
             telemetry = {
                 'timestamp': time.time(),
+                'status': self._engine_status,
                 'speed': self.speed,
-                'rpm': int(self.rpm * 1000) if self.rpm else 0,  # 轉換為整數 RPM
+                'rpm': current_rpm,  # 使用已計算的整數 RPM
                 'coolant_temp': coolant_celsius,
                 'fuel': self.fuel,
                 'gear': self.gear,
@@ -8787,9 +8805,9 @@ class Dashboard(QWidget):
                 except:
                     pass
             
-            # 發布數據
+            # 發布數據 (retain=True 讓新訂閱者能收到最後一筆訊息)
             payload = json.dumps(telemetry, ensure_ascii=False)
-            self.mqtt_client.publish(publish_topic, payload, qos=0)
+            self.mqtt_client.publish(publish_topic, payload, qos=0, retain=True)
             
         except Exception as e:
             print(f"[MQTT] 發布遙測數據錯誤: {e}")
