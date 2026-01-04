@@ -8721,8 +8721,8 @@ class Dashboard(QWidget):
         
         self._mqtt_telemetry_timer = QTimer()
         self._mqtt_telemetry_timer.timeout.connect(self._publish_telemetry)
-        self._mqtt_telemetry_timer.start(10000)  # 每 10 秒上傳一次
-        print("[MQTT] 車輛數據上傳已啟動 (每 10 秒)")
+        self._mqtt_telemetry_timer.start(1000)  # 每 1 秒上傳一次
+        print("[MQTT] 車輛數據上傳已啟動 (每 1 秒)")
     
     def _publish_telemetry(self):
         """發布車輛遙測數據到 MQTT"""
