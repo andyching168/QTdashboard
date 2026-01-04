@@ -8690,8 +8690,8 @@ class Dashboard(QWidget):
             self.mqtt_client.on_disconnect = on_disconnect
             self.mqtt_client.on_message = on_message
             
-            # 啟用自動重連
-            self.mqtt_client.reconnect_delay_set(min_delay=1, max_delay=60)
+            # 啟用自動重連，指數退避（1秒起，最大 5 秒）
+            self.mqtt_client.reconnect_delay_set(min_delay=1, max_delay=5)
             
             # 設定認證
             username = config.get('username', '').strip()
@@ -8755,15 +8755,16 @@ class Dashboard(QWidget):
             coolant_celsius = 40 + (self.temp / 100) * 80 if self.temp is not None else None
             
             # 計算引擎狀態 (status)
-            # RPM > 100 時，status 變成 true
-            # 電壓從 10 以上掉到 0 時，status 變成 false
+            # 電壓從 10 以上掉到 0 時，status 優先變成 false（熄火）
+            # RPM > 100 時，status 變成 true（引擎運轉）
             current_rpm = int(self.rpm * 1000) if self.rpm else 0
             current_battery = self.battery if self.battery is not None else 0.0
             
-            if current_rpm > 100:
-                self._engine_status = True
-            elif self._last_battery_for_status >= 10 and current_battery == 0:
+            if self._last_battery_for_status >= 10 and current_battery == 0:
+                # 電壓掉到 0 優先判斷為熄火，不管 RPM
                 self._engine_status = False
+            elif current_rpm > 100:
+                self._engine_status = True
             
             self._last_battery_for_status = current_battery
             
