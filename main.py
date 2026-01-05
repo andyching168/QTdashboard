@@ -8725,8 +8725,8 @@ class Dashboard(QWidget):
         
         self._mqtt_telemetry_timer = QTimer()
         self._mqtt_telemetry_timer.timeout.connect(self._publish_telemetry)
-        self._mqtt_telemetry_timer.start(1000)  # 每 1 秒上傳一次
-        print("[MQTT] 車輛數據上傳已啟動 (每 1 秒)")
+        self._mqtt_telemetry_timer.start(30000)  # 每 30 秒上傳一次
+        print("[MQTT] 車輛數據上傳已啟動 (每 30 秒)")
     
     def _publish_telemetry(self):
         """發布車輛遙測數據到 MQTT"""
@@ -9259,9 +9259,13 @@ class Dashboard(QWidget):
         # 決定顯示的檔位
         display_gear = self._get_display_gear(gear)
         
-        # 只在檔位真正改變時才收起控制面板
-        if display_gear != self.gear and self.panel_visible:
-            self.hide_control_panel()
+        # 只在檔位真正改變時才收起控制面板並立即上傳 MQTT
+        if display_gear != self.gear:
+            if self.panel_visible:
+                self.hide_control_panel()
+            # 檔位變更時立即上傳 MQTT 數據
+            if self._mqtt_connected:
+                self._publish_telemetry()
         
         self.gear = display_gear
         self.update_display()
