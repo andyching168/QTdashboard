@@ -8772,7 +8772,7 @@ class Dashboard(QWidget):
             telemetry = {
                 'timestamp': time.time(),
                 'status': self._engine_status,
-                'speed': self.speed,
+                'speed': int(self.speed),  # 與儀表顯示一致，使用整數
                 'rpm': current_rpm,  # 使用已計算的整數 RPM
                 'coolant_temp': coolant_celsius,
                 'fuel': self.fuel,
