@@ -8727,6 +8727,30 @@ class Dashboard(QWidget):
         self._mqtt_telemetry_timer.timeout.connect(self._publish_telemetry)
         self._mqtt_telemetry_timer.start(30000)  # 每 30 秒上傳一次
         print("[MQTT] 車輛數據上傳已啟動 (每 30 秒)")
+
+    def _update_engine_status(self):
+        """根據 RPM 與電壓更新引擎狀態，回傳是否從 on 掉到 off"""
+        prev_status = self._engine_status
+        current_rpm = int(self.rpm * 1000) if self.rpm else 0
+        current_battery = self.battery if self.battery is not None else 0.0
+
+        if self._last_battery_for_status >= 10 and current_battery == 0:
+            # 電壓掉到 0 優先判斷為熄火，不管 RPM
+            self._engine_status = False
+        elif current_rpm > 100:
+            # 轉速高於 100 rpm 視為引擎運轉
+            self._engine_status = True
+        # 其他情況維持原狀態
+
+        self._last_battery_for_status = current_battery
+        status_fell = prev_status and not self._engine_status
+        return status_fell, current_rpm
+
+    def _maybe_publish_engine_off(self):
+        """引擎狀態從 on 掉到 off 時立即上傳一次"""
+        status_fell, _ = self._update_engine_status()
+        if status_fell and self._mqtt_connected:
+            self._publish_telemetry()
     
     def _publish_telemetry(self):
         """發布車輛遙測數據到 MQTT"""
@@ -8757,16 +8781,7 @@ class Dashboard(QWidget):
             # 計算引擎狀態 (status)
             # 電壓從 10 以上掉到 0 時，status 優先變成 false（熄火）
             # RPM > 100 時，status 變成 true（引擎運轉）
-            current_rpm = int(self.rpm * 1000) if self.rpm else 0
-            current_battery = self.battery if self.battery is not None else 0.0
-            
-            if self._last_battery_for_status >= 10 and current_battery == 0:
-                # 電壓掉到 0 優先判斷為熄火，不管 RPM
-                self._engine_status = False
-            elif current_rpm > 100:
-                self._engine_status = True
-            
-            self._last_battery_for_status = current_battery
+            status_fell, current_rpm = self._update_engine_status()
             
             # 組裝數據
             telemetry = {
@@ -9230,6 +9245,9 @@ class Dashboard(QWidget):
         # 只在轉速變化明顯時才更新 UI（降低重繪頻率）
         if abs(self.rpm - old_rpm) > 0.02:  # 變化超過 0.02 千轉
             self.update_display()
+        
+        # 若引擎狀態從 on 掉到 off，立即上傳一次 MQTT
+        self._maybe_publish_engine_off()
     
     @pyqtSlot(float)
     def _slot_set_temperature(self, temp):
@@ -9259,16 +9277,19 @@ class Dashboard(QWidget):
         # 決定顯示的檔位
         display_gear = self._get_display_gear(gear)
         
-        # 只在檔位真正改變時才收起控制面板並立即上傳 MQTT
-        if display_gear != self.gear:
-            if self.panel_visible:
-                self.hide_control_panel()
-            # 檔位變更時立即上傳 MQTT 數據
-            if self._mqtt_connected:
-                self._publish_telemetry()
-        
+        gear_changed = display_gear != self.gear
+
+        # 只在檔位真正改變時才收起控制面板
+        if gear_changed and self.panel_visible:
+            self.hide_control_panel()
+
+        # 先更新狀態與畫面，再發布 MQTT，避免送出舊檔位
         self.gear = display_gear
         self.update_display()
+
+        # 檔位變更時立即上傳 MQTT 數據
+        if gear_changed and self._mqtt_connected:
+            self._publish_telemetry()
     
     def _get_display_gear(self, actual_gear):
         """根據顯示模式決定要顯示的檔位"""
@@ -10407,6 +10428,9 @@ class Dashboard(QWidget):
         # 如果在詳細視圖中且顯示的是 BATTERY，也更新
         if self._in_detail_view and self._detail_gauge_index == 3:
             self.quad_gauge_detail.set_value(voltage)
+        
+        # 若引擎狀態從 on 掉到 off，立即上傳一次 MQTT
+        self._maybe_publish_engine_off()
         
         # 關機監控：檢測電壓掉落
         if hasattr(self, '_shutdown_monitor'):
