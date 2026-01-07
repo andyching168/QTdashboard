@@ -7488,7 +7488,100 @@ class GPSMonitorThread(QThread):
         if is_fixed != self._last_fix_status:
             self._last_fix_status = is_fixed
             self.gps_fixed_changed.emit(is_fixed)
+            status = "FIXED" if is_fixed else "SEARCHING"
+            print(f"[GPS] Status changed: {status}")
+
+class RadarMonitorThread(QThread):
+    """
+    ESP32 雷達訊號監控執行緒
+    - 掃描 serial ports
+    - 使用 115200 baud detection
+    - 識別 (LR:x,RR:x,LF:x,RF:x) 格式
+    """
+    radar_message_received = pyqtSignal(str)
     
+    def __init__(self):
+        super().__init__()
+        self.running = True
+        self.baud_rate = 115200
+        self._current_port = None
+        
+    def run(self):
+        print("[Radar] Starting monitor thread...")
+        while self.running:
+            # 1. 如果沒有鎖定 port，進行掃描
+            if not self._current_port:
+                ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*') + glob.glob('/dev/pts/*')
+                # 在 macOS 上增加額外的裝置路徑模式
+                if platform.system() == 'Darwin':
+                    ports += glob.glob('/dev/cu.usb*') + glob.glob('/dev/cu.SLAB*')
+                    
+                if not ports:
+                    time.sleep(2)
+                    continue
+                
+                # 嘗試每一個 port
+                found = False
+                for port in ports:
+                    if self._try_connect(port):
+                        self._current_port = port
+                        found = True
+                        break
+                
+                if not found:
+                    time.sleep(2)
+            else:
+                # 2. 已鎖定 port，持續讀取
+                if not self._read_loop():
+                    # 讀取失敗（斷線），重置 port
+                    print(f"[Radar] Connection lost on {self._current_port}")
+                    self._current_port = None
+                    time.sleep(1)
+                    
+    def _try_connect(self, port):
+        """測試連接"""
+        try:
+            # 嘗試開啟 serial port
+            with serial.Serial(port, self.baud_rate, timeout=1.0) as ser:
+                # 讀取幾行看看是不是雷達數據
+                for _ in range(10): # 嘗試多讀幾行，確保有足夠機會抓到
+                    line = ser.readline()
+                    try:
+                        line_str = line.decode('ascii', errors='ignore').strip()
+                        # 檢查特徵：以 '(' 開頭且包含 'LR:'
+                        if line_str.startswith('(') and 'LR:' in line_str:
+                            print(f"[Radar] Found Radar on {port} @ {self.baud_rate}")
+                            return True
+                    except:
+                        pass
+        except:
+            pass
+        return False
+        
+    def _read_loop(self):
+        """持續讀取迴圈"""
+        try:
+            with serial.Serial(self._current_port, self.baud_rate, timeout=1.0) as ser:
+                while self.running:
+                    line = ser.readline()
+                    if not line:
+                        continue
+                        
+                    try:
+                        line_str = line.decode('ascii', errors='ignore').strip()
+                        if line_str.startswith('(') and 'LR:' in line_str:
+                            self.radar_message_received.emit(line_str)
+                    except ValueError:
+                        pass
+        except serial.SerialException as e:
+            print(f"[Radar] Serial error: {e}")
+            return False # 斷線
+        except Exception as e:
+            print(f"[Radar] Error: {e}")
+            return False
+            
+        return True
+
     def stop(self):
         self.running = False
         self.wait()
@@ -7599,6 +7692,11 @@ class Dashboard(QWidget):
         self.gps_monitor_thread.gps_speed_changed.connect(self._update_gps_speed)
         self.gps_monitor_thread.gps_position_changed.connect(self._update_gps_position)
         self.gps_monitor_thread.start()
+        
+        # 初始化雷達監控器
+        self.radar_monitor_thread = RadarMonitorThread()
+        self.radar_monitor_thread.radar_message_received.connect(self._slot_update_radar)
+        self.radar_monitor_thread.start()
         
         # 創建亮度覆蓋層（必須在 init_ui 之後，確保在最上層）
         self._create_brightness_overlay()
