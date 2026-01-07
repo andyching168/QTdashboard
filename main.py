@@ -580,6 +580,106 @@ class GaugeStyle:
         self.text_scale = text_scale
         self.show_center_circle = show_center_circle
 
+class RadarOverlay(QWidget):
+    """雷達波紋覆蓋層"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setStyleSheet("background: transparent;")
+        
+        # 雷達狀態 (0=無, 1=黃, 2=紅)
+        self.levels = {
+            "LF": 0, "RF": 0,
+            "LR": 0, "RR": 0
+        }
+        
+    def set_levels(self, lf, rf, lr, rr):
+        self.levels["LF"] = lf
+        self.levels["RF"] = rf
+        self.levels["LR"] = lr
+        self.levels["RR"] = rr
+        self.update()
+        
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        w, h = self.width(), self.height()
+        
+        # 繪製各個角落的雷達波
+        # 假設車身在中間，雷達在四個角發散
+        # 調整偏移量以配合車身圖片位置
+        
+        # padding 是 overlay 相對於 image_container 的邊距 (20px)
+        padding_x = 20
+        padding_y = 20
+        
+        # margin 是雷達中心點距離圖片邊緣的距離
+        # 您可以調整這裡的數值來微調位置
+        margin_x = 80 
+        margin_y = -10
+        
+        # 左前 (LF)
+        # 座標計算：Padding + Margin + Offset
+        self._draw_radar_waves(painter, 
+                             center_x=padding_x + margin_x + 40, 
+                             center_y=padding_y + margin_y + 40, 
+                             start_angle=120, span_angle=60, 
+                             level=self.levels["LF"])
+                             
+        # 右前 (RF)
+        # 右側座標：Width - Padding - Margin - Offset
+        self._draw_radar_waves(painter, 
+                             center_x=w - padding_x - margin_x - 40, 
+                             center_y=padding_y + margin_y + 40, 
+                             start_angle=0, span_angle=60, 
+                             level=self.levels["RF"])
+                             
+        # 左後 (LR)
+        self._draw_radar_waves(painter, 
+                             center_x=padding_x + margin_x + 40, 
+                             center_y=h - padding_y - margin_y - 40, 
+                             start_angle=180, span_angle=60, 
+                             level=self.levels["LR"])
+                             
+        # 右後 (RR)
+        self._draw_radar_waves(painter, 
+                             center_x=w - padding_x - margin_x - 40, 
+                             center_y=h - padding_y - margin_y - 40, 
+                             start_angle=300, span_angle=60, 
+                             level=self.levels["RR"])
+
+    def _draw_radar_waves(self, painter, center_x, center_y, start_angle, span_angle, level):
+        if level == 0:
+            return
+            
+        color = QColor("#FFD700") if level == 1 else QColor("#FF4444")  # 黃/紅
+        
+        # 畫三層波紋
+        pen = QPen(color, 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        
+        # 根據 level 決定顯示幾層，或者全部顯示但顏色不同
+        # 這裡設定：如果是 level 1 (黃) 畫 2 層，level 2 (紅) 畫 3 層且更密
+        
+        wave_count = 3
+        base_radius = 20
+        gap = 12
+        
+        for i in range(wave_count):
+            radius = base_radius + i * gap
+            rect = QRectF(center_x - radius, center_y - radius, radius * 2, radius * 2)
+            
+            # 調整透明度，越外層越透明
+            alpha = 255 - (i * 60)
+            color.setAlpha(alpha)
+            pen.setColor(color)
+            painter.setPen(pen)
+            
+            # 繪製圓弧 (角度單位是 1/16 度)
+            painter.drawArc(rect, int(start_angle * 16), int(span_angle * 16))
+
 class DoorStatusCard(QWidget):
     """門狀態顯示卡片"""
     
@@ -616,7 +716,7 @@ class DoorStatusCard(QWidget):
             font-weight: bold;
             background: transparent;
         """)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         
         # 圖片顯示區域（使用絕對定位來疊加圖層）
         self.image_container = QWidget()
@@ -655,6 +755,27 @@ class DoorStatusCard(QWidget):
         self.bk_open_layer = QLabel(self.image_container)
         self.bk_open_layer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
+        # 雷達波紋覆蓋層 (最上層)
+        self.radar_overlay = RadarOverlay(self.image_container)
+        # 擴大範圍以避免雷達波被裁切 (-20, -20, 380, 320)
+        # 雖然 parent 是 image_container (340x280)，但子元件可以超出邊界顯示 (除非父元件設了 mask)
+        # 不過為了保險起見，我們將其 parent 改為 self (DoorStatusCard) 並手動定位
+        self.radar_overlay.setParent(self)
+        self.radar_overlay.setGeometry(0, 40, 380, 320) # 垂直置中: (380-320)/2 + title offset?
+        # Layout margins: 20, 20, 20, 20. Title ~20px + 10px spacing.
+        # Image container is at roughly y=50.
+        # Since image_container is centered in layout, and card is 380x380.
+        # Image is 280h. Center y = 190. Top y = 190 - 140 = 50.
+        # New overlay is 320h. Center y = 190. Top y = 190 - 160 = 30.
+        # Left x = 190 - 190 = 0.
+        
+        self.radar_overlay.setGeometry(0, 30, 380, 320)
+        self.radar_overlay.raise_()
+        
+        # 初始調用一次 geometry 對齊，確保正確
+        # 由於此時可能尚未佈局完成，resizeEvent 會負責後續更新
+        QTimer.singleShot(0, lambda: self.resizeEvent(None))
+        
         # 設置所有圖層的位置和大小，使其疊加
         for layer in [self.base_layer, self.fl_handle_layer, self.fr_handle_layer,
                       self.fl_open_layer, self.fr_open_layer, self.rl_open_layer,
@@ -672,7 +793,7 @@ class DoorStatusCard(QWidget):
             font-weight: bold;
             background: transparent;
         """)
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         
         # 組合佈局
         layout.addWidget(title_label)
@@ -684,6 +805,65 @@ class DoorStatusCard(QWidget):
         # 初始更新
         self.update_display()
     
+    def resizeEvent(self, event):
+        """處理視窗大小變更，確保雷達圖層對齊"""
+        if event is not None:
+            super().resizeEvent(event)
+        
+        # 將 radar_overlay 對齊到 image_container，並向外擴展 20px
+        # 這樣可以避免雷達波被裁切，同時保持與圖片的相對位置
+        if hasattr(self, 'radar_overlay') and hasattr(self, 'image_container'):
+            geo = self.image_container.geometry()
+            self.radar_overlay.setGeometry(
+                geo.x() - 20,
+                geo.y() - 20,
+                geo.width() + 40,
+                geo.height() + 40
+            )
+
+    def set_radar_status(self, radar_str):
+        """設置雷達狀態
+        Args:
+            radar_str: 格式 "(LR:0,RR:0,LF:0,RF:0)"
+        """
+        import re
+        try:
+            # 解析字串
+            # 格式可能為 "(LR:0,RR:0,LF:0,RF:0)"
+            # 使用 regex 提取數值
+            pattern = r"LR:(\d),RR:(\d),LF:(\d),RF:(\d)"
+            match = re.search(pattern, radar_str)
+            if match:
+                lr = int(match.group(1))
+                rr = int(match.group(2))
+                lf = int(match.group(3))
+                rf = int(match.group(4))
+                
+                # 更新雷達覆蓋層
+                self.radar_overlay.set_levels(lf, rf, lr, rr)
+                
+                # 如果有雷達警示，也可以更新狀態文字
+                if lf > 0 or rf > 0 or lr > 0 or rr > 0:
+                    self.status_label.setText("Radar Warning")
+                    self.status_label.setStyleSheet("""
+                        color: #ff4;
+                        font-size: 14px;
+                        font-weight: bold;
+                        background: transparent;
+                    """)
+                elif self.door_fl_closed and self.door_fr_closed and \
+                     self.door_rl_closed and self.door_rr_closed and self.door_bk_closed:
+                     # 只有在門都關閉且無雷達警示時才顯示 All Doors Closed
+                    self.status_label.setText("All Doors Closed")
+                    self.status_label.setStyleSheet("""
+                        color: #6f6;
+                        font-size: 14px;
+                        font-weight: bold;
+                        background: transparent;
+                    """)
+        except Exception as e:
+            print(f"Radar parse error: {e}")
+
     def load_images(self):
         """載入所有門狀態圖片"""
         sprite_path = "carSprite"
@@ -7336,6 +7516,9 @@ class Dashboard(QWidget):
     # 手煞車 Signal
     signal_update_parking_brake = pyqtSignal(bool)  # 傳遞手煞車狀態 (is_engaged)
     
+    # 雷達 Signal
+    signal_update_radar = pyqtSignal(str)  # 傳遞雷達字串
+    
     # MQTT telemetry Signal (用於跨執行緒啟動 timer)
     signal_start_mqtt_telemetry = pyqtSignal()
 
@@ -7370,6 +7553,9 @@ class Dashboard(QWidget):
         
         # 連接手煞車 Signal
         self.signal_update_parking_brake.connect(self._slot_update_parking_brake)
+        
+        # 連接雷達 Signal
+        self.signal_update_radar.connect(self._slot_update_radar)
         
         # 連接 MQTT telemetry Signal
         self.signal_start_mqtt_telemetry.connect(self._start_mqtt_telemetry_timer)
@@ -10376,6 +10562,39 @@ class Dashboard(QWidget):
         elif key == Qt.Key.Key_F10 or key == Qt.Key.Key_Equal:
             self.trigger_voltage_zero_test()
 
+        # R: 雷達測試 (循環切換測試資料)
+        elif key == Qt.Key.Key_R:
+            if not hasattr(self, '_radar_test_idx'):
+                self._radar_test_idx = 0
+            
+            test_patterns = [
+                "(LR:0,RR:0,LF:0,RF:0)", # 全關
+                "(LR:1,RR:0,LF:0,RF:0)", # 左後黃
+                "(LR:2,RR:0,LF:0,RF:0)", # 左後紅
+                "(LR:0,RR:1,LF:0,RF:0)", # 右後黃
+                "(LR:0,RR:2,LF:0,RF:0)", # 右後紅
+                "(LR:0,RR:0,LF:1,RF:0)", # 左前黃
+                "(LR:0,RR:0,LF:2,RF:0)", # 左前紅
+                "(LR:0,RR:0,LF:0,RF:1)", # 右前黃
+                "(LR:0,RR:0,LF:0,RF:2)", # 右前紅
+                "(LR:1,RR:1,LF:1,RF:1)", # 全黃
+                "(LR:2,RR:2,LF:2,RF:2)", # 全紅
+            ]
+            pattern = test_patterns[self._radar_test_idx]
+            self.signal_update_radar.emit(pattern)
+            print(f"雷達測試: {pattern}")
+            
+            # 切換到門卡片看效果
+            DOOR_ROW_INDEX = 0
+            DOOR_CARD_INDEX = 2
+            self.current_row_index = DOOR_ROW_INDEX
+            self.current_card_index = DOOR_CARD_INDEX
+            self.row_stack.setCurrentIndex(DOOR_ROW_INDEX)
+            self.rows[DOOR_ROW_INDEX].setCurrentIndex(DOOR_CARD_INDEX)
+            self.update_indicators()
+            
+            self._radar_test_idx = (self._radar_test_idx + 1) % len(test_patterns)
+
         self.update_display()
 
     def toggle_cruise_switch(self):
@@ -10550,6 +10769,11 @@ class Dashboard(QWidget):
         print(f"[Dashboard] 收到手煞車信號: {is_engaged}")
         self.parking_brake = is_engaged
         self.update_parking_brake_display()
+
+    def _slot_update_radar(self, radar_str: str):
+        """Slot: 更新雷達狀態 (格式: "(LR:0,RR:0,LF:0,RF:0)")"""
+        if hasattr(self, 'door_card'):
+            self.door_card.set_radar_status(radar_str)
 
     def set_parking_brake(self, is_engaged: bool):
         """設定手煞車狀態 - 供外部呼叫"""
