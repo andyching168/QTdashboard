@@ -824,12 +824,12 @@ class DoorStatusCard(QWidget):
     def set_radar_status(self, radar_str):
         """設置雷達狀態
         Args:
-            radar_str: 格式 "(LR:0,RR:0,LF:0,RF:0)"
+            radar_str: 格式 "(LR:0,RR:0,LF:0,RF:0)" 或 "LR:0,RR:0,LF:0,RF:0"
         """
         import re
         try:
             # 解析字串
-            # 格式可能為 "(LR:0,RR:0,LF:0,RF:0)"
+            # 格式可能為 "(LR:0,RR:0,LF:0,RF:0)" 或 "LR:0,RR:0,LF:0,RF:0"
             # 使用 regex 提取數值
             pattern = r"LR:(\d),RR:(\d),LF:(\d),RF:(\d)"
             match = re.search(pattern, radar_str)
@@ -838,6 +838,8 @@ class DoorStatusCard(QWidget):
                 rr = int(match.group(2))
                 lf = int(match.group(3))
                 rf = int(match.group(4))
+                
+                print(f"[DoorCard] Radar: LF={lf}, RF={rf}, LR={lr}, RR={rr}")  # Debug 用
                 
                 # 更新雷達覆蓋層
                 self.radar_overlay.set_levels(lf, rf, lr, rr)
@@ -862,7 +864,7 @@ class DoorStatusCard(QWidget):
                         background: transparent;
                     """)
         except Exception as e:
-            print(f"Radar parse error: {e}")
+            print(f"[DoorCard] Radar parse error: {e}")
 
     def load_images(self):
         """載入所有門狀態圖片"""
@@ -7548,9 +7550,10 @@ class RadarMonitorThread(QThread):
                     line = ser.readline()
                     try:
                         line_str = line.decode('ascii', errors='ignore').strip()
-                        # 檢查特徵：以 '(' 開頭且包含 'LR:'
-                        if line_str.startswith('(') and 'LR:' in line_str:
+                        # 檢查特徵：包含 'LR:' 和 'RR:' 和 'LF:' 和 'RF:' (支援有括號或無括號格式)
+                        if 'LR:' in line_str and 'RR:' in line_str and 'LF:' in line_str and 'RF:' in line_str:
                             print(f"[Radar] Found Radar on {port} @ {self.baud_rate}")
+                            print(f"[Radar] Sample data: {line_str}")
                             return True
                     except:
                         pass
@@ -7569,7 +7572,9 @@ class RadarMonitorThread(QThread):
                         
                     try:
                         line_str = line.decode('ascii', errors='ignore').strip()
-                        if line_str.startswith('(') and 'LR:' in line_str:
+                        # 檢查是否包含雷達數據（支援有括號或無括號格式）
+                        if 'LR:' in line_str and 'RR:' in line_str and 'LF:' in line_str and 'RF:' in line_str:
+                            print(f"[Radar] Data: {line_str}")  # Debug 用
                             self.radar_message_received.emit(line_str)
                     except ValueError:
                         pass
@@ -8490,6 +8495,12 @@ class Dashboard(QWidget):
         self.door_auto_switch_timer.timeout.connect(self._auto_switch_back_from_door)
         self.previous_row_index = 0   # 記錄切換前的列索引
         self.previous_card_index = 0  # 記錄切換前的卡片索引
+        
+        # 雷達自動切換（低速 + D/R檔 + 雷達觸發時自動切到門卡片）
+        self.last_radar_auto_switch_time = 0  # 上次雷達自動切換時間
+        
+        # 雷達自動切換（低速 + D/R檔 + 雷達觸發時自動切到門卡片）
+        self.last_radar_auto_switch_time = 0  # 上次雷達自動切換時間
         
         # 物理心跳 Timer（每 100ms 觸發一次，持續累積里程）
         self.physics_timer = QTimer()
@@ -10869,9 +10880,70 @@ class Dashboard(QWidget):
         self.update_parking_brake_display()
 
     def _slot_update_radar(self, radar_str: str):
-        """Slot: 更新雷達狀態 (格式: "(LR:0,RR:0,LF:0,RF:0)")"""
+        """Slot: 更新雷達狀態 (格式: "(LR:0,RR:0,LF:0,RF:0)" 或 "LR:0,RR:0,LF:0,RF:0")
+        
+        自動切換規則：
+        - 當車速 <= 10 km/h
+        - 檔位在 D 或 R
+        - 有任意雷達觸發（值 > 0）
+        - 1 分鐘內只自動切換一次
+        """
+        print(f"[Dashboard] Received radar data: {radar_str}")  # Debug 用
         if hasattr(self, 'door_card'):
             self.door_card.set_radar_status(radar_str)
+        
+        # 雷達自動切換邏輯
+        import re
+        try:
+            # 解析雷達數據
+            pattern = r"LR:(\d),RR:(\d),LF:(\d),RF:(\d)"
+            match = re.search(pattern, radar_str)
+            if match:
+                lr = int(match.group(1))
+                rr = int(match.group(2))
+                lf = int(match.group(3))
+                rf = int(match.group(4))
+                
+                # 檢查是否有任意雷達觸發
+                has_radar_trigger = (lf > 0 or rf > 0 or lr > 0 or rr > 0)
+                
+                # 檢查速度條件（<= 10 km/h）
+                speed_ok = self.speed <= 10
+                
+                # 檢查檔位條件（D 或 R）
+                gear_ok = self.gear in ['D', 'R']
+                
+                # 檢查時間間隔（距離上次切換是否已超過 60 秒）
+                current_time = time.time()
+                time_ok = (current_time - self.last_radar_auto_switch_time) >= 60
+                
+                # 檢查是否不在門卡片上（避免重複切換）
+                not_on_door_card = not (self.current_row_index == 0 and self.current_card_index == 2)
+                
+                if has_radar_trigger and speed_ok and gear_ok and time_ok and not_on_door_card:
+                    print(f"[Dashboard] 雷達自動切換觸發: 速度={self.speed}km/h, 檔位={self.gear}, 雷達=(LF:{lf},RF:{rf},LR:{lr},RR:{rr})")
+                    
+                    # 切換到門卡片（第一列第三張，索引為 2）
+                    if self.current_row_index != 0:
+                        # 先切換到第一列
+                        self.switch_left_card(1 if self.current_row_index == 1 else 0)
+                    
+                    # 切換到門卡片
+                    target_card = 2
+                    if self.current_card_index != target_card:
+                        # 計算需要切換的方向
+                        direction = 1 if target_card > self.current_card_index else -1
+                        # 直接切換到目標卡片
+                        old_card_index = self.current_card_index
+                        self.current_card_index = target_card
+                        self.rows[self.current_row_index].setCurrentIndex(target_card)
+                        self.update_indicators()
+                    
+                    # 更新最後切換時間
+                    self.last_radar_auto_switch_time = current_time
+                    
+        except Exception as e:
+            print(f"[Dashboard] 雷達自動切換錯誤: {e}")
 
     def set_parking_brake(self, is_engaged: bool):
         """設定手煞車狀態 - 供外部呼叫"""
