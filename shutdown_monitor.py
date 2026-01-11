@@ -365,6 +365,8 @@ class ShutdownMonitor(QObject):
         # 車輛狀態
         self.current_fuel_level = None
         self.current_avg_fuel = None
+        self.trip_elapsed_time = None  # 字串格式 "hh:mm"
+        self.trip_distance = None
 
     def update_fuel_level(self, level: float):
         """更新油量"""
@@ -373,6 +375,13 @@ class ShutdownMonitor(QObject):
     def update_avg_fuel(self, avg_fuel: float):
         """更新平均油耗"""
         self.current_avg_fuel = avg_fuel
+
+    def update_trip_info(self, elapsed_time: str, distance: float, avg_fuel: float = None):
+        """更新本次行程資訊"""
+        self.trip_elapsed_time = elapsed_time
+        self.trip_distance = distance
+        if avg_fuel is not None:
+            self.current_avg_fuel = avg_fuel
     
     def start_no_signal_monitoring(self):
         """啟動無電壓訊號監控
@@ -466,7 +475,12 @@ class ShutdownMonitor(QObject):
                 
                 # 啟動位置通知 (背景執行)
                 print("[ShutdownMonitor] 觸發位置通知...")
-                threading.Thread(target=notify_current_location, args=(self.current_fuel_level, self.current_avg_fuel), daemon=True).start()
+                threading.Thread(target=notify_current_location, args=(
+                    self.current_fuel_level,
+                    self.current_avg_fuel,
+                    self.trip_elapsed_time,
+                    self.trip_distance
+                ), daemon=True).start()
                 
                 self.power_lost.emit()
         

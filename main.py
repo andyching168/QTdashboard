@@ -2882,8 +2882,9 @@ class TripInfoCardWide(QWidget):
             avg = (self.total_fuel_used / self.total_distance) * 100
             self.avg_fuel = avg
 
-            # Update ShutdownMonitor with avg fuel
-            get_shutdown_monitor().update_avg_fuel(avg)
+            # Update ShutdownMonitor with all trip info
+            elapsed_time = self._format_elapsed_time()
+            get_shutdown_monitor().update_trip_info(elapsed_time, self.trip_distance, avg)
 
             # 限制顯示上限 19.9
             display_avg = min(19.9, avg)
@@ -2891,6 +2892,15 @@ class TripInfoCardWide(QWidget):
             
         # DEBUG (建議保留一陣子觀察 Turbo 與 AFR 的關係)
         # print(f"RPM:{self.rpm} MAP:{map_bar:.2f} VE:{ve:.2f} AFR:{target_afr:.1f} Fuel:{fuel_rate_lph:.2f}L/h")
+
+    def get_trip_info(self):
+        """取得本次行程資訊（用於熄火通知）"""
+        elapsed_time = self._format_elapsed_time()
+        return {
+            'elapsed_time': elapsed_time,
+            'trip_distance': self.trip_distance,
+            'avg_fuel': self.avg_fuel
+        }
 
 
 class OdometerCardWide(QWidget):
@@ -8018,6 +8028,7 @@ class Dashboard(QWidget):
         self.signal_update_temperature.connect(self._slot_set_temperature)
         self.signal_update_fuel.connect(self._slot_set_fuel)
         self.signal_update_gear.connect(self._slot_set_gear)
+        self.signal_update_fuel_consumption.connect(self._slot_update_fuel_consumption)
         
         # 連接 Spotify Signals
         self.signal_update_spotify_track.connect(self._slot_update_spotify_track)
@@ -11180,6 +11191,16 @@ class Dashboard(QWidget):
         # 更新行程資訊卡片
         if hasattr(self, 'trip_info_card'):
             self.trip_info_card.update_fuel_consumption(instant, avg)
+
+        # 更新關機監控器的行程資訊
+        if hasattr(self, '_shutdown_monitor') and hasattr(self, 'trip_info_card'):
+            trip_info = self.trip_info_card.get_trip_info()
+            print(f"[DEBUG] get_trip_info result: {trip_info}")
+            print(f"[DEBUG] trip_info_card.start_time: {self.trip_info_card.start_time}")
+            print(f"[DEBUG] trip_info_card.trip_distance: {self.trip_info_card.trip_distance}")
+            print(f"[DEBUG] trip_info_card.avg_fuel: {self.trip_info_card.avg_fuel}")
+            if trip_info:
+                self._shutdown_monitor.update_trip_info(trip_info['elapsed_time'], trip_info['trip_distance'], trip_info['avg_fuel'])
     
     def trigger_voltage_zero_test(self):
         """觸發電壓歸零測試（F10 或 = 鍵）"""

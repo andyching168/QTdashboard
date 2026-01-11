@@ -6,6 +6,8 @@ import requests
 import glob
 import threading
 import os
+import xml.etree.ElementTree as ET
+from datetime import datetime
 
 # Configuration Path
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
@@ -38,6 +40,51 @@ def send_telegram_message(token, chat_id, message):
     except Exception as e:
         print(f"[-] Telegram error: {e}")
         return False
+
+CPC_PRICE_URL = "https://vipmbr.cpc.com.tw/cpcstn/listpricewebservice.asmx/getCPCMainProdListPrice"
+
+def get_cpc_fuel_prices(timeout=10):
+    """Fetch current CPC fuel prices from API"""
+    try:
+        response = requests.post(CPC_PRICE_URL, timeout=timeout, verify=False)
+        if response.status_code == 200:
+            return response.text
+        else:
+            print(f"[-] CPC API request failed: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"[-] CPC API error: {e}")
+        return None
+
+def parse_fuel_prices(xml_data):
+    """Parse CPC XML response and extract fuel prices"""
+    prices = {}
+    try:
+        root = ET.fromstring(xml_data)
+        # Elements don't have namespace prefix, search directly
+        for tbTable in root.findall('.//tbTable'):
+            name = tbTable.find('產品名稱')
+            price = tbTable.find('參考牌價')
+            if name is not None and price is not None and name.text:
+                try:
+                    prices[name.text] = float(price.text)
+                except (ValueError, TypeError):
+                    pass
+        return prices
+    except Exception as e:
+        print(f"[-] XML parse error: {e}")
+        return prices
+
+def get_fuel_price_by_type(prices, fuel_type='95無鉛汽油'):
+    """Get price for specific fuel type, fallback to 95 if not found"""
+    if fuel_type in prices:
+        return prices[fuel_type]
+    # Try different common names
+    for name, price in prices.items():
+        if fuel_type in name or name in fuel_type:
+            return price
+    # Default to 95 unleaded if available
+    return prices.get('95無鉛汽油')
 
 def parse_nmea_coords(line):
     """
@@ -213,14 +260,16 @@ def find_gps_and_get_location(timeout=10):
     print("[-] Timeout and no coordinates found.")
     return None
 
-def notify_current_location(fuel_level=None, avg_fuel=None):
+def notify_current_location(fuel_level=None, avg_fuel=None, elapsed_time=None, trip_distance=None):
     """
     Main entry point to be called by shutdown monitor.
     Args:
         fuel_level: float or None, current fuel percentage.
         avg_fuel: float or None, average fuel consumption (L/100km).
+        elapsed_time: str or None, trip elapsed time in "hh:mm" format.
+        trip_distance: float or None, trip distance in km.
     """
-    print(f"[Notifier] Starting location notification sequence... (Fuel: {fuel_level}, Avg Fuel: {avg_fuel})")
+    print(f"[Notifier] Starting location notification sequence... (Fuel: {fuel_level}, Avg Fuel: {avg_fuel}, Elapsed: {elapsed_time}, Trip Dist: {trip_distance})")
     
     config = load_config()
     if not config:
@@ -244,14 +293,77 @@ def notify_current_location(fuel_level=None, avg_fuel=None):
         
         note = " (約略位置)" if is_approx else ""
         fuel_str = f"⛽ 油量: {fuel_level:.0f}%\n" if fuel_level is not None else ""
+
+        # 格式化運行時間
+        time_str = f"🕐 行駛時間: {elapsed_time}\n" if elapsed_time else ""
+
+        # 格式化行駛距離
+        dist_str = f"📏 本次里程: {trip_distance:.1f} km\n" if trip_distance is not None and trip_distance > 0 else ""
+
+        # 計算消耗油量 = 平均油耗 * 距離 / 100
+        fuel_consumed = 0.0
+        if avg_fuel is not None and avg_fuel > 0 and trip_distance is not None and trip_distance > 0:
+            fuel_consumed = (avg_fuel * trip_distance) / 100
+            fuel_consumed_str = f"⛽ 消耗油量: {fuel_consumed:.2f} L\n"
+        else:
+            fuel_consumed_str = ""
+
         avg_fuel_str = f"📊 平均油耗: {avg_fuel:.1f} L/100km\n" if avg_fuel is not None and avg_fuel > 0 else ""
 
-        message = f"🚗 車輛已熄火\n{fuel_str}{avg_fuel_str}📍 位置: {lat:.6f}, {lon:.6f}{note}\n🔗 {maps_url}"
+        # Fetch CPC fuel prices and calculate cost
+        fuel_cost_str = ""
+        if fuel_consumed > 0:
+            xml_data = get_cpc_fuel_prices()
+            if xml_data:
+                prices = parse_fuel_prices(xml_data)
+                fuel_price = get_fuel_price_by_type(prices, '95無鉛汽油')
+                if fuel_price:
+                    cost = fuel_consumed * fuel_price
+                    fuel_cost_str = f"💰 推估油錢: ${cost:.0f} (95: ${fuel_price:.1f}/L)\n"
+                    print(f"[Notifier] Fuel price: {fuel_price}, Consumed: {fuel_consumed}L, Cost: ${cost}")
+                else:
+                    print("[Notifier] Could not find fuel price")
+            else:
+                print("[Notifier] Failed to fetch CPC prices")
+
+        message = f"🚗 車輛已熄火\n{time_str}{dist_str}{fuel_str}{avg_fuel_str}{fuel_consumed_str}{fuel_cost_str}📍 位置: {lat:.6f}, {lon:.6f}{note}\n🔗 {maps_url}"
         send_telegram_message(token, chat_id, message)
     else:
-        print("[GPS] 未找到 GPS 位置")
-        # Optional: Send a "Last known location unknown" message?
-        # send_telegram_message(token, chat_id, "🚗 Car Engine OFF. GPS Fix not available.")
+        print("[GPS] 未找到 GPS 位置，發送無位置通知")
+        fuel_str = f"⛽ 油量: {fuel_level:.0f}%\n" if fuel_level is not None else ""
+
+        time_str = f"🕐 行駛時間: {elapsed_time}\n" if elapsed_time else ""
+        dist_str = f"📏 本次里程: {trip_distance:.1f} km\n" if trip_distance is not None and trip_distance > 0 else ""
+
+        fuel_consumed = 0.0
+        if avg_fuel is not None and avg_fuel > 0 and trip_distance is not None and trip_distance > 0:
+            fuel_consumed = (avg_fuel * trip_distance) / 100
+            fuel_consumed_str = f"⛽ 消耗油量: {fuel_consumed:.2f} L\n"
+        else:
+            fuel_consumed_str = ""
+
+        avg_fuel_str = f"📊 平均油耗: {avg_fuel:.1f} L/100km\n" if avg_fuel is not None and avg_fuel > 0 else ""
+
+        fuel_cost_str = ""
+        if fuel_consumed > 0:
+            print(f"[Notifier] Fetching CPC prices... fuel_consumed={fuel_consumed}")
+            xml_data = get_cpc_fuel_prices()
+            print(f"[Notifier] CPC response: {xml_data[:200] if xml_data else None}...")
+            if xml_data:
+                prices = parse_fuel_prices(xml_data)
+                print(f"[Notifier] Parsed prices: {prices}")
+                fuel_price = get_fuel_price_by_type(prices, '95無鉛汽油')
+                print(f"[Notifier] Fuel price: {fuel_price}")
+                if fuel_price:
+                    cost = fuel_consumed * fuel_price
+                    fuel_cost_str = f"💰 推估油錢: ${cost:.0f} (95: ${fuel_price:.1f}/L)\n"
+                else:
+                    print("[Notifier] Could not find fuel price")
+            else:
+                print("[Notifier] Failed to fetch CPC prices")
+
+        message = f"🚗 車輛已熄火（無 GPS 定位）\n{time_str}{dist_str}{fuel_str}{avg_fuel_str}{fuel_consumed_str}{fuel_cost_str}"
+        send_telegram_message(token, chat_id, message)
 
 if __name__ == "__main__":
     # Test mode
