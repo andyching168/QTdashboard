@@ -2537,6 +2537,15 @@ class TripInfoCardWide(QWidget):
         self.last_speed = 0.0           # 上次車速
         self.last_update_time = time.time()  # 上次更新時間
         
+        # 油耗計算用緩存
+        self.rpm = 0.0                  # 當前 RPM
+        self.speed = 0.0                # 當前車速 (km/h)
+        self.turbo = 0.0                # 渦輪負壓 (bar)
+        self.total_fuel_used = 0.0      # 累計燃油消耗 (L)
+        self.total_distance = 0.0       # 累計行駛距離 (km)
+        self.last_calc_time = time.time()  # 上次計算時間
+        self.has_valid_data = False     # 是否有有效數據
+        
         # 主佈局
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(30, 25, 30, 25)
@@ -2674,13 +2683,15 @@ class TripInfoCardWide(QWidget):
         
         # 更新瞬時油耗顯示
         if instant > 0:
-            self.instant_fuel_label.setText(f"{instant:.1f}")
+            display_instant = min(19.9, instant)
+            self.instant_fuel_label.setText(f"{display_instant:.1f}")
         else:
             self.instant_fuel_label.setText("--")
         
         # 更新平均油耗顯示
         if avg > 0:
-            self.avg_fuel_label.setText(f"{avg:.1f}")
+            display_avg = min(19.9, avg)
+            self.avg_fuel_label.setText(f"{display_avg:.1f}")
         else:
             self.avg_fuel_label.setText("--")
     
@@ -2704,6 +2715,179 @@ class TripInfoCardWide(QWidget):
         
         self.last_speed = speed_kmh
         self.last_update_time = current_time
+    
+    def update_rpm(self, rpm):
+        """接收 RPM 更新並計算油耗"""
+        self.rpm = rpm * 1000  # 轉換回 RPM
+        self._calculate_fuel()
+    
+    def update_speed(self, speed_kmh):
+        """接收 Speed 更新並計算油耗"""
+        self.speed = speed_kmh
+        self._calculate_fuel()
+        # 同時更新行駛距離
+        self._update_trip_distance()
+    
+    def update_turbo(self, turbo_bar):
+        """接收渦輪負壓更新並計算油耗"""
+        self.turbo = turbo_bar
+        self._calculate_fuel()
+    
+    def _update_trip_distance(self):
+        """更新行駛距離"""
+        current_time = time.time()
+        delta_time = current_time - self.last_update_time
+        
+        if 0 < delta_time < 2 and self.speed > 0:
+            avg_speed = (self.last_speed + self.speed) / 2
+            distance = avg_speed * (delta_time / 3600)
+            self.trip_distance += distance
+            self.distance_label.setText(f"{self.trip_distance:.1f}")
+        
+        self.last_speed = self.speed
+        self.last_update_time = current_time
+    
+    def _calculate_fuel(self):
+        """
+        計算油耗 (修正版：基於 Speed-Density 法，加入渦輪增壓補償與 DFCO)
+        適用：Luxgen M7 2.2T
+        """
+        # 1. 基礎過濾：RPM 過低或速度為 0 不計算
+        if self.rpm < 50 or self.speed < 1:
+            self.instant_fuel = 0.0
+            self.instant_fuel_label.setText("--")
+            return
+
+        # --- 常數設定 ---
+        ENGINE_DISPLACEMENT = 2.2   # 排氣量 (L)
+        # 汽油密度 (kg/L), 一般約 0.72~0.75
+        FUEL_DENSITY = 0.74         
+        # 空氣密度 (kg/m^3 或 g/L), 假設進氣溫約 40-50度C 的平均值
+        # 如果有 IAT (進氣溫) 數據，公式為: 1.293 * (273 / (273 + T_celsius))
+        AIR_DENSITY_BASE = 1.15     
+
+        # --- 步驟 A: 計算 MAP (進氣壓力) ---
+        # turbo 為 bar (例如 -0.6 或 +0.8)
+        # 轉為絕對壓力 (Bar) -> 1.013 是標準大氣壓
+        map_bar = max(0.1, 1.013 + self.turbo)
+
+        # --- 步驟 B: 判斷減速斷油 (DFCO - Deceleration Fuel Cut Off) ---
+        # 條件：轉速高於 1100 且 真空值極低 (例如低於 -0.65 bar，代表節氣門全關)
+        # 注意：M7 的怠速真空約在 -0.6 左右，滑行通常更低
+        is_dfco = (self.rpm > 1100) and (self.turbo < -0.65)
+        
+        if is_dfco:
+            fuel_rate_lph = 0.0
+            ve = 0.0
+            target_afr = 0.0
+        else:
+            # --- 步驟 C: 計算動態 VE (容積效率) ---
+            # 簡單模擬：峰值扭力區間 (2400-4000rpm) VE 最高
+            # 基礎 VE
+            if self.rpm < 2000:
+                ve = 0.80 + (self.rpm / 2000) * 0.10  # 0.80 -> 0.90
+            elif 2000 <= self.rpm <= 4500:
+                ve = 0.90 + (self.turbo * 0.05)       # 增壓時 VE 會略升
+            else:
+                ve = 0.85 # 高轉衰退
+            
+            # 限制 VE 範圍 (渦輪車打高增壓時 VE 可能超過 1.0，但在計算油量時保守點)
+            ve = max(0.7, min(1.05, ve))
+
+            # --- 步驟 D: 計算動態 AFR (空燃比) ---
+            # 這是修正誤差的關鍵：增壓時要噴濃
+            if self.turbo > 0.1:
+                # 增壓狀態 (Boost): 線性從 14.7 降到 11.5 (全增壓保護)
+                target_afr = 14.7 - (self.turbo * 2.5) 
+                target_afr = max(11.0, target_afr)
+            elif self.turbo < -0.1:
+                # 巡航/輕負載: 稍微稀薄燃燒或標準
+                target_afr = 14.7
+            else:
+                target_afr = 14.7
+
+            # --- 步驟 E: 物理公式計算噴油量 ---
+            # 1. 進氣量 (L/hr) = (RPM/2 * 60) * 排氣量 * VE * (MAP壓力比)
+            # 2. 進氣質量 (kg/hr) = 進氣量 * 空氣密度 / 1000
+            # 3. 燃油質量 (kg/hr) = 進氣質量 / AFR
+            # 4. 燃油體積 (L/hr)  = 燃油質量 / 汽油密度
+
+            # 簡化合併後的公式：
+            # Fuel(L/h) = (RPM * Disp * VE * MAP_bar * Air_Const) / (AFR * Fuel_Density)
+            # Air_Const 包含了 RPM/2, *60, 以及空氣密度修正
+            
+            # 理論進氣體積流率 (m^3/hr at ambient pressure) -> 換算有點複雜，直接用質量流法
+            # 質量流率 (Mass Air Flow) g/s approx = RPM/60 * Disp/2 * VE * AirDensity * PressureRatio
+            
+            pressure_ratio = map_bar / 1.013
+            air_mass_flow_g_sec = (self.rpm / 60) * (ENGINE_DISPLACEMENT / 2) * ve * AIR_DENSITY_BASE * pressure_ratio
+            
+            # 換算成燃油 (L/h)
+            fuel_mass_g_sec = air_mass_flow_g_sec / target_afr
+            fuel_rate_lph = (fuel_mass_g_sec * 3600) / (FUEL_DENSITY * 1000)
+
+            # --- 全局校正因子 (Global Adjustment) ---
+            # 根據實際加油數據調整此值。如果儀表顯示比實際耗油，調低此值 (例如 0.95)
+            # Luxgen 舊引擎效率較差，可能需要補償
+            CALIBRATION_FACTOR = 1.05 
+            fuel_rate_lph *= CALIBRATION_FACTOR
+
+        # 限制合理範圍 (M7 怠速約 1.2-1.5L/h, 全油門可能達 30-40L/h)
+        fuel_rate_lph = max(0.0, min(50.0, fuel_rate_lph))
+
+        # --- 以下為顯示邏輯 (與原程式類似) ---
+        
+        # 瞬時油耗 (L/100km) = (L/h / km/h) * 100
+        if self.speed > 3:
+            instant = (fuel_rate_lph / self.speed) * 100
+            # 限制顯示範圍 (避免剛起步數值爆表)
+            instant = max(0.0, min(50.0, instant))
+        elif fuel_rate_lph == 0:
+            instant = 0.0 # DFCO
+        else:
+            instant = 99.9 # 怠速或極低速顯示無限大
+
+        # 更新 UI
+        # 更新 UI
+        self.instant_fuel = instant
+        
+        # 限制顯示上限 19.9
+        display_instant = min(19.9, instant)
+        self.instant_fuel_label.setText(f"{display_instant:.1f}")
+
+        # --- 平均油耗累積計算 ---
+        current_time = time.time()
+        
+        if not self.has_valid_data:
+            self.last_calc_time = current_time
+            self.has_valid_data = True
+            self.total_fuel_used = 0.0
+            self.total_distance = 0.0
+        else:
+            delta_time = current_time - self.last_calc_time
+            # 只有在時間差合理時才積分 (避免休眠喚醒後的爆量)
+            if 0 < delta_time < 2: 
+                # 積分：油量 (L)
+                step_fuel = fuel_rate_lph * (delta_time / 3600)
+                # 積分：距離 (km)
+                step_dist = self.speed * (delta_time / 3600)
+                
+                self.total_fuel_used += step_fuel
+                self.total_distance += step_dist
+                
+            self.last_calc_time = current_time
+
+        # 更新平均油耗 (至少行駛 0.1km 後才顯示)
+        if self.total_distance > 0.1:
+            avg = (self.total_fuel_used / self.total_distance) * 100
+            self.avg_fuel = avg
+            
+            # 限制顯示上限 19.9
+            display_avg = min(19.9, avg)
+            self.avg_fuel_label.setText(f"{display_avg:.1f}")
+            
+        # DEBUG (建議保留一陣子觀察 Turbo 與 AFR 的關係)
+        # print(f"RPM:{self.rpm} MAP:{map_bar:.2f} VE:{ve:.2f} AFR:{target_afr:.1f} Fuel:{fuel_rate_lph:.2f}L/h")
 
 
 class OdometerCardWide(QWidget):
@@ -7792,6 +7976,7 @@ class Dashboard(QWidget):
     signal_update_fuel = pyqtSignal(float)
     signal_update_gear = pyqtSignal(str)
     signal_update_turn_signal = pyqtSignal(str)  # "left", "right", "both", "off"
+    signal_update_turbo = pyqtSignal(float)  # 渦輪增壓 (bar)
     
     # Spotify 相關 Signals
     signal_update_spotify_track = pyqtSignal(str, str, str)
@@ -7851,8 +8036,8 @@ class Dashboard(QWidget):
         # 連接雷達 Signal
         self.signal_update_radar.connect(self._slot_update_radar)
         
-        # 連接油耗 Signal
-        self.signal_update_fuel_consumption.connect(self._slot_update_fuel_consumption)
+        # 注意：油耗由 trip_info_card 直接從 RPM/Speed/Turbo 信號計算，
+        # 不需要從 datagrab.py 接收油號 signal
         
         # 連接 MQTT telemetry Signal
         self.signal_start_mqtt_telemetry.connect(self._start_mqtt_telemetry_timer)
@@ -8499,6 +8684,11 @@ class Dashboard(QWidget):
         # 行程資訊卡片（寬版）- 啟動時間/行駛距離/瞬時油耗/平均油耗
         self.trip_info_card = TripInfoCardWide()
         row2_cards.addWidget(self.trip_info_card)  # row2_index 2
+        
+        # 連接 RPM、Speed 和 Turbo 信號到行程資訊卡片（用於計算油耗）
+        self.signal_update_rpm.connect(self.trip_info_card.update_rpm)
+        self.signal_update_speed.connect(self.trip_info_card.update_speed)
+        self.signal_update_turbo.connect(self.trip_info_card.update_turbo)
         
         # 添加列到列堆疊
         self.row_stack.addWidget(row1_cards)  # row_index 0
@@ -10940,6 +11130,8 @@ class Dashboard(QWidget):
             turbo_bar: 增壓值 (bar)，負值為真空/負壓，正值為增壓
         """
         self.turbo = turbo_bar
+        # 發送 signal 給行程資訊卡片（用於計算油耗）
+        self.signal_update_turbo.emit(turbo_bar)
         # 更新四宮格卡片
         if hasattr(self, 'quad_gauge_card'):
             self.quad_gauge_card.set_turbo(turbo_bar)

@@ -72,13 +72,19 @@ speed_sync_mode = "calibrated"  # calibrated | fixed | gps
 # 油耗計算相關變數
 fuel_consumption_data = {
     "maf": 0.0,              # 空氣流量 (g/s)
+    "map_kpa": 0.0,          # 進氣歧管壓力 (kPa)
     "instant_lp100km": 0.0,  # 瞬時油耗 (L/100km)
     "avg_lp100km": 0.0,      # 平均油耗 (L/100km)
     "total_fuel_used": 0.0,  # 累計燃油消耗 (L)
     "total_distance": 0.0,   # 累計行駛距離 (km)
     "last_calc_time": 0.0,   # 上次計算時間
+    "first_calc_done": False, # 首次計算完成標記
 }
-FUEL_DENSITY = 0.775  # 汽油密度 (g/mL) - 用於 MAF 計算油耗
+
+# 緩存最新的 RPM 和 Speed (用於油耗計算)
+cached_rpm = 0.0
+cached_speed = 0.0
+FUEL_DENSITY = 0.775  # 汽油密度 (g/mL)
 
 # 校正會話控制（僅透過 UI 長按手動啟用）
 calibration_enabled = False  # 僅手動啟用時才允許自動校正
@@ -557,6 +563,10 @@ def unified_receiver(bus, db, signals):
                         else:
                             current_rpm_smoothed = (current_rpm_smoothed * (1 - rpm_alpha)) + (raw_rpm * rpm_alpha)
                         
+                        # 更新 RPM 緩存 (用於油耗計算)
+                        global cached_rpm
+                        cached_rpm = current_rpm_smoothed
+                        
                         # 記錄來源
                         source = "ECU" if msg.arbitration_id == 0x7E8 else "TCM"
                         data_store["OBD"]["rpm"] = raw_rpm
@@ -577,6 +587,10 @@ def unified_receiver(bus, db, signals):
                             current_speed_smoothed = raw_speed
                         else:
                             current_speed_smoothed = (current_speed_smoothed * (1 - speed_alpha)) + (raw_speed * speed_alpha)
+                        
+                        # 更新 Speed 緩存 (用於油耗計算)
+                        global cached_speed
+                        cached_speed = current_speed_smoothed
                         
                         data_store["OBD"]["speed"] = raw_speed
                         data_store["OBD"]["speed_smoothed"] = current_speed_smoothed
@@ -641,95 +655,17 @@ def unified_receiver(bus, db, signals):
                         # 更新前端電瓶電壓顯示
                         signals.update_battery.emit(voltage)
                     
-                    # PID 0B (MAP - Manifold Absolute Pressure) - 進氣歧管壓力 (用於油耗計算)
+                    # PID 0B (MAP - Manifold Absolute Pressure) - 進氣歧管壓力
                     elif msg.data[2] == 0x0B and msg.arbitration_id == 0x7E8:
                         if len(msg.data) < 4:
                             logger.warning("MAP 進氣歧管壓力資料長度不足")
                             continue
                         
-                        # MAP 值 (kPa) - OBD 直接返回 kPa
+                        # MAP 值 (kPa)
                         map_kpa = msg.data[3]
                         fuel_consumption_data["map_kpa"] = map_kpa
                         logger.debug(f"MAP 進氣歧管壓力: {map_kpa} kPa")
-                        
-                        # 計算油耗
-                        current_time = time.time()
-                        current_speed = data_store["OBD"]["speed_smoothed"]
-                        current_rpm = data_store["OBD"]["rpm"]
-                        
-                        # 使用 MAP 估算燃油消耗 (適用於渦輪車)
-                        # 渦輪車增壓時 MAP > 101 kPa，需要動態 VE
-                        # 動態 VE 計算：根據 MAP 和 RPM 估算
-                        
-                        # 引擎參數 (Luxgen M7 2.2T)
-                        ENGINE_DISPLACEMENT = 2.2  # 排氣量 L
-                        MAX_POWER_RPM = 5200       # 最大馬力轉速
-                        MAX_POWER_HP = 175         # 最大馬力
-                        ATM_PRESSURE = 101.325     # 標準大氣壓 kPa
-                        AIR_FUEL_RATIO = 14.7      # 理想空燃比
-                        
-                        # 計算最大功率時的燃油消耗率 (用於校準)
-                        # 175hp @ 5200rpm ≈ 對應燃油消耗率校準
-                        max_fuel_rate_at_power = (MAX_POWER_HP * 0.746) / 0.35  # 粗略估算 L/h
-                        
-                        # 相對增壓壓力 (kPa)
-                        boost_pressure = max(0, map_kpa - ATM_PRESSURE)
-                        
-                        # 動態 VE 估算：
-                        # 自然進氣時 VE ~85-95%
-                        # 渦輪增壓時 VE 會提高 (與增壓壓力成正比)
-                        base_ve = 0.90  # 基礎 VE
-                        boost_factor = min(0.15, boost_pressure / 200)  # 增壓帶來的 VE 提升
-                        dynamic_ve = base_ve + boost_factor
-                        
-                        # 燃油消耗率估算 (L/h)
-                        # 公式: (MAP/ATM) * VE * 排氣量 * RPM / 2 / 60 * 空燃比 / 燃油密度
-                        pressure_ratio = map_kpa / ATM_PRESSURE
-                        fuel_rate_lph = (pressure_ratio * dynamic_ve * ENGINE_DISPLACEMENT * 
-                                        current_rpm / 2 / 60 * AIR_FUEL_RATIO / FUEL_DENSITY)
-                        
-                        # 限制燃油消耗率在合理範圍 (渦輪車高負載時可達較高值)
-                        fuel_rate_lph = max(0.0, min(60.0, fuel_rate_lph))
-                        
-                        # 瞬時油耗計算 (L/100km)
-                        if current_speed > 2:  # 車速 > 2km/h 才計算
-                            instant_lp100km = (fuel_rate_lph / current_speed) * 100
-                            # 限制合理範圍 3-30 L/100km (渦輪車+重車)
-                            instant_lp100km = max(3.0, min(30.0, instant_lp100km))
-                        else:
-                            instant_lp100km = 0.0
-                        
-                        fuel_consumption_data["instant_lp100km"] = instant_lp100km
-                        
-                        # 累積油耗和距離計算平均油耗
-                        last_time = fuel_consumption_data["last_calc_time"]
-                        if last_time > 0:
-                            delta_time = current_time - last_time  # 秒
-                            if delta_time > 0 and delta_time < 2:  # 合理時間間隔
-                                # 累積燃油消耗 (L)
-                                fuel_used = fuel_rate_lph * (delta_time / 3600)
-                                fuel_consumption_data["total_fuel_used"] += fuel_used
-                                
-                                # 累積距離 (km)
-                                distance_km = current_speed * (delta_time / 3600)
-                                fuel_consumption_data["total_distance"] += distance_km
-                                
-                                # 計算平均油耗
-                                total_dist = fuel_consumption_data["total_distance"]
-                                total_fuel = fuel_consumption_data["total_fuel_used"]
-                                if total_dist > 0.1:  # 至少行駛 100m
-                                    avg_lp100km = (total_fuel / total_dist) * 100
-                                    # 限制平均油耗範圍 3-30 L/100km (渦輪車+重車)
-                                    avg_lp100km = max(3.0, min(30.0, avg_lp100km))
-                                    fuel_consumption_data["avg_lp100km"] = avg_lp100km
-                        
-                        fuel_consumption_data["last_calc_time"] = current_time
-                        
-                        # 發送油耗信號
-                        signals.update_fuel_consumption.emit(
-                            fuel_consumption_data["instant_lp100km"],
-                            fuel_consumption_data["avg_lp100km"]
-                        )
+                        # 注意：油耗由卡片從 RPM/Speed/Turbo 信號直接計算
                         
                 except (IndexError, KeyError) as e:
                     logger.error(f"解析 OBD 訊息錯誤: {e}, data: {msg.data.hex()}")
