@@ -2513,6 +2513,199 @@ class OdometerCard(QWidget):
             self.sync_time_label.setText("未同步")
 
 
+class TripInfoCardWide(QWidget):
+    """本次行程資訊卡片（寬版 800x380）- 顯示啟動時間、行駛距離、瞬時/平均油耗"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(800, 380)
+        
+        # 設置背景樣式
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a1a25, stop:1 #0f0f18);
+                border-radius: 20px;
+            }
+        """)
+        
+        # 行程數據
+        self.start_time = time.time()  # 啟動時間戳
+        self.trip_distance = 0.0        # 本次行駛距離 (km)
+        self.instant_fuel = 0.0         # 瞬時油耗 (L/100km)
+        self.avg_fuel = 0.0             # 平均油耗 (L/100km)
+        self.last_speed = 0.0           # 上次車速
+        self.last_update_time = time.time()  # 上次更新時間
+        
+        # 主佈局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(30, 25, 30, 25)
+        main_layout.setSpacing(15)
+        
+        # 標題
+        title_label = QLabel("本次行程")
+        title_label.setStyleSheet("""
+            color: #6af;
+            font-size: 28px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title_label)
+        
+        # 內容區域 - 2x2 網格
+        content_widget = QWidget()
+        content_widget.setStyleSheet("background: transparent;")
+        content_layout = QGridLayout(content_widget)
+        content_layout.setContentsMargins(10, 10, 10, 10)
+        content_layout.setSpacing(20)
+        
+        # === 左上：運行時間（經過時間）===
+        self.elapsed_time_panel, self.elapsed_time_label = self._create_value_panel(
+            "運行時間",
+            "00:00",
+            "",
+            "#4ecdc4"  # 青綠色
+        )
+        content_layout.addWidget(self.elapsed_time_panel, 0, 0)
+        
+        # === 右上：行駛距離 ===
+        self.distance_panel, self.distance_label = self._create_value_panel(
+            "行駛距離",
+            "0.0",
+            "km",
+            "#f39c12"  # 橙色
+        )
+        content_layout.addWidget(self.distance_panel, 0, 1)
+        
+        # === 左下：瞬時油耗 ===
+        self.instant_fuel_panel, self.instant_fuel_label = self._create_value_panel(
+            "瞬時油耗",
+            "--",
+            "L/100km",
+            "#e74c3c"  # 紅色
+        )
+        content_layout.addWidget(self.instant_fuel_panel, 1, 0)
+        
+        # === 右下：平均油耗 ===
+        self.avg_fuel_panel, self.avg_fuel_label = self._create_value_panel(
+            "平均油耗",
+            "--",
+            "L/100km",
+            "#2ecc71"  # 綠色
+        )
+        content_layout.addWidget(self.avg_fuel_panel, 1, 1)
+        
+        main_layout.addWidget(content_widget, 1)
+        
+        # 定時器：每分鐘更新經過時間（顯示格式為 hh:mm，無需每秒更新）
+        self.elapsed_timer = QTimer()
+        self.elapsed_timer.timeout.connect(self._update_elapsed_time)
+        self.elapsed_timer.start(60000)  # 每 60 秒更新
+    
+    def _format_elapsed_time(self):
+        """格式化經過時間為 hh:mm"""
+        elapsed_seconds = int(time.time() - self.start_time)
+        hours = elapsed_seconds // 3600
+        minutes = (elapsed_seconds % 3600) // 60
+        return f"{hours:02d}:{minutes:02d}"
+    
+    def _update_elapsed_time(self):
+        """更新經過時間顯示"""
+        self.elapsed_time_label.setText(self._format_elapsed_time())
+    
+    def _create_value_panel(self, title, value, unit, color):
+        """創建數值面板（帶有標題、值和單位）- 無外框"""
+        panel = QWidget()
+        panel.setStyleSheet("background: transparent;")
+        
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(5)
+        
+        # 標題
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet(f"""
+            color: {color};
+            font-size: 18px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 值 + 單位 (水平排列)
+        value_widget = QWidget()
+        value_widget.setStyleSheet("background: transparent;")
+        value_layout = QHBoxLayout(value_widget)
+        value_layout.setContentsMargins(0, 0, 0, 0)
+        value_layout.setSpacing(8)
+        
+        value_lbl = QLabel(value)
+        value_lbl.setStyleSheet("""
+            color: white;
+            font-size: 42px;
+            font-weight: bold;
+            background: transparent;
+        """)
+        value_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        
+        unit_lbl = QLabel(unit)
+        unit_lbl.setStyleSheet("""
+            color: #888;
+            font-size: 16px;
+            background: transparent;
+        """)
+        unit_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
+        
+        value_layout.addStretch()
+        value_layout.addWidget(value_lbl)
+        value_layout.addWidget(unit_lbl)
+        value_layout.addStretch()
+        
+        layout.addWidget(title_lbl)
+        layout.addWidget(value_widget)
+        
+        return panel, value_lbl
+    
+    def update_fuel_consumption(self, instant, avg):
+        """更新油耗顯示"""
+        self.instant_fuel = instant
+        self.avg_fuel = avg
+        
+        # 更新瞬時油耗顯示
+        if instant > 0:
+            self.instant_fuel_label.setText(f"{instant:.1f}")
+        else:
+            self.instant_fuel_label.setText("--")
+        
+        # 更新平均油耗顯示
+        if avg > 0:
+            self.avg_fuel_label.setText(f"{avg:.1f}")
+        else:
+            self.avg_fuel_label.setText("--")
+    
+    def add_distance(self, distance_km):
+        """累加行駛距離"""
+        self.trip_distance += distance_km
+        self.distance_label.setText(f"{self.trip_distance:.1f}")
+    
+    def update_from_speed(self, speed_kmh):
+        """根據車速更新行駛距離"""
+        current_time = time.time()
+        delta_time = current_time - self.last_update_time
+        
+        # 合理的時間間隔內計算距離
+        if 0 < delta_time < 2:
+            # 使用平均速度計算距離
+            avg_speed = (self.last_speed + speed_kmh) / 2
+            distance = avg_speed * (delta_time / 3600)  # km
+            self.trip_distance += distance
+            self.distance_label.setText(f"{self.trip_distance:.1f}")
+        
+        self.last_speed = speed_kmh
+        self.last_update_time = current_time
+
+
 class OdometerCardWide(QWidget):
     """總里程表卡片（寬版 800x380）- 顯示模式 / 輸入模式切換"""
     
@@ -7617,6 +7810,9 @@ class Dashboard(QWidget):
     # 雷達 Signal
     signal_update_radar = pyqtSignal(str)  # 傳遞雷達字串
     
+    # 油耗 Signal
+    signal_update_fuel_consumption = pyqtSignal(float, float)  # 傳遞油耗 (瞬時 L/100km, 平均 L/100km)
+    
     # MQTT telemetry Signal (用於跨執行緒啟動 timer)
     signal_start_mqtt_telemetry = pyqtSignal()
 
@@ -7654,6 +7850,9 @@ class Dashboard(QWidget):
         
         # 連接雷達 Signal
         self.signal_update_radar.connect(self._slot_update_radar)
+        
+        # 連接油耗 Signal
+        self.signal_update_fuel_consumption.connect(self._slot_update_fuel_consumption)
         
         # 連接 MQTT telemetry Signal
         self.signal_start_mqtt_telemetry.connect(self._start_mqtt_telemetry_timer)
@@ -8285,7 +8484,7 @@ class Dashboard(QWidget):
         row1_cards.addWidget(self.nav_card)    # row1_index 1
         row1_cards.addWidget(self.door_card)   # row1_index 2
         
-        # === 第二列：Trip 卡片 / ODO 卡片 ===
+        # === 第二列：Trip 卡片 / ODO 卡片 / 行程資訊卡片 ===
         row2_cards = QStackedWidget()
         row2_cards.setFixedSize(800, 380)
         
@@ -8296,6 +8495,10 @@ class Dashboard(QWidget):
         # ODO 卡片（寬版）
         self.odo_card = OdometerCardWide()
         row2_cards.addWidget(self.odo_card)  # row2_index 1
+        
+        # 行程資訊卡片（寬版）- 啟動時間/行駛距離/瞬時油耗/平均油耗
+        self.trip_info_card = TripInfoCardWide()
+        row2_cards.addWidget(self.trip_info_card)  # row2_index 2
         
         # 添加列到列堆疊
         self.row_stack.addWidget(row1_cards)  # row_index 0
@@ -8332,7 +8535,7 @@ class Dashboard(QWidget):
         self.current_card_index = 0    # 當前卡片索引（右側）
         self.current_left_index = 0    # 當前左側卡片索引
         self.rows = [row1_cards, row2_cards]  # 列的引用
-        self.row_card_counts = [3, 2]  # 每列的卡片數量（第一列: 音樂/導航/門）
+        self.row_card_counts = [3, 3]  # 每列的卡片數量（第一列: 音樂/導航/門, 第二列: Trip/ODO/行程資訊）
         self.left_card_count = 2       # 左側卡片數量（四宮格 + 油量，不含詳細視圖）
         
         # 觸控滑動相關
@@ -9366,8 +9569,8 @@ class Dashboard(QWidget):
             self.update_indicators()
             
             row_names = ["第一列", "第二列"]
-            row1_card_names = ["音樂播放器", "門狀態"]
-            row2_card_names = ["Trip", "ODO"]
+            row1_card_names = ["音樂播放器", "導航", "門狀態"]
+            row2_card_names = ["Trip", "ODO", "行程資訊"]
             if self.previous_row_index == 0:
                 card_name = row1_card_names[self.previous_card_index] if self.previous_card_index < len(row1_card_names) else "未知"
             else:
@@ -9437,6 +9640,10 @@ class Dashboard(QWidget):
         # 里程/卡片顯示使用顯示速度（實際累積由 _physics_tick 驅動）
         self.trip_card.current_speed = new_speed
         self.odo_card.current_speed = new_speed
+        
+        # 更新行程資訊卡片的行駛距離（根據車速累計）
+        if hasattr(self, 'trip_info_card'):
+            self.trip_info_card.update_from_speed(new_speed)
         
         # 更新速度校正（維持原本邏輯）
         self._maybe_update_speed_correction(smoothed_obd_speed or raw_obd_speed)
@@ -9986,7 +10193,7 @@ class Dashboard(QWidget):
         
         # 顯示提示
         row1_card_names = ["音樂播放器", "導航", "門狀態"]
-        row2_card_names = ["Trip卡片", "ODO卡片"]
+        row2_card_names = ["Trip卡片", "ODO卡片", "行程資訊"]
         all_card_names = [row1_card_names, row2_card_names]
         
         card_name = all_card_names[self.current_row_index][new_card_index]
@@ -10478,7 +10685,7 @@ class Dashboard(QWidget):
         
         # 顯示提示
         row1_card_names = ["音樂播放器", "導航", "門狀態"]
-        row2_card_names = ["Trip卡片", "ODO卡片"]
+        row2_card_names = ["Trip卡片", "ODO卡片", "行程資訊"]
         all_card_names = [row1_card_names, row2_card_names]
         # 動畫結束後才會更新索引，所以這裡用計算的值
         if next_card_index >= current_row_card_count:
@@ -10764,6 +10971,21 @@ class Dashboard(QWidget):
         if hasattr(self, '_shutdown_monitor'):
             self._shutdown_monitor.update_voltage(voltage)
     
+    def set_fuel_consumption(self, instant: float, avg: float):
+        """外部數據接口：設置油耗 - 透過 Signal 發送，由主執行緒執行
+        Args:
+            instant: 瞬時油耗 (L/100km)
+            avg: 平均油耗 (L/100km)
+        """
+        self.signal_update_fuel_consumption.emit(instant, avg)
+    
+    @pyqtSlot(float, float)
+    def _slot_update_fuel_consumption(self, instant: float, avg: float):
+        """Slot: 在主執行緒中更新油耗顯示"""
+        # 更新行程資訊卡片
+        if hasattr(self, 'trip_info_card'):
+            self.trip_info_card.update_fuel_consumption(instant, avg)
+    
     def trigger_voltage_zero_test(self):
         """觸發電壓歸零測試（F10 或 = 鍵）"""
         # 如果已經在測試中，忽略
@@ -10923,21 +11145,19 @@ class Dashboard(QWidget):
                 if has_radar_trigger and speed_ok and gear_ok and time_ok and not_on_door_card:
                     print(f"[Dashboard] 雷達自動切換觸發: 速度={self.speed}km/h, 檔位={self.gear}, 雷達=(LF:{lf},RF:{rf},LR:{lr},RR:{rr})")
                     
-                    # 切換到門卡片（第一列第三張，索引為 2）
-                    if self.current_row_index != 0:
-                        # 先切換到第一列
-                        self.switch_left_card(1 if self.current_row_index == 1 else 0)
+                    # 記錄切換前的位置（供跳回使用）
+                    self.previous_row_index = self.current_row_index
+                    self.previous_card_index = self.current_card_index
                     
-                    # 切換到門卡片
-                    target_card = 2
-                    if self.current_card_index != target_card:
-                        # 計算需要切換的方向
-                        direction = 1 if target_card > self.current_card_index else -1
-                        # 直接切換到目標卡片
-                        old_card_index = self.current_card_index
-                        self.current_card_index = target_card
-                        self.rows[self.current_row_index].setCurrentIndex(target_card)
-                        self.update_indicators()
+                    # 切換到門卡片（第一列第三張，索引為 2）
+                    DOOR_ROW_INDEX = 0
+                    DOOR_CARD_INDEX = 2
+                    
+                    self.current_row_index = DOOR_ROW_INDEX
+                    self.current_card_index = DOOR_CARD_INDEX
+                    self.row_stack.setCurrentIndex(DOOR_ROW_INDEX)
+                    self.rows[DOOR_ROW_INDEX].setCurrentIndex(DOOR_CARD_INDEX)
+                    self.update_indicators()
                     
                     # 更新最後切換時間
                     self.last_radar_auto_switch_time = current_time

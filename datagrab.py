@@ -54,6 +54,7 @@ class WorkerSignals(QObject):
     update_cruise = pyqtSignal(bool, bool)  # 發送巡航狀態 (cruise_switch: bool, cruise_engaged: bool)
     update_turbo = pyqtSignal(float)  # 發送渦輪增壓 (bar)
     update_battery = pyqtSignal(float)  # 發送電瓶電壓 (V)
+    update_fuel_consumption = pyqtSignal(float, float)  # 發送油耗 (瞬時 L/100km, 平均 L/100km)
     # update_nav_icon = pyqtSignal(str) # 預留給導航圖片
 
 # --- 全局變數 ---
@@ -67,6 +68,17 @@ console = Console()
 send_lock = threading.Lock() # 保護寫入操作
 gps_speed_mode=False  # True: GPS 顯示優先 (OBD+GPS 混合)，False: OBD 顯示
 speed_sync_mode = "calibrated"  # calibrated | fixed | gps
+
+# 油耗計算相關變數
+fuel_consumption_data = {
+    "maf": 0.0,              # 空氣流量 (g/s)
+    "instant_lp100km": 0.0,  # 瞬時油耗 (L/100km)
+    "avg_lp100km": 0.0,      # 平均油耗 (L/100km)
+    "total_fuel_used": 0.0,  # 累計燃油消耗 (L)
+    "total_distance": 0.0,   # 累計行駛距離 (km)
+    "last_calc_time": 0.0,   # 上次計算時間
+}
+FUEL_DENSITY = 0.775  # 汽油密度 (g/mL) - 用於 MAF 計算油耗
 
 # 校正會話控制（僅透過 UI 長按手動啟用）
 calibration_enabled = False  # 僅手動啟用時才允許自動校正
@@ -628,6 +640,63 @@ def unified_receiver(bus, db, signals):
                         
                         # 更新前端電瓶電壓顯示
                         signals.update_battery.emit(voltage)
+                    
+                    # PID 10 (MAF - Mass Air Flow) - 空氣流量 (用於油耗計算)
+                    elif msg.data[2] == 0x10 and msg.arbitration_id == 0x7E8:
+                        if len(msg.data) < 5:
+                            logger.warning("MAF 空氣流量資料長度不足")
+                            continue
+                        # 公式: (A*256 + B) / 100 = MAF (g/s)
+                        maf = (msg.data[3] * 256 + msg.data[4]) / 100.0
+                        fuel_consumption_data["maf"] = maf
+                        logger.debug(f"MAF 空氣流量: {maf:.2f} g/s")
+                        
+                        # 計算油耗
+                        current_time = time.time()
+                        current_speed = data_store["OBD"]["speed_smoothed"]
+                        
+                        # 瞬時油耗計算 (L/100km)
+                        # 燃油消耗率 (g/s) = MAF / 14.7 (理想空燃比)
+                        # 燃油消耗率 (L/h) = (MAF / 14.7) / FUEL_DENSITY * 3.6
+                        fuel_rate_lph = (maf / 14.7) / FUEL_DENSITY * 3.6  # L/h
+                        
+                        if current_speed > 2:  # 車速 > 2km/h 才計算
+                            instant_lp100km = (fuel_rate_lph / current_speed) * 100
+                            # 限制合理範圍 0-99 L/100km
+                            instant_lp100km = max(0.0, min(99.0, instant_lp100km))
+                        else:
+                            instant_lp100km = 0.0
+                        
+                        fuel_consumption_data["instant_lp100km"] = instant_lp100km
+                        
+                        # 累積油耗和距離計算平均油耗
+                        last_time = fuel_consumption_data["last_calc_time"]
+                        if last_time > 0:
+                            delta_time = current_time - last_time  # 秒
+                            if delta_time > 0 and delta_time < 2:  # 合理時間間隔
+                                # 累積燃油消耗 (L)
+                                fuel_used = fuel_rate_lph * (delta_time / 3600)
+                                fuel_consumption_data["total_fuel_used"] += fuel_used
+                                
+                                # 累積距離 (km)
+                                distance_km = current_speed * (delta_time / 3600)
+                                fuel_consumption_data["total_distance"] += distance_km
+                                
+                                # 計算平均油耗
+                                total_dist = fuel_consumption_data["total_distance"]
+                                total_fuel = fuel_consumption_data["total_fuel_used"]
+                                if total_dist > 0.1:  # 至少行駛 100m
+                                    avg_lp100km = (total_fuel / total_dist) * 100
+                                    avg_lp100km = max(0.0, min(99.0, avg_lp100km))
+                                    fuel_consumption_data["avg_lp100km"] = avg_lp100km
+                        
+                        fuel_consumption_data["last_calc_time"] = current_time
+                        
+                        # 發送油耗信號
+                        signals.update_fuel_consumption.emit(
+                            fuel_consumption_data["instant_lp100km"],
+                            fuel_consumption_data["avg_lp100km"]
+                        )
                         
                 except (IndexError, KeyError) as e:
                     logger.error(f"解析 OBD 訊息錯誤: {e}, data: {msg.data.hex()}")
@@ -1005,6 +1074,17 @@ def obd_query(bus, signals):
             
             time.sleep(0.05)  # 查詢間隔
             
+            # 查詢 空氣流量 MAF (PID 0x10) - 用於油耗計算
+            msg_maf = can.Message(
+                arbitration_id=0x7DF, 
+                data=[0x02, 0x01, 0x10, 0, 0, 0, 0, 0], 
+                is_extended_id=False
+            )
+            with send_lock:
+                bus.send(msg_maf)
+            
+            time.sleep(0.05)  # 查詢間隔
+            
         except can.CanError:
             time.sleep(1)
         except Exception as e:
@@ -1082,6 +1162,7 @@ def main():
             signals.update_cruise.connect(dashboard.set_cruise)
             signals.update_turbo.connect(dashboard.set_turbo)
             signals.update_battery.connect(dashboard.set_battery)
+            signals.update_fuel_consumption.connect(dashboard.set_fuel_consumption)
             
             # 啟動背景執行緒
             logger.info("正在啟動背景執行緒...")
