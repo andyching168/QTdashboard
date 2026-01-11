@@ -8844,7 +8844,7 @@ class Dashboard(QWidget):
         self.fuel = 60  # 稍微偏上的油量
         self.gear = "P"  # 顯示用的檔位
         self.actual_gear = "P"  # 實際檔位（CAN 傳來的原始值）
-        self.show_detailed_gear = False  # False=顯示D, True=顯示具體檔位(1-5)
+        self.show_detailed_gear = True  # False=顯示D, True=顯示具體檔位(1-5)
         self.turbo = None  # None = OBD 未回應，顯示 "--"
         self.battery = None  # None = OBD 未回應，顯示 "--"
         
