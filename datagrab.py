@@ -288,12 +288,17 @@ def setup_socketcan_interface(interface='can0', bitrate=500000):
         return False
 
 
-def init_can_bus(bitrate=500000):
+def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0):
     """
     初始化 CAN Bus 連線
     優先順序：
     1. Linux: SocketCAN (如果有可用介面)
     2. 所有平台: SLCAN (USB CAN adapter)
+    
+    Args:
+        bitrate: CAN Bus 速率
+        max_retries: 最大重試次數
+        retry_delay: 重試間隔（秒）
     
     返回: (bus, interface_type) 或 (None, None)
     """
@@ -312,69 +317,84 @@ def init_can_bus(bitrate=500000):
         {"can_id": 0x420, "can_mask": 0x7FF},  # BODY_ECU_STATUS (方向燈、門狀態)
     ]
     
-    # === 1. 嘗試 SocketCAN (僅 Linux) ===
-    if platform.system() == 'Linux':
-        console.print("[cyan]偵測 SocketCAN 介面...[/cyan]")
-        socketcan_interfaces = detect_socketcan_interfaces()
+    for attempt in range(max_retries):
+        if attempt > 0:
+            console.print(f"[yellow]CAN 連線重試 (嘗試 {attempt + 1}/{max_retries})...[/yellow]")
+            logger.info(f"CAN Bus 連線重試 (嘗試 {attempt + 1}/{max_retries})")
+            time.sleep(retry_delay)
         
-        if socketcan_interfaces:
-            for iface, status in socketcan_interfaces:
-                console.print(f"  發現: [green]{iface}[/green] ({status})")
-                
-                # 如果介面是 DOWN，嘗試設定並啟動
-                if status == "DOWN":
-                    console.print(f"  [yellow]介面 {iface} 未啟動，嘗試設定...[/yellow]")
-                    if not setup_socketcan_interface(iface, bitrate):
-                        continue
-                
-                # 嘗試連接
-                try:
-                    bus = can.interface.Bus(
-                        interface='socketcan',
-                        channel=iface,
-                        bitrate=bitrate,
-                        receive_own_messages=False,
-                        can_filters=can_filters
-                    )
-                    interface_type = f"SocketCAN ({iface})"
-                    console.print(f"[bold green]✓ SocketCAN 連線成功: {iface}[/bold green]")
-                    logger.info(f"CAN Bus 已連接 (SocketCAN): {iface}, 過濾器: {len(can_filters)} 個 ID")
-                    return bus, interface_type
+        # === 1. 嘗試 SocketCAN (僅 Linux) ===
+        if platform.system() == 'Linux':
+            console.print("[cyan]偵測 SocketCAN 介面...[/cyan]")
+            socketcan_interfaces = detect_socketcan_interfaces()
+            
+            if socketcan_interfaces:
+                for iface, status in socketcan_interfaces:
+                    console.print(f"  發現: [green]{iface}[/green] ({status})")
                     
-                except Exception as e:
-                    logger.warning(f"SocketCAN {iface} 連線失敗: {e}")
-                    continue
-        else:
-            console.print("  [yellow]未發現 SocketCAN 介面[/yellow]")
-    
-    # === 2. Fallback 到 SLCAN ===
-    console.print("[cyan]嘗試 SLCAN 模式...[/cyan]")
-    
-    port = select_serial_port()
-    if not port:
-        console.print("[red]未找到可用的 CAN 裝置[/red]")
-        return None, None
-    
-    try:
-        # 注意：SLCAN 不支援硬體過濾器，過濾會在軟體層進行
-        # 但設定 can_filters 仍有助於 python-can 內部優化
-        bus = can.interface.Bus(
-            interface='slcan',
-            channel=port,
-            bitrate=bitrate,
-            timeout=0.01,
-            receive_own_messages=False,
-            can_filters=can_filters
-        )
-        interface_type = f"SLCAN ({port})"
-        console.print(f"[bold green]✓ SLCAN 連線成功: {port}[/bold green]")
-        logger.info(f"CAN Bus 已連接 (SLCAN): {port}, 過濾器: {len(can_filters)} 個 ID")
-        return bus, interface_type
+                    # 如果介面是 DOWN，嘗試設定並啟動
+                    if status == "DOWN":
+                        console.print(f"  [yellow]介面 {iface} 未啟動，嘗試設定...[/yellow]")
+                        if not setup_socketcan_interface(iface, bitrate):
+                            continue
+                        # 等待介面穩定
+                        time.sleep(0.5)
+                    
+                    # 嘗試連接
+                    try:
+                        bus = can.interface.Bus(
+                            interface='socketcan',
+                            channel=iface,
+                            bitrate=bitrate,
+                            receive_own_messages=False,
+                            can_filters=can_filters
+                        )
+                        interface_type = f"SocketCAN ({iface})"
+                        console.print(f"[bold green]✓ SocketCAN 連線成功: {iface}[/bold green]")
+                        logger.info(f"CAN Bus 已連接 (SocketCAN): {iface}, 過濾器: {len(can_filters)} 個 ID")
+                        return bus, interface_type
+                        
+                    except Exception as e:
+                        logger.warning(f"SocketCAN {iface} 連線失敗: {e}")
+                        continue
+            else:
+                console.print("  [yellow]未發現 SocketCAN 介面[/yellow]")
         
-    except Exception as e:
-        console.print(f"[red]SLCAN 連線失敗: {e}[/red]")
-        logger.error(f"SLCAN 初始化失敗: {e}", exc_info=True)
-        return None, None
+        # === 2. Fallback 到 SLCAN ===
+        console.print("[cyan]嘗試 SLCAN 模式...[/cyan]")
+        
+        port = select_serial_port()
+        if not port:
+            console.print("[red]未找到可用的 CAN 裝置[/red]")
+            # 繼續下一次重試
+            continue
+        
+        try:
+            # 注意：SLCAN 不支援硬體過濾器，過濾會在軟體層進行
+            # 但設定 can_filters 仍有助於 python-can 內部優化
+            bus = can.interface.Bus(
+                interface='slcan',
+                channel=port,
+                bitrate=bitrate,
+                timeout=0.01,
+                receive_own_messages=False,
+                can_filters=can_filters
+            )
+            interface_type = f"SLCAN ({port})"
+            console.print(f"[bold green]✓ SLCAN 連線成功: {port}[/bold green]")
+            logger.info(f"CAN Bus 已連接 (SLCAN): {port}, 過濾器: {len(can_filters)} 個 ID")
+            return bus, interface_type
+            
+        except Exception as e:
+            console.print(f"[red]SLCAN 連線失敗: {e}[/red]")
+            logger.error(f"SLCAN 初始化失敗: {e}", exc_info=True)
+            # 繼續下一次重試
+            continue
+    
+    # 所有重試都失敗
+    console.print(f"[red]CAN Bus 連線失敗，已重試 {max_retries} 次[/red]")
+    logger.error(f"CAN Bus 初始化失敗，已重試 {max_retries} 次")
+    return None, None
 
 
 def select_serial_port():

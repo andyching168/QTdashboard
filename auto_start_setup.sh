@@ -82,6 +82,29 @@ if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
         echo "$(date): 警告: GPU 未就緒，仍嘗試啟動" >> "$BOOT_LOG"
     fi
     
+    # 檢查 CAN 設備是否就緒 (最多等待 15 秒)
+    echo "$(date): 檢查 CAN 設備狀態..." >> "$BOOT_LOG"
+    CAN_READY=false
+    for i in {1..30}; do
+        # 方式 1: 檢查 SocketCAN 介面 (can0)
+        if ip link show can0 2>/dev/null | grep -q "state UP"; then
+            CAN_READY=true
+            echo "$(date): SocketCAN can0 就緒 (嘗試 $i)" >> "$BOOT_LOG"
+            break
+        fi
+        # 方式 2: 檢查 USB CANable 設備
+        if ls /dev/ttyACM* 2>/dev/null | head -1 > /dev/null; then
+            CAN_READY=true
+            echo "$(date): USB CAN 設備就緒 (嘗試 $i)" >> "$BOOT_LOG"
+            break
+        fi
+        sleep 0.5
+    done
+    
+    if [ "$CAN_READY" = "false" ]; then
+        echo "$(date): 警告: CAN 設備未就緒，仍嘗試啟動 (將進入 demo 模式)" >> "$BOOT_LOG"
+    fi
+    
     # 檢查啟動腳本是否存在
     STARTX_SCRIPT="/home/ac/QTdashboard/startx_dashboard.sh"
     if [ ! -f "$STARTX_SCRIPT" ]; then

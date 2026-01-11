@@ -172,10 +172,35 @@ echo ""
 
 # --- 7. 偵測 CAN Bus 裝置 ---
 echo "🔍 掃描 CAN Bus 裝置..."
-update_progress "🔌 掃描 CAN Bus 裝置" "偵測 SocketCAN / CANable..." 60
+update_progress "🔌 掃描 CAN Bus 裝置" "等待 CAN 設備就緒..." 60
 
 CAN_INTERFACE=""
 CAN_TYPE=""
+
+# 等待 CAN 設備就緒 (最多等待 10 秒)
+log_info "等待 CAN 設備就緒..."
+CAN_DEVICE_READY=false
+for i in {1..20}; do
+    # 檢查 SocketCAN 介面
+    if ip link show type can 2>/dev/null | grep -q "can"; then
+        CAN_DEVICE_READY=true
+        log_info "SocketCAN 介面就緒 (嘗試 $i)"
+        break
+    fi
+    # 檢查 USB CANable 設備
+    if ls /dev/ttyACM* 2>/dev/null | head -1 > /dev/null; then
+        CAN_DEVICE_READY=true
+        log_info "USB CAN 設備就緒 (嘗試 $i)"
+        break
+    fi
+    sleep 0.5
+done
+
+if [ "$CAN_DEVICE_READY" = "false" ]; then
+    log_info "警告: CAN 設備未就緒，將嘗試 demo 模式"
+fi
+
+update_progress "🔌 掃描 CAN Bus 裝置" "偵測 SocketCAN / CANable..." 65
 
 # 方法 1: 優先檢查 SocketCAN 介面 (can0, can1, vcan0 等)
 if ip link show type can 2>/dev/null | grep -q "can"; then
