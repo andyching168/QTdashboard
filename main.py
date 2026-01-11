@@ -2877,11 +2877,14 @@ class TripInfoCardWide(QWidget):
                 
             self.last_calc_time = current_time
 
-        # 更新平均油耗 (至少行駛 0.1km 後才顯示)
-        if self.total_distance > 0.1:
+        # 更新平均油耗 (至少行駛 0.5km 後才顯示)
+        if self.total_distance > 0.5:
             avg = (self.total_fuel_used / self.total_distance) * 100
             self.avg_fuel = avg
-            
+
+            # Update ShutdownMonitor with avg fuel
+            get_shutdown_monitor().update_avg_fuel(avg)
+
             # 限制顯示上限 19.9
             display_avg = min(19.9, avg)
             self.avg_fuel_label.setText(f"{display_avg:.1f}")
