@@ -51,14 +51,52 @@ cat > $DASHBOARD_AUTOSTART << 'AUTOSTART_EOF'
 #!/bin/bash
 # 儀表板自動啟動腳本 - 由 .bashrc 調用
 
-# 只在 tty1 且沒有 X 執行時啟動儀表板
-if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
-    BOOT_LOG="/tmp/dashboard_boot.log"
-    echo "" >> "$BOOT_LOG"
-    echo "=============================================" >> "$BOOT_LOG"
-    echo "$(date): dashboard_autostart 開始執行" >> "$BOOT_LOG"
-    echo "TTY: $(tty), DISPLAY: $DISPLAY, USER: $USER" >> "$BOOT_LOG"
-    echo "=============================================" >> "$BOOT_LOG"
+BOOT_LOG="/tmp/dashboard_boot.log"
+
+# 永遠記錄診斷資訊（無論條件是否滿足）
+{
+    echo ""
+    echo "============================================="
+    echo "$(date): .dashboard_autostart.sh 被呼叫"
+    echo "  TTY 輸出: $(tty 2>&1)"
+    echo "  DISPLAY: ${DISPLAY:-<空>}"
+    echo "  USER: $USER"
+    echo "  TERM: $TERM"
+    echo "  PS1: ${PS1:0:20}..."
+    echo "  XDG_SESSION_TYPE: ${XDG_SESSION_TYPE:-<未設定>}"
+    echo "  強制啟動標記: $([ -f /tmp/.dashboard_force_start ] && echo '存在' || echo '不存在')"
+    echo "  X Server 狀態: $(pgrep -x Xorg >/dev/null 2>&1 && echo '執行中' || echo '未執行')"
+    echo "============================================="
+} >> "$BOOT_LOG"
+
+# TTY 檢測邏輯 (更可靠)
+CURRENT_TTY="$(tty 2>/dev/null)"
+IS_TTY1=false
+
+# 方式 1: 標準 tty 命令
+if [ "$CURRENT_TTY" = "/dev/tty1" ]; then
+    IS_TTY1=true
+# 方式 2: 環境變數 XDG_VTNR (systemd 設定)
+elif [ "${XDG_VTNR:-}" = "1" ]; then
+    IS_TTY1=true
+    echo "$(date): 透過 XDG_VTNR=1 判定為 tty1" >> "$BOOT_LOG"
+# 方式 3: 強制啟動標記 (由 ssh_start.sh 建立)
+elif [ -f /tmp/.dashboard_force_start ]; then
+    # 確保 X server 沒有在執行
+    if ! pgrep -x "Xorg" > /dev/null 2>&1 && ! pgrep -x "X" > /dev/null 2>&1; then
+        IS_TTY1=true
+        echo "$(date): 透過 force_start 標記強制啟動" >> "$BOOT_LOG"
+    else
+        echo "$(date): 有 force_start 標記但 X 已在執行，跳過" >> "$BOOT_LOG"
+    fi
+fi
+
+# 檢查是否應該啟動
+if [ "$IS_TTY1" = "true" ] && [ -z "$DISPLAY" ]; then
+    echo "$(date): 條件滿足，開始啟動流程" >> "$BOOT_LOG"
+    
+    # 清除強制啟動標記
+    rm -f /tmp/.dashboard_force_start
     
     echo "🚗 Luxgen M7 儀表板自動啟動中..."
     
@@ -113,19 +151,62 @@ if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
         return 1
     fi
     
-    echo "$(date): 執行 startx $STARTX_SCRIPT..." >> "$BOOT_LOG"
+    # startx 重試機制
+    MAX_RETRIES=3
+    RETRY_DELAY=3
+    STARTX_SUCCESS=false
     
-    # 執行 startx，記錄輸出
-    startx "$STARTX_SCRIPT" -- -nocursor >> "$BOOT_LOG" 2>&1
-    STARTX_EXIT=$?
-    echo "$(date): startx 結束，exit code: $STARTX_EXIT" >> "$BOOT_LOG"
+    for attempt in $(seq 1 $MAX_RETRIES); do
+        echo "$(date): startx 嘗試 $attempt/$MAX_RETRIES..." >> "$BOOT_LOG"
+        echo "🚀 啟動 X Server (嘗試 $attempt/$MAX_RETRIES)..."
+        
+        # 執行 startx，記錄輸出
+        startx "$STARTX_SCRIPT" -- -nocursor >> "$BOOT_LOG" 2>&1
+        STARTX_EXIT=$?
+        echo "$(date): startx 結束，exit code: $STARTX_EXIT" >> "$BOOT_LOG"
+        
+        # 檢查結果
+        if [ $STARTX_EXIT -eq 0 ]; then
+            STARTX_SUCCESS=true
+            echo "$(date): startx 成功完成" >> "$BOOT_LOG"
+            break
+        else
+            echo "$(date): startx 失敗 (exit: $STARTX_EXIT)" >> "$BOOT_LOG"
+            
+            # 如果還有重試機會
+            if [ $attempt -lt $MAX_RETRIES ]; then
+                echo "⚠️  startx 失敗，${RETRY_DELAY} 秒後重試..."
+                echo "$(date): 等待 ${RETRY_DELAY} 秒後重試..." >> "$BOOT_LOG"
+                sleep $RETRY_DELAY
+                
+                # 確保 X 進程已完全停止
+                pkill -9 Xorg 2>/dev/null || true
+                pkill -9 X 2>/dev/null || true
+                sleep 1
+            fi
+        fi
+    done
     
-    # 如果 startx 失敗，等待讓用戶看到錯誤
-    if [ $STARTX_EXIT -ne 0 ]; then
-        echo "❌ startx 失敗 (exit: $STARTX_EXIT)"
+    # 如果所有重試都失敗
+    if [ "$STARTX_SUCCESS" != "true" ]; then
+        echo "❌ startx 失敗，已重試 $MAX_RETRIES 次"
         echo "   請檢查: cat /tmp/dashboard_boot.log"
+        echo "$(date): startx 最終失敗，已重試 $MAX_RETRIES 次" >> "$BOOT_LOG"
         sleep 30
     fi
+else
+    # 記錄未啟動的原因
+    {
+        echo "$(date): 條件不滿足，跳過啟動"
+        echo "  IS_TTY1=$IS_TTY1"
+        echo "  DISPLAY=${DISPLAY:-<空>}"
+        if [ "$IS_TTY1" != "true" ]; then
+            echo "  原因: 不在 tty1 上"
+        fi
+        if [ -n "$DISPLAY" ]; then
+            echo "  原因: DISPLAY 已設定 (X 可能已在執行)"
+        fi
+    } >> "$BOOT_LOG"
 fi
 AUTOSTART_EOF
 
