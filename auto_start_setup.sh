@@ -161,8 +161,8 @@ if [ "$IS_TTY1" = "true" ] && [ -z "$DISPLAY" ]; then
     fi
     
     # startx 重試機制
-    MAX_RETRIES=3
-    RETRY_DELAY=3
+    MAX_RETRIES=10
+    RETRY_DELAY=1
     STARTX_SUCCESS=false
     
     for attempt in $(seq 1 $MAX_RETRIES); do
