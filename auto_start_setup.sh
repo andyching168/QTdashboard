@@ -169,8 +169,8 @@ if [ "$IS_TTY1" = "true" ] && [ -z "$DISPLAY" ]; then
         echo "$(date): startx 嘗試 $attempt/$MAX_RETRIES..." >> "$BOOT_LOG"
         echo "🚀 啟動 X Server (嘗試 $attempt/$MAX_RETRIES)..."
         
-        # 執行 startx，記錄輸出
-        startx "$STARTX_SCRIPT" -- -nocursor >> "$BOOT_LOG" 2>&1
+        # 執行 startx，明確指定 vt1 避免 /dev/tty0 權限問題
+        startx "$STARTX_SCRIPT" -- -nocursor vt1 >> "$BOOT_LOG" 2>&1
         STARTX_EXIT=$?
         echo "$(date): startx 結束，exit code: $STARTX_EXIT" >> "$BOOT_LOG"
         

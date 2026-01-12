@@ -2,12 +2,20 @@
 Description=Luxgen M7 Dashboard
 After=multi-user.target systemd-user-sessions.service
 Wants=systemd-user-sessions.service
+# 確保網路可用（如果需要 NTP 時間同步）
+After=network-online.target
+# 衝突設定：不與 getty@tty1 同時執行
+Conflicts=getty@tty1.service
 
 [Service]
 Type=simple
 User=ac
 Group=ac
+
+# PAM 設定 - 確保正確的登入環境
 PAMName=login
+
+# TTY 控制 - 這是關鍵！強制使用 tty1
 TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes
@@ -15,13 +23,29 @@ TTYVTDisallocate=yes
 StandardInput=tty-force
 StandardOutput=tty
 StandardError=journal
+
+# 設定為 tty1 的登入 session
 UtmpIdentifier=tty1
 UtmpMode=user
+
+# 環境變數
 Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=HOME=/home/ac
+Environment=TERM=linux
+
+# 工作目錄
 WorkingDirectory=/home/ac/QTdashboard
+
+# 啟動命令 - 使用 xinit 直接在 vt1 上啟動 X
 ExecStart=/bin/bash -c 'exec /usr/bin/xinit /home/ac/QTdashboard/startx_dashboard.sh -- :0 vt1 -keeptty -novtswitch'
+
+# 失敗時自動重啟
 Restart=on-failure
-RestartSec=5
+RestartSec=3
+
+# 資源限制
+TimeoutStartSec=60
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target
