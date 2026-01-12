@@ -76,6 +76,7 @@ IS_TTY1=false
 # 方式 1: 標準 tty 命令
 if [ "$CURRENT_TTY" = "/dev/tty1" ]; then
     IS_TTY1=true
+    echo "$(date): 透過 tty=/dev/tty1 判定" >> "$BOOT_LOG"
 # 方式 2: 環境變數 XDG_VTNR (systemd 設定)
 elif [ "${XDG_VTNR:-}" = "1" ]; then
     IS_TTY1=true
@@ -88,6 +89,14 @@ elif [ -f /tmp/.dashboard_force_start ]; then
         echo "$(date): 透過 force_start 標記強制啟動" >> "$BOOT_LOG"
     else
         echo "$(date): 有 force_start 標記但 X 已在執行，跳過" >> "$BOOT_LOG"
+    fi
+# 方式 4: XDG_SESSION_TYPE=tty 且 X server 未執行 (解決 tty 返回 /dev/pts/x 的問題)
+elif [ "${XDG_SESSION_TYPE:-}" = "tty" ]; then
+    if ! pgrep -x "Xorg" > /dev/null 2>&1 && ! pgrep -x "X" > /dev/null 2>&1; then
+        IS_TTY1=true
+        echo "$(date): 透過 XDG_SESSION_TYPE=tty 且 X 未執行判定" >> "$BOOT_LOG"
+    else
+        echo "$(date): XDG_SESSION_TYPE=tty 但 X 已在執行，跳過" >> "$BOOT_LOG"
     fi
 fi
 
