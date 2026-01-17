@@ -24,6 +24,10 @@ cd "$SCRIPT_DIR"
 echo "" >> "$STARTUP_LOG"
 echo "=============================================" >> "$STARTUP_LOG"
 echo "$(date): startx_dashboard.sh 開始執行" >> "$STARTUP_LOG"
+echo "  PID: $$" >> "$STARTUP_LOG"
+echo "  TTY: $(tty 2>/dev/null || echo 'N/A')" >> "$STARTUP_LOG"
+echo "  DISPLAY: ${DISPLAY:-未設定}" >> "$STARTUP_LOG"
+echo "  USER: $USER" >> "$STARTUP_LOG"
 echo "=============================================" >> "$STARTUP_LOG"
 
 # === 錯誤處理函數 ===
@@ -139,10 +143,15 @@ for i in {1..10}; do
 done
 
 # --- 5. 音訊服務 ---
-# PipeWire 由 systemd --user 自動管理，不需要手動啟動
-# 確保使用者 dbus 和 pipewire 服務已啟動
-systemctl --user start pipewire.socket pipewire-pulse.socket 2>/dev/null || true
-sleep 0.5
+# PipeWire 由 systemd --user 自動管理
+log_info "初始化音訊服務..."
+# 使用 timeout 避免 systemctl --user 卡住（在 systemd service 環境中可能沒有 user session）
+if [ -n "$XDG_RUNTIME_DIR" ]; then
+    timeout 5 systemctl --user start pipewire.socket pipewire-pulse.socket 2>/dev/null || log_info "PipeWire 啟動跳過（可能已在執行或不需要）"
+else
+    log_info "XDG_RUNTIME_DIR 未設定，跳過 PipeWire user service"
+fi
+sleep 0.3
 update_progress "🔊 初始化音訊服務" "PipeWire" 50
 
 # --- 6. Python 環境驗證 ---
