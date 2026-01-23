@@ -46,9 +46,9 @@ class SpotifyIntegration:
             logger.info("Spotify 認證成功")
             
             # 建立監聽器
-            # update_interval=2.0 秒可減少 API 呼叫，同時仍保持良好的響應性
-            # Spotify 的播放進度可透過本地計算補間，不需要每秒都查詢 API
-            self.listener = SpotifyListener(self.auth, update_interval=2.0)
+            # update_interval=10.0 秒可減少 API 呼叫，進入音樂卡片時會立即更新
+            # Spotify 的播放進度可透過本地計算補間，不需要頻繁查詢 API
+            self.listener = SpotifyListener(self.auth, update_interval=10.0)
             
             # 設定回調函數
             self.listener.set_callback('on_track_change', self._on_track_change)
@@ -113,6 +113,25 @@ class SpotifyIntegration:
         # 網路相關錯誤已在 listener 層級處理，這裡只記錄非網路錯誤
         if 'timeout' not in error.lower() and 'connection' not in error.lower():
             logger.warning(f"Spotify 錯誤: {error}")
+    
+    def set_update_interval(self, interval: float):
+        """
+        設定 Spotify 更新間隔
+        
+        Args:
+            interval: 新的更新間隔（秒）
+        """
+        if self.listener:
+            self.listener.set_update_interval(interval)
+        else:
+            logger.warning("Spotify listener 未初始化，無法設定更新間隔")
+    
+    def force_update_now(self):
+        """強制立即更新一次 Spotify 資訊（用於進入音樂卡片時）"""
+        if self.listener:
+            self.listener.force_update_now()
+        else:
+            logger.warning("Spotify listener 未初始化，無法強制更新")
     
     def stop(self):
         """停止 Spotify 監聽"""

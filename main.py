@@ -8317,35 +8317,24 @@ class Dashboard(QWidget):
     
     def update_gradient_animation(self):
         """更新漸層動畫效果（優化：只在需要時更新樣式）"""
-        # 如果兩個方向燈都關閉且動畫已完成，跳過更新
-        if (not self.left_turn_on and not self.right_turn_on and 
-            self.left_gradient_pos <= 0.0 and self.right_gradient_pos <= 0.0):
-            return
-        
-        # 熄滅動畫速度
-        fade_speed = 0.05
-        
-        # 記錄舊的狀態用於比較
+        # === 靜態開關版本 - 無動畫 ===
+        # 直接根據開關狀態設定漸層位置，無漸變效果
         old_left_pos = self.left_gradient_pos
         old_right_pos = self.right_gradient_pos
         old_left_on = getattr(self, '_prev_left_turn_on', None)
         old_right_on = getattr(self, '_prev_right_turn_on', None)
         
-        # 左轉燈動畫
+        # 左轉燈 - 靜態開關
         if self.left_turn_on:
-            # 亮起時直接全滿
-            self.left_gradient_pos = 1.0
+            self.left_gradient_pos = 1.0  # 開啟時全滿
         else:
-            # 熄滅時從中間向外漸暗
-            self.left_gradient_pos = max(0.0, self.left_gradient_pos - fade_speed)
+            self.left_gradient_pos = 0.0  # 關閉時全暗
         
-        # 右轉燈動畫
+        # 右轉燈 - 靜態開關
         if self.right_turn_on:
-            # 亮起時直接全滿
-            self.right_gradient_pos = 1.0
+            self.right_gradient_pos = 1.0  # 開啟時全滿
         else:
-            # 熄滅時從中間向外漸暗
-            self.right_gradient_pos = max(0.0, self.right_gradient_pos - fade_speed)
+            self.right_gradient_pos = 0.0  # 關閉時全暗
         
         # 只在狀態實際變更時才更新樣式（避免無謂的 CSS 重解析）
         left_changed = (self.left_gradient_pos != old_left_pos or 
@@ -8357,6 +8346,48 @@ class Dashboard(QWidget):
             self._prev_left_turn_on = self.left_turn_on
             self._prev_right_turn_on = self.right_turn_on
             self.update_turn_signal_style()
+        
+        # === 原始動畫代碼（已註解） ===
+        # 如果兩個方向燈都關閉且動畫已完成，跳過更新
+        # if (not self.left_turn_on and not self.right_turn_on and 
+        #     self.left_gradient_pos <= 0.0 and self.right_gradient_pos <= 0.0):
+        #     return
+        # 
+        # # 熄滅動畫速度
+        # fade_speed = 0.05
+        # 
+        # # 記錄舊的狀態用於比較
+        # old_left_pos = self.left_gradient_pos
+        # old_right_pos = self.right_gradient_pos
+        # old_left_on = getattr(self, '_prev_left_turn_on', None)
+        # old_right_on = getattr(self, '_prev_right_turn_on', None)
+        # 
+        # # 左轉燈動畫
+        # if self.left_turn_on:
+        #     # 亮起時直接全滿
+        #     self.left_gradient_pos = 1.0
+        # else:
+        #     # 熄滅時從中間向外漸暗
+        #     self.left_gradient_pos = max(0.0, self.left_gradient_pos - fade_speed)
+        # 
+        # # 右轉燈動畫
+        # if self.right_turn_on:
+        #     # 亮起時直接全滿
+        #     self.right_gradient_pos = 1.0
+        # else:
+        #     # 熄滅時從中間向外漸暗
+        #     self.right_gradient_pos = max(0.0, self.right_gradient_pos - fade_speed)
+        # 
+        # # 只在狀態實際變更時才更新樣式（避免無謂的 CSS 重解析）
+        # left_changed = (self.left_gradient_pos != old_left_pos or 
+        #                self.left_turn_on != old_left_on)
+        # right_changed = (self.right_gradient_pos != old_right_pos or 
+        #                 self.right_turn_on != old_right_on)
+        # 
+        # if left_changed or right_changed:
+        #     self._prev_left_turn_on = self.left_turn_on
+        #     self._prev_right_turn_on = self.right_turn_on
+        #     self.update_turn_signal_style()
     
     def update_turn_signal_style(self):
         """更新方向燈的視覺樣式 - 使用 QPainter 實作，避免 CSS 效能瓶頸"""
@@ -8880,6 +8911,7 @@ class Dashboard(QWidget):
         # 服務連線狀態追蹤
         self._spotify_connected = False
         self._spotify_init_attempts = 0
+        self._spotify_integration = None  # Spotify 整合實例引用
         self._mqtt_connected = False
         self._mqtt_reconnect_timer = None
         
@@ -9030,6 +9062,7 @@ class Dashboard(QWidget):
                 result = setup_spotify(self)
                 if result:
                     self._spotify_connected = True
+                    self._spotify_integration = result  # 儲存整合實例引用
                     self._spotify_init_attempts = 0
                     print("Spotify 初始化成功")
                 else:
@@ -9060,6 +9093,7 @@ class Dashboard(QWidget):
             result = setup_spotify(self)
             if result:
                 self._spotify_connected = True
+                self._spotify_integration = result  # 儲存整合實例引用
                 self._spotify_init_attempts = 0
                 print("[Spotify] ✅ 重試成功")
             else:
@@ -9072,6 +9106,46 @@ class Dashboard(QWidget):
         
         threading.Thread(target=init_spotify, daemon=True).start()
 
+    def _handle_spotify_update_on_card_change(self, old_index, new_index):
+        """處理卡片切換時的 Spotify 更新邏輯"""
+        if not self._spotify_integration:
+            return
+        
+        # 只有在第一列（音樂卡片所在列）才處理
+        if self.current_row_index != 0:
+            return
+        
+        # 音樂卡片在第一列的索引 0
+        is_entering_music = (old_index != 0 and new_index == 0)
+        is_leaving_music = (old_index == 0 and new_index != 0)
+        
+        if is_entering_music:
+            print("進入音樂卡片，強制立即更新 Spotify")
+            # 進入音樂卡片時立即更新
+            self._spotify_integration.force_update_now()
+            # 保持高頻更新（設定為2秒以獲得良好體驗）
+            self._spotify_integration.set_update_interval(2.0)
+        elif is_leaving_music:
+            print("離開音樂卡片，恢復10秒更新間隔")
+            # 離開音樂卡片時恢復10秒更新間隔
+            self._spotify_integration.set_update_interval(10.0)
+    
+    def _handle_spotify_update_on_row_change(self, new_row_index):
+        """處理列切換時的 Spotify 更新邏輯"""
+        if not self._spotify_integration:
+            return
+        
+        # 音樂卡片在第一列，切換到非第一列時要恢復10秒更新
+        if self.current_row_index == 0 and new_row_index != 0:
+            print("離開音樂卡片所在列，恢復10秒更新間隔")
+            self._spotify_integration.set_update_interval(10.0)
+        # 切換到第一列時，檢查是否在音樂卡片上
+        elif self.current_row_index != 0 and new_row_index == 0:
+            if self.current_left_index == 0:  # 目前在音樂卡片上
+                print("進入音樂卡片所在列且在音樂卡片上，設定2秒更新")
+                self._spotify_integration.force_update_now()
+                self._spotify_integration.set_update_interval(2.0)
+    
     def start_spotify_auth(self):
         """啟動 Spotify 授權流程"""
         print("啟動 Spotify 授權流程...")
@@ -10504,8 +10578,13 @@ class Dashboard(QWidget):
         # 動畫完成後切換
         def on_animation_finished():
             self.left_card_stack.setCurrentIndex(to_index)
+            old_left_index = self.current_left_index
             self.current_left_index = to_index
             self._update_left_indicators()
+            
+            # Spotify 更新邏輯：檢查是否進入音樂卡片
+            self._handle_spotify_update_on_card_change(old_left_index, to_index)
+            
             # 重設位置
             from_widget.move(0, 0)
             to_widget.move(0, 0)
@@ -10574,6 +10653,10 @@ class Dashboard(QWidget):
             self.current_card_index = to_index
             current_row.setCurrentIndex(to_index)
             self.update_indicators()
+            
+            # Spotify 更新邏輯：檢查是否在音樂卡片所在的第一列
+            self._handle_spotify_update_on_row_change(self.current_row_index)
+            
             # 重設位置
             from_widget.move(0, 0)
             to_widget.move(0, 0)

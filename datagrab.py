@@ -992,7 +992,7 @@ def obd_query(bus, signals):
             continue
 
         try:
-            # 查詢 RPM (PID 0x0C)
+            # 查詢 RPM (PID 0x0C) - 目標2秒更新頻率
             msg_rpm = can.Message(
                 arbitration_id=0x7DF, 
                 data=[0x02, 0x01, 0x0C, 0, 0, 0, 0, 0], 
@@ -1000,9 +1000,9 @@ def obd_query(bus, signals):
             )
             with send_lock:
                 bus.send(msg_rpm)
-            time.sleep(0.08)
+            time.sleep(0.35)  # 調整為約2秒總週期時間
             
-            # 查詢 車速 (PID 0x0D)
+            # 查詢 車速 (PID 0x0D) - 保持高頻率
             msg_speed = can.Message(
                 arbitration_id=0x7DF, 
                 data=[0x02, 0x01, 0x0D, 0, 0, 0, 0, 0], 
@@ -1010,9 +1010,9 @@ def obd_query(bus, signals):
             )
             with send_lock:
                 bus.send(msg_speed)
-            time.sleep(0.08)
+            time.sleep(0.08)  # 保持原頻率
 
-            # 查詢 水溫 (PID 0x05)
+            # 查詢 水溫 (PID 0x05) - 目標2秒更新頻率
             msg_temp = can.Message(
                 arbitration_id=0x7DF, 
                 data=[0x02, 0x01, 0x05, 0, 0, 0, 0, 0], 
@@ -1020,9 +1020,9 @@ def obd_query(bus, signals):
             )
             with send_lock:
                 bus.send(msg_temp)
-            time.sleep(0.05)
+            time.sleep(0.35)  # 調整為約2秒總週期時間
             
-            # 查詢 進氣歧管壓力/渦輪增壓 (PID 0x0B)
+            # 查詢 進氣歧管壓力/渦輪增壓 (PID 0x0B) - 目標2秒更新頻率
             msg_turbo = can.Message(
                 arbitration_id=0x7DF, 
                 data=[0x02, 0x01, 0x0B, 0, 0, 0, 0, 0], 
@@ -1030,9 +1030,9 @@ def obd_query(bus, signals):
             )
             with send_lock:
                 bus.send(msg_turbo)
-            time.sleep(0.05)
+            time.sleep(0.35)  # 調整為約2秒總週期時間
             
-            # 查詢 電瓶電壓 (PID 0x42)
+            # 查詢 電瓶電壓 (PID 0x42) - 目標2秒更新頻率
             msg_battery = can.Message(
                 arbitration_id=0x7DF, 
                 data=[0x02, 0x01, 0x42, 0, 0, 0, 0, 0], 
@@ -1041,9 +1041,9 @@ def obd_query(bus, signals):
             with send_lock:
                 bus.send(msg_battery)
             
-            time.sleep(0.05)  # 查詢間隔
+            time.sleep(0.35)  # 調整為約2秒總週期時間
             
-            # 查詢 空氣流量 MAF (PID 0x10) - 用於油耗計算
+            # 查詢 空氣流量 MAF (PID 0x10) - 用於油耗計算，目標2秒更新頻率
             msg_maf = can.Message(
                 arbitration_id=0x7DF, 
                 data=[0x02, 0x01, 0x10, 0, 0, 0, 0, 0], 
@@ -1052,7 +1052,7 @@ def obd_query(bus, signals):
             with send_lock:
                 bus.send(msg_maf)
             
-            time.sleep(0.05)  # 查詢間隔
+            time.sleep(0.35)  # 調整為約2秒總週期時間
             
         except can.CanError:
             time.sleep(1)

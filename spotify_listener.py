@@ -81,6 +81,27 @@ class SpotifyListener:
         else:
             logger.warning(f"未知的事件名稱: {event_name}")
     
+    def set_update_interval(self, interval: float):
+        """
+        設定更新間隔
+        
+        Args:
+            interval: 新的更新間隔（秒）
+        """
+        old_interval = self.update_interval
+        self.update_interval = interval
+        logger.info(f"Spotify 更新間隔已變更: {old_interval}秒 -> {interval}秒")
+    
+    def force_update_now(self):
+        """強制立即更新一次（用於進入音樂卡片時的即時更新）"""
+        try:
+            logger.info("強制立即更新 Spotify 資訊")
+            self._update_playback_state()
+            self.consecutive_errors = 0
+            self.error_backoff = 1.0
+        except Exception as e:
+            logger.error(f"強制更新失敗: {e}")
+    
     def start(self):
         """啟動監聽器"""
         if self.running:
