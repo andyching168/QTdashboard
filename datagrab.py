@@ -546,148 +546,118 @@ def unified_receiver(bus, db, signals):
             error_count = 0
 
             # 1. 處理 OBD 回應 (ID 0x7E8 ECU / 0x7E9 TCM)
+            # 單一 PID 回應格式: [長度, 服務+0x40, PID, 數據A, 數據B, ...]
             if msg.arbitration_id in [0x7E8, 0x7E9]:
                 try:
                     if len(msg.data) < 3:
                         continue
                     
-                    # === Multi-PID 回應解析 ===
-                    # 單一 PID 回應格式: [長度, 服務+0x40, PID, 數據...]
-                    # Multi-PID 回應格式: [長度, 服務+0x40, PID1, 數據1..., PID2, 數據2..., ...]
-                    # 
-                    # 注意：有些 ECU 會為每個 PID 發送獨立回應，有些會合併
-                    # 此解析器同時支援兩種格式
-                    
-                    response_length = msg.data[0]
                     service_response = msg.data[1]
                     
                     # 驗證是否為 Service 01 回應 (Mode 01 + 0x40 = 0x41)
                     if service_response != 0x41:
                         continue
                     
-                    # 解析 payload 中的所有 PID
-                    # 跳過 [長度, 服務] 兩個 bytes
-                    payload = msg.data[2:2 + response_length - 1]
+                    pid = msg.data[2]
                     
-                    # 定義各 PID 的數據長度 (bytes)
-                    PID_DATA_LENGTHS = {
-                        0x05: 1,  # Coolant Temp: 1 byte
-                        0x0B: 1,  # MAP: 1 byte
-                        0x0C: 2,  # RPM: 2 bytes
-                        0x0D: 1,  # Speed: 1 byte
-                        0x10: 2,  # MAF: 2 bytes
-                        0x42: 2,  # Control Module Voltage: 2 bytes
-                    }
+                    # === 根據 PID 處理數據 ===
                     
-                    # 遍歷 payload 提取所有 PID 數據
-                    offset = 0
-                    while offset < len(payload):
-                        if offset >= len(payload):
-                            break
+                    # PID 0C (RPM) - 格式: [04, 41, 0C, A, B, ...]
+                    if pid == 0x0C:
+                        if len(msg.data) < 5:
+                            continue
+                        raw_rpm = (msg.data[3] * 256 + msg.data[4]) / 4
                         
-                        pid = payload[offset]
-                        offset += 1
+                        # 平滑處理 (EMA - Exponential Moving Average)
+                        if current_rpm_smoothed == 0:
+                            current_rpm_smoothed = raw_rpm
+                        else:
+                            current_rpm_smoothed = (current_rpm_smoothed * (1 - rpm_alpha)) + (raw_rpm * rpm_alpha)
                         
-                        if pid not in PID_DATA_LENGTHS:
-                            # 未知 PID，無法確定數據長度，跳過
-                            logger.debug(f"未知 PID: 0x{pid:02X}，跳過剩餘 payload")
-                            break
+                        # 更新 RPM 緩存 (用於油耗計算)
+                        global cached_rpm
+                        cached_rpm = current_rpm_smoothed
                         
-                        data_length = PID_DATA_LENGTHS[pid]
-                        if offset + data_length > len(payload):
-                            # 數據不完整
-                            logger.warning(f"PID 0x{pid:02X} 數據不完整")
-                            break
+                        # 記錄來源
+                        data_store["OBD"]["rpm"] = raw_rpm
+                        data_store["OBD"]["last_update"] = time.time()
                         
-                        pid_data = payload[offset:offset + data_length]
-                        offset += data_length
+                        signals.update_rpm.emit(current_rpm_smoothed / 1000.0)
+                    
+                    # PID 0D (Vehicle Speed) - 格式: [03, 41, 0D, Speed, ...]
+                    elif pid == 0x0D:
+                        if len(msg.data) < 4:
+                            continue
+                        raw_speed = msg.data[3]  # 單位: km/h
                         
-                        # === 根據 PID 處理數據 ===
+                        # 平滑處理
+                        if current_speed_smoothed == 0:
+                            current_speed_smoothed = raw_speed
+                        else:
+                            current_speed_smoothed = (current_speed_smoothed * (1 - speed_alpha)) + (raw_speed * speed_alpha)
                         
-                        # PID 0C (RPM)
-                        if pid == 0x0C:
-                            raw_rpm = (pid_data[0] * 256 + pid_data[1]) / 4
-                            
-                            # 平滑處理 (EMA - Exponential Moving Average)
-                            if current_rpm_smoothed == 0:
-                                current_rpm_smoothed = raw_rpm
-                            else:
-                                current_rpm_smoothed = (current_rpm_smoothed * (1 - rpm_alpha)) + (raw_rpm * rpm_alpha)
-                            
-                            # 更新 RPM 緩存 (用於油耗計算)
-                            global cached_rpm
-                            cached_rpm = current_rpm_smoothed
-                            
-                            # 記錄來源
-                            data_store["OBD"]["rpm"] = raw_rpm
-                            data_store["OBD"]["last_update"] = time.time()
-                            
-                            signals.update_rpm.emit(current_rpm_smoothed / 1000.0)
+                        # 更新 Speed 緩存 (用於油耗計算)
+                        global cached_speed
+                        cached_speed = current_speed_smoothed
                         
-                        # PID 0D (Vehicle Speed)
-                        elif pid == 0x0D:
-                            raw_speed = pid_data[0]  # 單位: km/h
-                            
-                            # 平滑處理
-                            if current_speed_smoothed == 0:
-                                current_speed_smoothed = raw_speed
-                            else:
-                                current_speed_smoothed = (current_speed_smoothed * (1 - speed_alpha)) + (raw_speed * speed_alpha)
-                            
-                            # 更新 Speed 緩存 (用於油耗計算)
-                            global cached_speed
-                            cached_speed = current_speed_smoothed
-                            
-                            data_store["OBD"]["speed"] = raw_speed
-                            data_store["OBD"]["speed_smoothed"] = current_speed_smoothed
-                            data_store["OBD"]["last_update"] = time.time()
-                            
-                            # 套用校正係數後更新 UI（依據速度模式）
-                            mode = speed_sync_mode
-                            if mode == "fixed":
-                                speed_correction = 1.05
-                                corrected_speed = current_speed_smoothed * speed_correction + 0.8
-                            else:
-                                speed_correction = get_speed_correction()
-                                corrected_speed = current_speed_smoothed * speed_correction
-                            speed_int = int(corrected_speed)
-                            if last_obd_speed_int is None or abs(speed_int - last_obd_speed_int) >= 1:
-                                signals.update_speed.emit(corrected_speed)
-                                last_obd_speed_int = speed_int
+                        data_store["OBD"]["speed"] = raw_speed
+                        data_store["OBD"]["speed_smoothed"] = current_speed_smoothed
+                        data_store["OBD"]["last_update"] = time.time()
                         
-                        # PID 05 (Coolant Temp)
-                        elif pid == 0x05 and msg.arbitration_id == 0x7E8:
-                            temp = pid_data[0] - 40
-                            data_store["OBD"]["temp"] = temp
-                            
-                            # 更新前端水溫顯示: 40°C -> 0%, 80°C -> 50%, 120°C -> 100%
-                            temp_normalized = ((temp - 40) / 80.0) * 100
-                            temp_normalized = max(0, min(100, temp_normalized))
-                            signals.update_temp.emit(temp_normalized)
+                        # 套用校正係數後更新 UI（依據速度模式）
+                        mode = speed_sync_mode
+                        if mode == "fixed":
+                            speed_correction = 1.05
+                            corrected_speed = current_speed_smoothed * speed_correction + 0.8
+                        else:
+                            speed_correction = get_speed_correction()
+                            corrected_speed = current_speed_smoothed * speed_correction
+                        speed_int = int(corrected_speed)
+                        if last_obd_speed_int is None or abs(speed_int - last_obd_speed_int) >= 1:
+                            signals.update_speed.emit(corrected_speed)
+                            last_obd_speed_int = speed_int
+                    
+                    # PID 05 (Coolant Temp) - 格式: [03, 41, 05, Temp, ...]
+                    elif pid == 0x05 and msg.arbitration_id == 0x7E8:
+                        if len(msg.data) < 4:
+                            continue
+                        temp = msg.data[3] - 40
+                        data_store["OBD"]["temp"] = temp
                         
-                        # PID 0B (MAP / Turbo Pressure)
-                        elif pid == 0x0B and msg.arbitration_id == 0x7E8:
-                            abs_pressure_kpa = pid_data[0]
-                            # 轉換為相對壓力 (bar): (絕對壓力 - 大氣壓) / 100
-                            turbo_bar = (abs_pressure_kpa - 101) / 100.0
-                            data_store["OBD"]["turbo"] = turbo_bar
-                            fuel_consumption_data["map_kpa"] = abs_pressure_kpa
-                            
-                            signals.update_turbo.emit(turbo_bar)
+                        # 更新前端水溫顯示: 40°C -> 0%, 80°C -> 50%, 120°C -> 100%
+                        temp_normalized = ((temp - 40) / 80.0) * 100
+                        temp_normalized = max(0, min(100, temp_normalized))
+                        signals.update_temp.emit(temp_normalized)
+                    
+                    # PID 0B (MAP / Turbo Pressure) - 格式: [03, 41, 0B, MAP, ...]
+                    elif pid == 0x0B and msg.arbitration_id == 0x7E8:
+                        if len(msg.data) < 4:
+                            continue
+                        abs_pressure_kpa = msg.data[3]
+                        # 轉換為相對壓力 (bar): (絕對壓力 - 大氣壓) / 100
+                        turbo_bar = (abs_pressure_kpa - 101) / 100.0
+                        data_store["OBD"]["turbo"] = turbo_bar
+                        fuel_consumption_data["map_kpa"] = abs_pressure_kpa
                         
-                        # PID 42 (Control Module Voltage / Battery)
-                        elif pid == 0x42 and msg.arbitration_id == 0x7E8:
-                            voltage = (pid_data[0] * 256 + pid_data[1]) / 1000.0
-                            data_store["OBD"]["battery"] = voltage
-                            
-                            signals.update_battery.emit(voltage)
+                        signals.update_turbo.emit(turbo_bar)
+                    
+                    # PID 42 (Control Module Voltage / Battery) - 格式: [04, 41, 42, A, B, ...]
+                    elif pid == 0x42 and msg.arbitration_id == 0x7E8:
+                        if len(msg.data) < 5:
+                            continue
+                        voltage = (msg.data[3] * 256 + msg.data[4]) / 1000.0
+                        data_store["OBD"]["battery"] = voltage
                         
-                        # PID 10 (MAF)
-                        elif pid == 0x10 and msg.arbitration_id == 0x7E8:
-                            # MAF: (A*256 + B) / 100 = g/s
-                            maf = (pid_data[0] * 256 + pid_data[1]) / 100.0
-                            fuel_consumption_data["maf"] = maf
-                            logger.debug(f"MAF 空氣流量: {maf:.2f} g/s")
+                        signals.update_battery.emit(voltage)
+                    
+                    # PID 10 (MAF) - 格式: [04, 41, 10, A, B, ...]
+                    elif pid == 0x10 and msg.arbitration_id == 0x7E8:
+                        if len(msg.data) < 5:
+                            continue
+                        # MAF: (A*256 + B) / 100 = g/s
+                        maf = (msg.data[3] * 256 + msg.data[4]) / 100.0
+                        fuel_consumption_data["maf"] = maf
+                        logger.debug(f"MAF 空氣流量: {maf:.2f} g/s")
                         
                 except (IndexError, KeyError) as e:
                     logger.error(f"解析 OBD 訊息錯誤: {e}, data: {msg.data.hex()}")
@@ -1005,43 +975,29 @@ def unified_receiver(bus, db, signals):
 
 def obd_query(bus, signals):
     """
-    主動查詢 OBD-II - 使用 Multi-PID 批次查詢優化
+    主動查詢 OBD-II - 優化版：最小化延遲
     
-    SAE J1979 標準支援在單一請求中查詢最多 6 個 PID (ISO 15765-4 CAN)
-    格式: [長度, 服務(0x01), PID1, PID2, PID3, ...]
+    優化策略：
+    - 減少固定等待時間，讓 receiver 線程異步處理回應
+    - 高頻 PID (RPM + Speed) 快速輪詢，目標 ~15-20 Hz
+    - 低頻 PID 穿插在高頻查詢中，避免突發延遲
     
-    優化策略:
-    - 高頻組 (每 100ms): RPM(0x0C) + Speed(0x0D) + Turbo(0x0B)
-    - 低頻組 (每 2s): Temp(0x05) + Battery(0x42) + MAF(0x10)
+    查詢順序（每個 PID 間隔約 20-30ms）：
+    - RPM → Speed → RPM → Speed → RPM → Speed → ... (重複 5 次)
+    - 然後穿插一個低頻 PID (輪流: Temp → Turbo → Battery → MAF)
     """
     global data_store
-    logger.info("OBD-II 查詢執行緒已啟動 (Multi-PID 批次模式)")
+    logger.info("OBD-II 查詢執行緒已啟動 (低延遲模式)")
     
-    # 計數器：用於低頻查詢的節流
-    low_freq_counter = 0
-    LOW_FREQ_INTERVAL = 20  # 每 20 個高頻週期執行一次低頻查詢 (約 2 秒)
+    # 低頻 PID 輪詢索引
+    low_freq_pids = [0x05, 0x0B, 0x42, 0x10]  # Temp, Turbo, Battery, MAF
+    low_freq_idx = 0
+    high_freq_counter = 0
+    HIGH_FREQ_BURST = 5  # 每 5 次高頻查詢後，穿插一個低頻查詢
     
-    # 高頻 PID 組: RPM(0x0C) + Speed(0x0D) + Turbo/MAP(0x0B)
-    # 格式: [num_bytes, service, pid1, pid2, pid3, padding...]
-    HIGH_FREQ_PIDS = [0x0C, 0x0D, 0x0B]  # RPM, Speed, MAP
-    msg_high_freq = can.Message(
-        arbitration_id=0x7DF,
-        data=[len(HIGH_FREQ_PIDS) + 1, 0x01] + HIGH_FREQ_PIDS + [0] * (5 - len(HIGH_FREQ_PIDS)),
-        is_extended_id=False
-    )
-    
-    # 低頻 PID 組: Temp(0x05) + Battery(0x42) + MAF(0x10)
-    LOW_FREQ_PIDS = [0x05, 0x42, 0x10]  # Coolant Temp, Control Module Voltage, MAF
-    msg_low_freq = can.Message(
-        arbitration_id=0x7DF,
-        data=[len(LOW_FREQ_PIDS) + 1, 0x01] + LOW_FREQ_PIDS + [0] * (5 - len(LOW_FREQ_PIDS)),
-        is_extended_id=False
-    )
-    
-    # 備援：單一 PID 查詢（當 Multi-PID 不被支援時使用）
-    single_pid_mode = False
-    multi_pid_fail_count = 0
-    MULTI_PID_FAIL_THRESHOLD = 10  # 連續失敗 10 次後切換到單一 PID 模式
+    # 請求間隔（毫秒）- 發送後的最小等待時間
+    # ECU 通常需要 10-50ms 來回應，我們設定 25ms 作為平衡點
+    REQUEST_INTERVAL = 0.025  # 25ms
     
     while not stop_threads:
         if current_mode == "CAN_ONLY":
@@ -1049,66 +1005,54 @@ def obd_query(bus, signals):
             continue
 
         try:
-            if not single_pid_mode:
-                # === Multi-PID 批次查詢模式 ===
-                
-                # 高頻查詢: RPM + Speed + Turbo (每 ~100ms)
+            # === 快速高頻查詢: RPM + Speed ===
+            
+            # 查詢 RPM (PID 0x0C)
+            msg_rpm = can.Message(
+                arbitration_id=0x7DF,
+                data=[0x02, 0x01, 0x0C, 0, 0, 0, 0, 0],
+                is_extended_id=False
+            )
+            with send_lock:
+                bus.send(msg_rpm)
+            time.sleep(REQUEST_INTERVAL)
+            
+            # 查詢 車速 (PID 0x0D)
+            msg_speed = can.Message(
+                arbitration_id=0x7DF,
+                data=[0x02, 0x01, 0x0D, 0, 0, 0, 0, 0],
+                is_extended_id=False
+            )
+            with send_lock:
+                bus.send(msg_speed)
+            time.sleep(REQUEST_INTERVAL)
+            
+            # === 穿插低頻查詢 (每 HIGH_FREQ_BURST 次高頻後) ===
+            high_freq_counter += 1
+            if high_freq_counter >= HIGH_FREQ_BURST:
+                pid = low_freq_pids[low_freq_idx]
+                msg_low = can.Message(
+                    arbitration_id=0x7DF,
+                    data=[0x02, 0x01, pid, 0, 0, 0, 0, 0],
+                    is_extended_id=False
+                )
                 with send_lock:
-                    bus.send(msg_high_freq)
+                    bus.send(msg_low)
+                time.sleep(REQUEST_INTERVAL)
                 
-                # 低頻查詢: Temp + Battery + MAF (每 ~2s)
-                low_freq_counter += 1
-                if low_freq_counter >= LOW_FREQ_INTERVAL:
-                    time.sleep(0.05)  # 短暫延遲讓 ECU 處理
-                    with send_lock:
-                        bus.send(msg_low_freq)
-                    low_freq_counter = 0
-                
-                # 調整延遲以達到約 10Hz 更新率
-                time.sleep(0.10)
-                
-            else:
-                # === 備援：單一 PID 查詢模式 ===
-                # 這是當 ECU 不支援 Multi-PID 時的備援方案
-                
-                # 高頻: RPM + Speed
-                for pid in [0x0C, 0x0D]:
-                    msg = can.Message(
-                        arbitration_id=0x7DF,
-                        data=[0x02, 0x01, pid, 0, 0, 0, 0, 0],
-                        is_extended_id=False
-                    )
-                    with send_lock:
-                        bus.send(msg)
-                    time.sleep(0.05)
-                
-                # 低頻: Temp + Turbo + Battery + MAF
-                low_freq_counter += 1
-                if low_freq_counter >= LOW_FREQ_INTERVAL:
-                    for pid in [0x05, 0x0B, 0x42, 0x10]:
-                        msg = can.Message(
-                            arbitration_id=0x7DF,
-                            data=[0x02, 0x01, pid, 0, 0, 0, 0, 0],
-                            is_extended_id=False
-                        )
-                        with send_lock:
-                            bus.send(msg)
-                        time.sleep(0.05)
-                    low_freq_counter = 0
-                
-                time.sleep(0.05)
+                # 輪轉到下一個低頻 PID
+                low_freq_idx = (low_freq_idx + 1) % len(low_freq_pids)
+                high_freq_counter = 0
+            
+            # 最小循環間隔 - 讓出 CPU 給其他線程
+            # 不需要額外的長時間 sleep，因為上面已經有足夠的間隔了
             
         except can.CanError as e:
             logger.warning(f"CAN 發送錯誤: {e}")
-            if not single_pid_mode:
-                multi_pid_fail_count += 1
-                if multi_pid_fail_count >= MULTI_PID_FAIL_THRESHOLD:
-                    logger.warning("Multi-PID 查詢多次失敗，切換至單一 PID 模式")
-                    single_pid_mode = True
-            time.sleep(0.5)
+            time.sleep(0.1)  # 錯誤時稍微等長一點
         except Exception as e:
             logger.error(f"OBD 查詢錯誤: {e}")
-            time.sleep(1)
+            time.sleep(0.5)
     
     logger.info("OBD-II 查詢執行緒已停止")
 
