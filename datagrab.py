@@ -531,6 +531,19 @@ def unified_receiver(bus, db, signals):
     last_fuel_int = None  # 油量緩存（整數化，避免浮點微小變化觸發更新）
     last_speed_int = None  # CAN 速度緩存（僅供記錄，不更新 UI）
     
+    # === UI 更新節流：避免更新過快造成視覺疲勞 ===
+    # 數據持續收集和平滑處理，但 UI 更新頻率降低到 0.5 秒一次
+    UI_UPDATE_INTERVAL = 0.5  # 秒
+    last_rpm_ui_update = 0
+    last_temp_ui_update = 0
+    last_turbo_ui_update = 0
+    last_battery_ui_update = 0
+    # 緩存最新的平滑值，供節流後 emit
+    last_rpm_value = 0.0
+    last_temp_value = 0.0
+    last_turbo_value = 0.0
+    last_battery_value = 0.0
+    
     logger.info("CAN 訊息接收執行緒已啟動")
     
     while not stop_threads:
@@ -582,7 +595,12 @@ def unified_receiver(bus, db, signals):
                         data_store["OBD"]["rpm"] = raw_rpm
                         data_store["OBD"]["last_update"] = time.time()
                         
-                        signals.update_rpm.emit(current_rpm_smoothed / 1000.0)
+                        # 緩存平滑值，節流更新 UI
+                        last_rpm_value = current_rpm_smoothed / 1000.0
+                        now = time.time()
+                        if now - last_rpm_ui_update >= UI_UPDATE_INTERVAL:
+                            signals.update_rpm.emit(last_rpm_value)
+                            last_rpm_ui_update = now
                     
                     # PID 0D (Vehicle Speed) - 格式: [03, 41, 0D, Speed, ...]
                     elif pid == 0x0D:
@@ -627,7 +645,13 @@ def unified_receiver(bus, db, signals):
                         # 更新前端水溫顯示: 40°C -> 0%, 80°C -> 50%, 120°C -> 100%
                         temp_normalized = ((temp - 40) / 80.0) * 100
                         temp_normalized = max(0, min(100, temp_normalized))
-                        signals.update_temp.emit(temp_normalized)
+                        
+                        # 節流更新 UI
+                        last_temp_value = temp_normalized
+                        now = time.time()
+                        if now - last_temp_ui_update >= UI_UPDATE_INTERVAL:
+                            signals.update_temp.emit(last_temp_value)
+                            last_temp_ui_update = now
                     
                     # PID 0B (MAP / Turbo Pressure) - 格式: [03, 41, 0B, MAP, ...]
                     elif pid == 0x0B and msg.arbitration_id == 0x7E8:
@@ -639,7 +663,12 @@ def unified_receiver(bus, db, signals):
                         data_store["OBD"]["turbo"] = turbo_bar
                         fuel_consumption_data["map_kpa"] = abs_pressure_kpa
                         
-                        signals.update_turbo.emit(turbo_bar)
+                        # 節流更新 UI
+                        last_turbo_value = turbo_bar
+                        now = time.time()
+                        if now - last_turbo_ui_update >= UI_UPDATE_INTERVAL:
+                            signals.update_turbo.emit(last_turbo_value)
+                            last_turbo_ui_update = now
                     
                     # PID 42 (Control Module Voltage / Battery) - 格式: [04, 41, 42, A, B, ...]
                     elif pid == 0x42 and msg.arbitration_id == 0x7E8:
@@ -648,6 +677,8 @@ def unified_receiver(bus, db, signals):
                         voltage = (msg.data[3] * 256 + msg.data[4]) / 1000.0
                         data_store["OBD"]["battery"] = voltage
                         
+                        # 電壓即時更新 - ShutdownMonitor 需要即時收到電壓
+                        # UI 節流在 main.py 的 set_battery() 中處理
                         signals.update_battery.emit(voltage)
                     
                     # PID 10 (MAF) - 格式: [04, 41, 10, A, B, ...]

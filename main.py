@@ -8016,6 +8016,13 @@ class Dashboard(QWidget):
 
     def __init__(self):
         super().__init__()
+        
+        # === 禁用 Python 自動 GC ===
+        # 在桌面環境下，自動 GC 可能會與桌面合成器競爭資源導致凍結
+        # 改由 _incremental_gc() 每 5 分鐘在背景手動執行
+        gc.disable()
+        print("[GC] 已禁用自動垃圾回收，改為手動控制")
+        
         self.setWindowTitle("儀表板 - F1:翻左卡片/焦點 Shift+F1:詳細視圖 F2:翻右卡片 Shift+F2:重置Trip")
         
         # GPS 速度優先邏輯變數 (必須在 init_data 之前初始化)
@@ -9015,37 +9022,34 @@ class Dashboard(QWidget):
         print("儀表板邏輯已啟動")
     
     def _incremental_gc(self):
-        """增量式垃圾回收 - 只執行快速 GC，完整 GC 在背景執行"""
+        """極低頻率垃圾回收 - 完全在背景執行
+        
+        策略：
+        1. 完全禁用 Python 自動 GC（在 __init__ 中設定）
+        2. 每 5 分鐘在背景執行緒執行一次完整 GC
+        3. 8GB RAM 足夠，短期內不做 GC 完全沒問題
+        
+        這個策略適合桌面環境，可以避免 GC 與桌面合成器競爭資源
+        """
         self._gc_counter += 1
         
         perf_enabled = os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes')
         
-        # 策略：主執行緒只做第 0 代 GC（< 5ms）
-        # 第 1、2 代 GC 太慢（40-60ms），改到背景執行緒執行
-        
-        counts_before = gc.get_count()
-        start_time = time.perf_counter()
-        
-        # 快速 GC（只有第 0 代）- 這個很快
-        collected = gc.collect(0)
-        
-        duration_ms = (time.perf_counter() - start_time) * 1000
-        
-        if perf_enabled and duration_ms > 10:
-            print(f"⚡ [GC] Gen 0: {duration_ms:.1f}ms, 回收 {collected}, 之前: {counts_before}")
-        
-        # 每 60 秒在背景執行緒執行完整 GC（從 30 秒改為 60 秒，減少 STW 頻率）
-        if self._gc_counter % 6 == 0:  # 每 60 秒 (10秒 * 6)
+        # 每 5 分鐘 (10秒 * 30) 在背景執行一次完整 GC
+        # 頻率極低，對效能影響最小
+        if self._gc_counter % 30 == 0:
             import threading
-            def background_gc():
+            def background_full_gc():
                 start = time.perf_counter()
-                gc.collect(1)
-                gc.collect(2)
+                # 按順序執行，避免一次性大量釋放
+                collected0 = gc.collect(0)
+                collected1 = gc.collect(1)
+                collected2 = gc.collect(2)
                 if perf_enabled:
                     duration = (time.perf_counter() - start) * 1000
-                    if duration > 20:
-                        print(f"⚡ [GC-BG] Full: {duration:.1f}ms (背景執行緒)")
-            threading.Thread(target=background_gc, daemon=True).start()
+                    total = collected0 + collected1 + collected2
+                    print(f"⚡ [GC-BG] 完整 GC: {duration:.1f}ms, 回收 {total} 物件")
+            threading.Thread(target=background_full_gc, daemon=True).start()
 
     def check_spotify_config(self):
         """檢查 Spotify 設定並初始化"""
@@ -11246,19 +11250,28 @@ class Dashboard(QWidget):
             return  # 測試中，忽略正常電壓
         
         self.battery = voltage
-        # 更新四宮格卡片
-        if hasattr(self, 'quad_gauge_card'):
-            self.quad_gauge_card.set_battery(voltage)
-        # 如果在詳細視圖中且顯示的是 BATTERY，也更新
-        if self._in_detail_view and self._detail_gauge_index == 3:
-            self.quad_gauge_detail.set_value(voltage)
+        
+        # === 關機監控：必須即時更新 (不受節流影響) ===
+        if hasattr(self, '_shutdown_monitor'):
+            self._shutdown_monitor.update_voltage(voltage)
+        
+        # === UI 更新：節流 (每 0.5 秒) ===
+        now = time.time()
+        if not hasattr(self, '_last_battery_ui_update'):
+            self._last_battery_ui_update = 0
+        
+        if now - self._last_battery_ui_update >= 0.5:
+            # 更新四宮格卡片
+            if hasattr(self, 'quad_gauge_card'):
+                self.quad_gauge_card.set_battery(voltage)
+            # 如果在詳細視圖中且顯示的是 BATTERY，也更新
+            if self._in_detail_view and self._detail_gauge_index == 3:
+                self.quad_gauge_detail.set_value(voltage)
+            
+            self._last_battery_ui_update = now
         
         # 若引擎狀態從 on 掉到 off，立即上傳一次 MQTT
         self._maybe_publish_engine_off()
-        
-        # 關機監控：檢測電壓掉落
-        if hasattr(self, '_shutdown_monitor'):
-            self._shutdown_monitor.update_voltage(voltage)
     
     def set_fuel_consumption(self, instant: float, avg: float):
         """外部數據接口：設置油耗 - 透過 Signal 發送，由主執行緒執行

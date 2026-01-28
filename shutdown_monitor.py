@@ -329,7 +329,7 @@ class ShutdownMonitor(QObject):
     
     # 快速斷電檢測超時時間（秒）
     # 當 was_powered=True 時，如果連續這麼久沒收到電壓更新，視為熄火
-    QUICK_POWER_LOSS_TIMEOUT = 5  # 5 秒
+    QUICK_POWER_LOSS_TIMEOUT = 15  # 15 秒（從 5 秒增加，避免誤觸發）
     
     def __init__(self, 
                  voltage_threshold=10.0,      # 正常電壓閾值
