@@ -8,6 +8,7 @@ import gc
 import glob
 import serial
 import threading
+import weakref
 from pathlib import Path
 from functools import wraps
 from collections import deque
@@ -3932,7 +3933,7 @@ class MarqueeLabel(QLabel):
     # 類別變數：用於同步所有 MarqueeLabel 實例
     _global_pause_counter = 0
     _global_pause_threshold = 166  # 約 5 秒 (166 * 30ms ≈ 5000ms)
-    _instances = []  # 追蹤所有實例
+    _instances = weakref.WeakSet()  # 使用 WeakSet 避免循環引用
     _waiting_for_sync = False  # 是否在等待其他標籤回到起點
     
     def __init__(self, text="", parent=None):
@@ -3945,8 +3946,8 @@ class MarqueeLabel(QLabel):
         self._at_home = True  # 是否在起始位置
         self._is_active = False  # 是否處於活躍狀態（可見且應該運作）
         
-        # 註冊實例
-        MarqueeLabel._instances.append(self)
+        # 註冊實例 (使用 WeakSet，自動處理清理)
+        MarqueeLabel._instances.add(self)
 
     def setText(self, text): # type: ignore
         if text == self.text():
@@ -4131,12 +4132,10 @@ class MarqueeLabel(QLabel):
         self.update()
     
     def __del__(self):
-        """清理實例"""
-        try:
-            if self in MarqueeLabel._instances:
-                MarqueeLabel._instances.remove(self)
-        except:
-            pass
+        """清理實例 - WeakSet 會自動處理引用移除，這裡只是安全起見"""
+        # WeakSet 會在物件被 GC 時自動移除引用
+        # 不需要手動清理
+        pass
 
 
 class MusicCard(QWidget):
