@@ -325,7 +325,11 @@ class ShutdownMonitor(QObject):
     no_signal_timeout = pyqtSignal()  # 無訊號超時
     
     # 無電壓訊號超時時間（秒）
-    NO_VOLTAGE_SIGNAL_TIMEOUT = 180  # 3 分鐘
+    NO_VOLTAGE_SIGNAL_TIMEOUT = 180  # 3 分鐘（針對從未發動的情況）
+    
+    # 快速斷電檢測超時時間（秒）
+    # 當 was_powered=True 時，如果連續這麼久沒收到電壓更新，視為熄火
+    QUICK_POWER_LOSS_TIMEOUT = 5  # 5 秒
     
     def __init__(self, 
                  voltage_threshold=10.0,      # 正常電壓閾值
@@ -359,6 +363,10 @@ class ShutdownMonitor(QObject):
         self.no_signal_triggered = False        # 是否已觸發無訊號超時
         self._no_signal_check_timer = None      # 檢查計時器
         
+        # === 快速斷電檢測 ===
+        self._quick_power_loss_timer = None     # 快速斷電檢測計時器
+        self._quick_power_loss_triggered = False  # 是否已觸發快速斷電
+        
         # 關機對話框
         self.shutdown_dialog = None
         
@@ -387,30 +395,85 @@ class ShutdownMonitor(QObject):
         """啟動無電壓訊號監控
         
         應在 Dashboard 啟動後呼叫，開始監控是否收到電壓訊號。
-        如果 3 分鐘內沒有收到任何電壓訊號，將觸發關機流程。
+        
+        兩種超時機制：
+        1. 快速斷電檢測 (5秒): 曾經有正常電壓後突然沒有回應 → 熄火
+        2. 長時間無訊號 (3分鐘): 從未收到正常電壓 → OBD 未連接/車輛從未發動
         """
         import time
         
         # 記錄啟動時間作為初始參考點
         self.last_voltage_received_time = time.time()
         self.no_signal_triggered = False
+        self._quick_power_loss_triggered = False
         
-        # 建立並啟動檢查計時器（每 30 秒檢查一次）
+        # 建立並啟動快速斷電檢測計時器（每 1 秒檢查一次）
+        if self._quick_power_loss_timer is None:
+            self._quick_power_loss_timer = QTimer()
+            self._quick_power_loss_timer.timeout.connect(self._check_quick_power_loss)
+        
+        self._quick_power_loss_timer.start(1000)  # 每 1 秒檢查一次
+        
+        # 建立並啟動長時間無訊號檢查計時器（每 30 秒檢查一次）
         if self._no_signal_check_timer is None:
             self._no_signal_check_timer = QTimer()
             self._no_signal_check_timer.timeout.connect(self._check_no_signal_timeout)
         
         self._no_signal_check_timer.start(30000)  # 30 秒檢查一次
-        print(f"[ShutdownMonitor] 無訊號監控已啟動 (超時: {self.NO_VOLTAGE_SIGNAL_TIMEOUT}秒)")
+        print(f"[ShutdownMonitor] 電源監控已啟動 (快速斷電: {self.QUICK_POWER_LOSS_TIMEOUT}秒, 無訊號超時: {self.NO_VOLTAGE_SIGNAL_TIMEOUT}秒)")
     
     def stop_no_signal_monitoring(self):
         """停止無電壓訊號監控"""
         if self._no_signal_check_timer:
             self._no_signal_check_timer.stop()
-            print("[ShutdownMonitor] 無訊號監控已停止")
+        if self._quick_power_loss_timer:
+            self._quick_power_loss_timer.stop()
+        print("[ShutdownMonitor] 電源監控已停止")
+    
+    def _check_quick_power_loss(self):
+        """檢查快速斷電（熄火）
+        
+        當 was_powered=True（曾經有正常電壓）且連續 5 秒沒有收到電壓更新時，
+        視為車輛熄火，立即觸發關機流程。
+        """
+        import time
+        
+        # 必須曾經有過正常電壓才檢測
+        if not self.was_powered:
+            return
+        
+        if self.last_voltage_received_time is None:
+            return
+        
+        # 如果已經觸發過，不重複觸發
+        if self._quick_power_loss_triggered or self.power_lost_triggered:
+            return
+        
+        # 如果關機對話框正在顯示，不重複觸發
+        if self.shutdown_dialog and self.shutdown_dialog.isVisible():
+            return
+        
+        elapsed = time.time() - self.last_voltage_received_time
+        
+        if elapsed >= self.QUICK_POWER_LOSS_TIMEOUT:
+            self._quick_power_loss_triggered = True
+            self.power_lost_triggered = True  # 防止重複觸發
+            print(f"🔴 [ShutdownMonitor] 快速斷電偵測！已 {elapsed:.1f} 秒未收到 OBD 電壓數據")
+            print(f"   上次電壓: {self.last_voltage:.1f}V，判定為熄火")
+            
+            # 啟動位置通知 (背景執行)
+            print("[ShutdownMonitor] 觸發位置通知...")
+            threading.Thread(target=notify_current_location, args=(
+                self.current_fuel_level,
+                self.current_avg_fuel,
+                self.trip_elapsed_time,
+                self.trip_distance
+            ), daemon=True).start()
+            
+            self.power_lost.emit()
     
     def _check_no_signal_timeout(self):
-        """檢查是否超過無訊號超時時間"""
+        """檢查是否超過無訊號超時時間（針對從未發動的情況）"""
         import time
         
         if self.last_voltage_received_time is None:
@@ -418,6 +481,10 @@ class ShutdownMonitor(QObject):
         
         # 如果已經觸發過，不重複觸發
         if self.no_signal_triggered:
+            return
+        
+        # 如果已經由快速斷電觸發，不再檢查
+        if self._quick_power_loss_triggered or self.power_lost_triggered:
             return
         
         # 如果關機對話框正在顯示，不重複觸發
@@ -452,11 +519,25 @@ class ShutdownMonitor(QObject):
             print("🟢 [ShutdownMonitor] 收到電壓訊號，重置無訊號超時狀態")
             self.no_signal_triggered = False
         
+        # 如果之前因快速斷電而觸發，現在收到訊號了，重置狀態（車子重新發動）
+        if self._quick_power_loss_triggered:
+            print("🟢 [ShutdownMonitor] 收到電壓訊號，重置快速斷電狀態")
+            self._quick_power_loss_triggered = False
+        
+        # === 診斷日誌：記錄電壓變化 ===
+        # 只在電壓有顯著變化時記錄，避免大量日誌
+        voltage_diff = abs(voltage - self.last_voltage)
+        if voltage_diff >= 1.0 or (not self.was_powered and voltage > 0):
+            print(f"[Voltage] {self.last_voltage:.1f}V → {voltage:.1f}V | was_powered={self.was_powered} | low_count={self.low_voltage_count}")
+        
         # 記錄是否曾經有過正常電壓
         if voltage >= self.voltage_threshold:
+            if not self.was_powered:
+                print(f"🟢 [ShutdownMonitor] 首次偵測到正常電壓: {voltage:.1f}V (閾值: {self.voltage_threshold}V)")
             self.was_powered = True
             self.low_voltage_count = 0
             self.power_lost_triggered = False
+            self._quick_power_loss_triggered = False  # 同時重置快速斷電狀態
             
             # 如果電源恢復且對話框正在顯示，關閉它
             if self.shutdown_dialog and self.shutdown_dialog.isVisible():
@@ -467,6 +548,7 @@ class ShutdownMonitor(QObject):
         # 檢測電壓掉落
         elif self.was_powered and voltage < self.low_voltage_threshold:
             self.low_voltage_count += 1
+            print(f"⚠️ [Voltage] 低電壓偵測: {voltage:.1f}V (count: {self.low_voltage_count}/{self.debounce_count})")
             
             # 連續多次低電壓才觸發 (防抖動)
             if self.low_voltage_count >= self.debounce_count and not self.power_lost_triggered:
@@ -483,6 +565,12 @@ class ShutdownMonitor(QObject):
                 ), daemon=True).start()
                 
                 self.power_lost.emit()
+        
+        # 記錄電壓未觸發的原因（僅在電壓接近 0 時）
+        elif voltage < self.low_voltage_threshold and not self.was_powered:
+            # 電壓低但從未有過正常電壓，不觸發
+            if voltage_diff >= 1.0:
+                print(f"⚠️ [Voltage] 低電壓 {voltage:.1f}V 但 was_powered=False，不觸發關機")
         
         self.last_voltage = voltage
     
