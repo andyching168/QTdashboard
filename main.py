@@ -9022,33 +9022,45 @@ class Dashboard(QWidget):
         print("儀表板邏輯已啟動")
     
     def _incremental_gc(self):
-        """極低頻率垃圾回收 - 完全在背景執行
+        """智能垃圾回收 - 只在車輛靜止時執行
         
         策略：
         1. 完全禁用 Python 自動 GC（在 __init__ 中設定）
-        2. 每 5 分鐘在背景執行緒執行一次完整 GC
-        3. 8GB RAM 足夠，短期內不做 GC 完全沒問題
+        2. 只在速度為 0（車輛靜止）時才考慮執行 GC
+        3. 距離上次 GC 超過 1 小時才執行
+        4. 這樣即使 GC 有短暫停頓，也不會影響駕駛體驗
         
-        這個策略適合桌面環境，可以避免 GC 與桌面合成器競爭資源
+        8GB RAM + 智能 GC = 不會記憶體洩漏，也不會凍結
         """
         self._gc_counter += 1
         
+        # 初始化上次 GC 時間
+        if not hasattr(self, '_last_full_gc_time'):
+            self._last_full_gc_time = time.time()
+        
         perf_enabled = os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes')
         
-        # 每 5 分鐘 (10秒 * 30) 在背景執行一次完整 GC
-        # 頻率極低，對效能影響最小
-        if self._gc_counter % 30 == 0:
+        # 每 10 秒檢查一次是否需要 GC
+        now = time.time()
+        hours_since_gc = (now - self._last_full_gc_time) / 3600
+        
+        # 條件：速度為 0 且距離上次 GC 超過 1 小時
+        if self.speed == 0 and hours_since_gc >= 1.0:
             import threading
+            
             def background_full_gc():
                 start = time.perf_counter()
                 # 按順序執行，避免一次性大量釋放
                 collected0 = gc.collect(0)
                 collected1 = gc.collect(1)
                 collected2 = gc.collect(2)
-                if perf_enabled:
-                    duration = (time.perf_counter() - start) * 1000
-                    total = collected0 + collected1 + collected2
-                    print(f"⚡ [GC-BG] 完整 GC: {duration:.1f}ms, 回收 {total} 物件")
+                duration = (time.perf_counter() - start) * 1000
+                total = collected0 + collected1 + collected2
+                print(f"⚡ [GC] 智能 GC 完成 (車輛靜止): {duration:.1f}ms, 回收 {total} 物件")
+            
+            # 更新 GC 時間
+            self._last_full_gc_time = now
+            print(f"⚡ [GC] 觸發智能 GC (速度=0, 已 {hours_since_gc:.1f} 小時未 GC)")
             threading.Thread(target=background_full_gc, daemon=True).start()
 
     def check_spotify_config(self):
