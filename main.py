@@ -9952,18 +9952,22 @@ class Dashboard(QWidget):
         current_displayed = self._displayed_speed_int
         h = self._speed_hysteresis
         
-        # 計算施密特閾值
-        upper_threshold = current_displayed + 0.5 + h  # 升到 current+1 的閾值
-        lower_threshold = current_displayed - 0.5 - h  # 降到 current-1 的閾值
-        
-        new_displayed = current_displayed
-        if new_speed >= upper_threshold:
-            # 速度明確上升，更新顯示
-            new_displayed = int(new_speed)
-        elif new_speed <= lower_threshold:
-            # 速度明確下降，更新顯示
-            new_displayed = int(new_speed)
-        # else: 在滯迴區間內，保持不變
+        # 特殊處理：速度 < 1 時強制顯示 0（避免停車時顯示 1）
+        if new_speed < 1.0:
+            new_displayed = 0
+        else:
+            # 計算施密特閾值
+            upper_threshold = current_displayed + 0.5 + h  # 升到 current+1 的閾值
+            lower_threshold = current_displayed - 0.5 - h  # 降到 current-1 的閾值
+            
+            new_displayed = current_displayed
+            if new_speed >= upper_threshold:
+                # 速度明確上升，更新顯示
+                new_displayed = int(new_speed)
+            elif new_speed <= lower_threshold:
+                # 速度明確下降，更新顯示
+                new_displayed = int(new_speed)
+            # else: 在滯迴區間內，保持不變
         
         # 更新速度狀態
         self.speed = new_speed
