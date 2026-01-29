@@ -2612,6 +2612,12 @@ class TripInfoCardWide(QWidget):
         self.elapsed_timer = QTimer()
         self.elapsed_timer.timeout.connect(self._update_elapsed_time)
         self.elapsed_timer.start(60000)  # 每 60 秒更新
+        
+        # 定時器：每秒計算里程（解決速度穩定時 signal 不觸發的問題）
+        # 之前依賴速度 signal 觸發計算，但速度穩定時 signal 可能長時間不觸發
+        self.distance_timer = QTimer()
+        self.distance_timer.timeout.connect(self._periodic_distance_update)
+        self.distance_timer.start(1000)  # 每秒更新
     
     def _format_elapsed_time(self):
         """格式化經過時間為 hh:mm"""
@@ -2726,27 +2732,30 @@ class TripInfoCardWide(QWidget):
         """接收 Speed 更新並計算油耗"""
         self.speed = speed_kmh
         self._calculate_fuel()
-        # 同時更新行駛距離
-        self._update_trip_distance()
+        # 里程計算改由定時器處理，這裡只更新速度緩存
+        self.last_speed = speed_kmh
     
     def update_turbo(self, turbo_bar):
         """接收渦輪負壓更新並計算油耗"""
         self.turbo = turbo_bar
         self._calculate_fuel()
     
-    def _update_trip_distance(self):
-        """更新行駛距離"""
-        current_time = time.time()
-        delta_time = current_time - self.last_update_time
+    def _periodic_distance_update(self):
+        """定時器觸發: 每秒計算里程
         
-        if 0 < delta_time < 2 and self.speed > 0:
-            avg_speed = (self.last_speed + self.speed) / 2
-            distance = avg_speed * (delta_time / 3600)
+        解決問題: 速度穩定時 signal 可能長時間不觸發，導致里程不計算
+        現在改由定時器每秒觸發，確保里程持續累積
+        """
+        if self.speed > 0:
+            # 每秒行駛的距離 = 速度(km/h) / 3600 = km
+            distance = self.speed / 3600.0
             self.trip_distance += distance
             self.distance_label.setText(f"{self.trip_distance:.1f}")
-        
-        self.last_speed = self.speed
-        self.last_update_time = current_time
+    
+    def _update_trip_distance(self):
+        """更新行駛距離 - 已棄用，改由 _periodic_distance_update 處理"""
+        # 此方法保留但不再使用，里程計算由定時器統一處理
+        pass
     
     def _calculate_fuel(self):
         """
