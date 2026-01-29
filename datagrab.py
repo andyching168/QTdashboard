@@ -828,28 +828,29 @@ def unified_receiver(bus, db, signals):
                             last_fuel_int = fuel_int
                             fuel_last_update_time = current_time
                     
-                    # === 巡航狀態 ===
+                    # === 巡航狀態 === (暫時停用以排除程式問題)
                     # CRUSE_ONOFF: bit 2 (開關)
                     # CRUSE_ENABLED: bit 4 (作動中)
-                    cruise_switch_value = decoded.get('CRUSE_ONOFF', 0)
-                    cruise_enabled_value = decoded.get('CRUSE_ENABLED', 0)
-                    
-                    # 轉換為 bool
-                    if hasattr(cruise_switch_value, 'value'):
-                        cruise_switch = bool(int(cruise_switch_value.value))
-                    else:
-                        cruise_switch = bool(int(cruise_switch_value))
-                    
-                    if hasattr(cruise_enabled_value, 'value'):
-                        cruise_enabled = bool(int(cruise_enabled_value.value))
-                    else:
-                        cruise_enabled = bool(int(cruise_enabled_value))
-                    
-                    # RPI4 優化：只在巡航狀態真正改變時才 emit signal
-                    cruise_state = (cruise_switch, cruise_enabled)
-                    if cruise_state != last_cruise_state:
-                        signals.update_cruise.emit(cruise_switch, cruise_enabled)
-                        last_cruise_state = cruise_state
+                    # [DEBUG] 暫時停用巡航狀態讀取，排查車輛定速巡航不穩定問題
+                    # cruise_switch_value = decoded.get('CRUSE_ONOFF', 0)
+                    # cruise_enabled_value = decoded.get('CRUSE_ENABLED', 0)
+                    # 
+                    # # 轉換為 bool
+                    # if hasattr(cruise_switch_value, 'value'):
+                    #     cruise_switch = bool(int(cruise_switch_value.value))
+                    # else:
+                    #     cruise_switch = bool(int(cruise_switch_value))
+                    # 
+                    # if hasattr(cruise_enabled_value, 'value'):
+                    #     cruise_enabled = bool(int(cruise_enabled_value.value))
+                    # else:
+                    #     cruise_enabled = bool(int(cruise_enabled_value))
+                    # 
+                    # # RPI4 優化：只在巡航狀態真正改變時才 emit signal
+                    # cruise_state = (cruise_switch, cruise_enabled)
+                    # if cruise_state != last_cruise_state:
+                    #     signals.update_cruise.emit(cruise_switch, cruise_enabled)
+                    #     last_cruise_state = cruise_state
                             
                 except cantools.database.errors.DecodeError as e:
                     logger.error(f"DBC 解碼錯誤 (THROTTLE_STATUS): {e}")
@@ -1153,7 +1154,7 @@ def main():
             signals.update_gear.connect(dashboard.set_gear)
             signals.update_turn_signal.connect(dashboard.set_turn_signal)
             signals.update_door_status.connect(dashboard.set_door_status)
-            signals.update_cruise.connect(dashboard.set_cruise)
+            # signals.update_cruise.connect(dashboard.set_cruise)  # [DEBUG] 暫時停用
             signals.update_turbo.connect(dashboard.set_turbo)
             signals.update_battery.connect(dashboard.set_battery)
             signals.update_fuel_consumption.connect(dashboard.set_fuel_consumption)
