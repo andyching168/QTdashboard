@@ -2613,11 +2613,8 @@ class TripInfoCardWide(QWidget):
         self.elapsed_timer.timeout.connect(self._update_elapsed_time)
         self.elapsed_timer.start(60000)  # 每 60 秒更新
         
-        # 定時器：每秒計算里程（解決速度穩定時 signal 不觸發的問題）
-        # 之前依賴速度 signal 觸發計算，但速度穩定時 signal 可能長時間不觸發
-        self.distance_timer = QTimer()
-        self.distance_timer.timeout.connect(self._periodic_distance_update)
-        self.distance_timer.start(1000)  # 每秒更新
+        # 里程計算由 Dashboard._physics_tick() 統一處理
+        # 使用與 Trip A/B 相同的梯形積分法計算邏輯
     
     def _format_elapsed_time(self):
         """格式化經過時間為 hh:mm"""
@@ -2739,23 +2736,6 @@ class TripInfoCardWide(QWidget):
         """接收渦輪負壓更新並計算油耗"""
         self.turbo = turbo_bar
         self._calculate_fuel()
-    
-    def _periodic_distance_update(self):
-        """定時器觸發: 每秒計算里程
-        
-        解決問題: 速度穩定時 signal 可能長時間不觸發，導致里程不計算
-        現在改由定時器每秒觸發，確保里程持續累積
-        """
-        if self.speed > 0:
-            # 每秒行駛的距離 = 速度(km/h) / 3600 = km
-            distance = self.speed / 3600.0
-            self.trip_distance += distance
-            self.distance_label.setText(f"{self.trip_distance:.1f}")
-    
-    def _update_trip_distance(self):
-        """更新行駛距離 - 已棄用，改由 _periodic_distance_update 處理"""
-        # 此方法保留但不再使用，里程計算由定時器統一處理
-        pass
     
     def _calculate_fuel(self):
         """
@@ -3357,6 +3337,11 @@ class OdometerCardWide(QWidget):
             self.odo_distance_label.setText(f"{int(self.total_distance)}")
             self.last_sync_time = time.time()
             self._update_sync_time_display()
+            
+            # 儲存到儲存系統
+            self.storage.update_odo(self.total_distance)
+            self.storage.save_now()  # 立即儲存，確保手動修改不會丟失
+            
             print(f"里程表已同步: {int(self.total_distance)} km")
         
         self._hide_keypad()
@@ -10025,6 +10010,10 @@ class Dashboard(QWidget):
             
             self.trip_card.add_distance(distance_increment)
             self.odo_card.add_distance(distance_increment)
+            
+            # 同時更新 trip_info_card 的本次里程（使用與 Trip A/B 相同的計算邏輯）
+            if hasattr(self, 'trip_info_card'):
+                self.trip_info_card.add_distance(distance_increment)
             
         # 記錄這次速度供下次梯形計算使用
         self._prev_physics_speed = current_speed
