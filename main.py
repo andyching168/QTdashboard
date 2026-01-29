@@ -8893,6 +8893,11 @@ class Dashboard(QWidget):
         self.turbo = None  # None = OBD 未回應，顯示 "--"
         self.battery = None  # None = OBD 未回應，顯示 "--"
         
+        # 施密特觸發器 (Schmitt Trigger) - 防止速度顯示閃爍
+        # 當速度在 N.3 ~ N.7 之間波動時，顯示會保持穩定不跳動
+        self._displayed_speed_int = 0   # 當前顯示的整數速度
+        self._speed_hysteresis = 0.3    # 滯迴閾值 (±0.3 km/h)
+        
         # 定速巡航狀態
         self.cruise_switch = False   # 開關是否開啟（白色）
         self.cruise_engaged = False  # 是否作動中（綠色）
@@ -9935,12 +9940,37 @@ class Dashboard(QWidget):
         # 更新速度校正（維持原本邏輯）
         self._maybe_update_speed_correction(smoothed_obd_speed or raw_obd_speed)
 
-        # 只在顯示數字變化時才更新 UI（整數部分變化）
-        if int(new_speed) != int(self.speed):
-            self.speed = new_speed
+        # === 施密特觸發器 (Schmitt Trigger) ===
+        # 防止速度在 116 ↔ 117 之間頻繁跳動
+        # 
+        # 原理：
+        # - 傳統方式：直接取整數，116.4→116, 116.6→117 (造成閃爍)
+        # - 施密特方式：需要明確超過閾值才會改變
+        #   - 從 116 升到 117：需要 speed > 116 + 0.5 + 0.3 = 116.8
+        #   - 從 117 降到 116：需要 speed < 117 + 0.5 - 0.3 - 1 = 116.2
+        #
+        current_displayed = self._displayed_speed_int
+        h = self._speed_hysteresis
+        
+        # 計算施密特閾值
+        upper_threshold = current_displayed + 0.5 + h  # 升到 current+1 的閾值
+        lower_threshold = current_displayed - 0.5 - h  # 降到 current-1 的閾值
+        
+        new_displayed = current_displayed
+        if new_speed >= upper_threshold:
+            # 速度明確上升，更新顯示
+            new_displayed = int(new_speed)
+        elif new_speed <= lower_threshold:
+            # 速度明確下降，更新顯示
+            new_displayed = int(new_speed)
+        # else: 在滯迴區間內，保持不變
+        
+        # 更新速度狀態
+        self.speed = new_speed
+        
+        if new_displayed != current_displayed:
+            self._displayed_speed_int = new_displayed
             self.update_display()
-        else:
-            self.speed = new_speed
 
     def _maybe_update_speed_correction(self, obd_speed):
         """根據 GPS 與 OBD 速度差逐步修正校正係數"""
@@ -11530,8 +11560,8 @@ class Dashboard(QWidget):
             # 使用 GPS 速度
             self.speed_label.setText(str(int(self.current_gps_speed)))
         else:
-            # 使用 CAN/Sim 速度
-            self.speed_label.setText(str(int(self.speed)))
+            # 使用 CAN/Sim 速度 (施密特觸發器處理後的穩定值)
+            self.speed_label.setText(str(self._displayed_speed_int))
         
         # 更新檔位顯示顏色
         gear_colors = {
