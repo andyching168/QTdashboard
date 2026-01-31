@@ -13,6 +13,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.align import Align
 
+# 硬體初始化模組（RPi 啟動時的硬體重試檢測）
+from hardware_init import initialize_hardware, is_raspberry_pi as hw_is_raspberry_pi, HardwareStatus
+
 # 設定入口點環境變數 (供程式重啟時判斷)
 os.environ['DASHBOARD_ENTRY'] = 'datagrab'
 
@@ -1095,6 +1098,7 @@ def main():
     bus = None
     db = None
     interface_type = None
+    hw_status = None
     
     try:
         logger.info("=" * 50)
@@ -1102,18 +1106,55 @@ def main():
         logger.info(f"平台: {platform.system()}")
         logger.info("=" * 50)
         
-        # 1. 初始化 CAN Bus（自動選擇 SocketCAN 或 SLCAN）
         console.print(Panel.fit(
             "[bold cyan]Luxgen M7 儀表板系統[/bold cyan]\n"
             f"平台: {platform.system()}",
             title="啟動中"
         ))
         
-        bus, interface_type = init_can_bus(bitrate=500000)
+        # === 硬體初始化（RPi 會持續重試直到超時或所有硬體就緒）===
+        # 在 Raspberry Pi 上：
+        #   - 持續檢測 CAN Bus、GPS、GPIO
+        #   - 如果硬體未就緒，會每 2 秒重試一次
+        #   - 預設超時 60 秒
+        #   - CAN Bus 是必需的，GPS 和 GPIO 可選
+        # 在開發環境（Mac/Windows）：
+        #   - 跳過硬體檢測，直接使用舊有的 init_can_bus()
+        
+        if hw_is_raspberry_pi():
+            # RPi 環境：使用新的硬體初始化流程（含重試機制）
+            console.print("[cyan]🔧 Raspberry Pi 環境，啟動硬體檢測...[/cyan]")
+            logger.info("Raspberry Pi 環境，啟動硬體重試檢測機制")
+            
+            # 硬體初始化參數
+            HW_INIT_TIMEOUT = 60.0  # 超時時間（秒）
+            
+            success, hw_status, initialized_bus = initialize_hardware(
+                timeout=HW_INIT_TIMEOUT,
+                require_gps=False,   # GPS 不是必需的（有更好，沒有也能運行）
+                require_gpio=False,  # GPIO 不是必需的（可以用觸控/鍵盤）
+                show_progress=True
+            )
+            
+            if success and initialized_bus:
+                bus = initialized_bus
+                interface_type = hw_status.can_interface
+                logger.info(f"硬體初始化成功: {hw_status.summary()}")
+            else:
+                # 如果 hardware_init 模組的初始化失敗，嘗試使用舊的 init_can_bus()
+                console.print("[yellow]⚠️  硬體初始化模組失敗，嘗試備用方案...[/yellow]")
+                logger.warning("硬體初始化模組失敗，嘗試備用 init_can_bus()")
+                bus, interface_type = init_can_bus(bitrate=500000, max_retries=5, retry_delay=3.0)
+        else:
+            # 開發環境：使用原有的 init_can_bus()
+            console.print("[yellow]💻 開發環境，使用標準 CAN 初始化流程[/yellow]")
+            bus, interface_type = init_can_bus(bitrate=500000)
         
         if bus is None:
             logger.error("無法初始化 CAN Bus，程式退出")
             console.print("[red]無法連接 CAN Bus！請檢查硬體連線。[/red]")
+            if hw_status:
+                console.print(f"[red]硬體狀態:\n{hw_status.summary()}[/red]")
             return
         
         logger.info(f"CAN Bus 連線模式: {interface_type}")
