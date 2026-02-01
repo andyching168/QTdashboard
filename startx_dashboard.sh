@@ -179,174 +179,22 @@ log_info "  Luxgen M7 儀表板 - 自動啟動"
 log_info "=============================================="
 echo ""
 
-# --- 7. 偵測 CAN Bus 裝置 ---
-echo "🔍 掃描 CAN Bus 裝置..."
-update_progress "🔌 掃描 CAN Bus 裝置" "等待 CAN 設備就緒..." 60
+# --- 7. 啟動儀表板 ---
+log_info "=============================================="
+log_info "🚀 啟動 Luxgen M7 儀表板"
+log_info "   由 datagrab.py 內部處理硬體檢測與重試..."
+log_info "=============================================="
 
-CAN_INTERFACE=""
-CAN_TYPE=""
-
-# 等待 CAN 設備就緒 (最多等待 10 秒)
-log_info "等待 CAN 設備就緒..."
-CAN_DEVICE_READY=false
-for i in {1..20}; do
-    # 檢查 SocketCAN 介面
-    if ip link show type can 2>/dev/null | grep -q "can"; then
-        CAN_DEVICE_READY=true
-        log_info "SocketCAN 介面就緒 (嘗試 $i)"
-        break
-    fi
-    # 檢查 USB CANable 設備
-    if ls /dev/ttyACM* 2>/dev/null | head -1 > /dev/null; then
-        CAN_DEVICE_READY=true
-        log_info "USB CAN 設備就緒 (嘗試 $i)"
-        break
-    fi
-    sleep 0.5
-done
-
-if [ "$CAN_DEVICE_READY" = "false" ]; then
-    log_info "警告: CAN 設備未就緒，將嘗試 demo 模式"
-fi
-
-update_progress "🔌 掃描 CAN Bus 裝置" "偵測 SocketCAN / CANable..." 65
-
-# 方法 1: 優先檢查 SocketCAN 介面 (can0, can1, vcan0 等)
-if ip link show type can 2>/dev/null | grep -q "can"; then
-    # 找到 CAN 介面，檢查是否有已啟動的
-    for iface in can0 can1 slcan0; do
-        if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
-            CAN_INTERFACE="$iface"
-            CAN_TYPE="socketcan"
-            echo "✅ 偵測到 SocketCAN 介面: $iface (已啟動)"
-            break
-        elif ip link show "$iface" 2>/dev/null | grep -q "state DOWN"; then
-            # 介面存在但未啟動，嘗試啟動
-            echo "⚙️  偵測到 SocketCAN 介面 $iface (未啟動)，嘗試設定..."
-            sudo ip link set "$iface" type can bitrate 500000 2>/dev/null
-            sudo ip link set "$iface" up 2>/dev/null
-            if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
-                CAN_INTERFACE="$iface"
-                CAN_TYPE="socketcan"
-                echo "✅ SocketCAN 介面 $iface 已啟動"
-                break
-            fi
-        fi
-    done
-fi
-
-# 方法 2: 如果沒有 SocketCAN，檢查 Serial Port (SLCAN 模式)
-if [ -z "$CAN_INTERFACE" ]; then
-    CANABLE_PORT=$($PYTHON_CMD -c "
-import serial.tools.list_ports
-for p in serial.tools.list_ports.comports():
-    if 'canable' in p.description.lower():
-        print(p.device)
-        break
-" 2>/dev/null || echo "")
-
-    # 方法 3: 如果 Python 沒找到，嘗試用 dmesg
-    if [ -z "$CANABLE_PORT" ]; then
-        for dev in /dev/ttyACM* /dev/ttyUSB*; do
-            if [ -e "$dev" ]; then
-                if dmesg 2>/dev/null | tail -50 | grep -qi "canable\|slcan"; then
-                    CANABLE_PORT="$dev"
-                    break
-                fi
-            fi
-        done
-    fi
-    
-    if [ -n "$CANABLE_PORT" ]; then
-        CAN_INTERFACE="$CANABLE_PORT"
-        CAN_TYPE="slcan"
-        echo "✅ 偵測到 CANable (SLCAN): $CANABLE_PORT"
-    fi
-fi
-
-# --- 9. 檢查 Spotify cache 是否存在 ---
-SPOTIFY_CACHE="$SCRIPT_DIR/.spotify_cache"
-SPOTIFY_AUTH_MODE=""
-
-update_progress "🎵 檢查 Spotify 設定" "檢查授權狀態..." 90
-if [ -f "$SPOTIFY_CACHE" ]; then
-    echo "✅ Spotify cache 已存在，使用瀏覽器授權"
-    SPOTIFY_AUTH_MODE="1"
-    update_progress "🎵 檢查 Spotify 設定" "已授權" 95
-else
-    echo "📱 Spotify cache 不存在，將使用 QR Code 授權"
-    SPOTIFY_AUTH_MODE="2"
-    update_progress "🎵 檢查 Spotify 設定" "需要 QR Code 授權" 95
-fi
-
-echo ""
-
-# --- 關閉進度視窗 ---
+# 關閉 shell 層級的進度視窗（datagrab.py 會自己開一個）
 close_progress
 
-# --- 10. 根據 CAN Bus 偵測結果決定啟動模式 ---
-log_info "準備啟動儀表板應用程式..."
-
-# === 啟動重試機制 ===
-MAX_RETRIES=3
-RETRY_DELAY=2
-
-launch_dashboard() {
-    local mode="$1"
-    local retries=0
-    local success=false
-    
-    while [ $retries -lt $MAX_RETRIES ] && [ "$success" = "false" ]; do
-        retries=$((retries + 1))
-        log_info "啟動嘗試 $retries/$MAX_RETRIES (模式: $mode)"
-        
-        if [ "$mode" = "can" ]; then
-            # CAN Bus 模式
-            $PYTHON_CMD "$SCRIPT_DIR/datagrab.py" 2>&1 | tee -a "$STARTUP_LOG"
-            PYTHON_EXIT=${PIPESTATUS[0]}
-        else
-            # Demo 模式
-            echo "$SPOTIFY_AUTH_MODE" | $PYTHON_CMD "$SCRIPT_DIR/demo_mode.py" --spotify 2>&1 | tee -a "$STARTUP_LOG"
-            PYTHON_EXIT=${PIPESTATUS[0]}
-        fi
-        
-        # 檢查退出碼
-        # 0 = 正常退出, 其他 = 錯誤
-        # 如果程式正常結束（使用者手動關閉），不重試
-        if [ $PYTHON_EXIT -eq 0 ]; then
-            success=true
-            log_info "儀表板正常結束 (exit: 0)"
-        elif [ $retries -lt $MAX_RETRIES ]; then
-            log_error "儀表板異常退出 (exit: $PYTHON_EXIT)，${RETRY_DELAY} 秒後重試..."
-            sleep $RETRY_DELAY
-        else
-            log_error "儀表板啟動失敗，已達最大重試次數"
-        fi
-    done
-    
-    return $PYTHON_EXIT
-}
-
-if [ -n "$CAN_INTERFACE" ]; then
-    log_info "=============================================="
-    log_info "🚗 偵測到 CAN Bus 裝置"
-    log_info "   介面: $CAN_INTERFACE ($CAN_TYPE)"
-    log_info "   啟動 CAN Bus 模式 (datagrab.py)"
-    log_info "=============================================="
-    echo ""
-    
-    launch_dashboard "can"
-    PYTHON_EXIT=$?
-else
-    log_info "=============================================="
-    log_info "🎮 未偵測到 CAN Bus 裝置"
-    log_info "   啟動演示模式 (demo_mode.py --spotify)"
-    log_info "=============================================="
-    echo ""
-    
-    launch_dashboard "demo"
-    PYTHON_EXIT=$?
-fi
+# 啟動應用程式
+# 由 datagrab.py 內部處理：
+# 1. 顯示新的硬體檢測進度視窗
+# 2. 持續重試 CAN/GPS/GPIO
+# 3. 失敗時顯示 "--"
+"$PYTHON_CMD" "$SCRIPT_DIR/datagrab.py" 2>&1 | tee -a "$STARTUP_LOG"
+PYTHON_EXIT=${PIPESTATUS[0]}
 
 # 記錄結束狀態
 log_info "儀表板程式結束，退出碼: $PYTHON_EXIT"
