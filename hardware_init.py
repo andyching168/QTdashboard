@@ -73,6 +73,22 @@ class HardwareStatus:
         lines.append(f"GPS: {'✓ ' + self.gps_port if self.gps_ready else '✗ ' + self.gps_error}")
         lines.append(f"GPIO: {'✓ 已初始化' if self.gpio_ready else '✗ ' + self.gpio_error}")
         return "\n".join(lines)
+    
+    def to_gui_dict(self, attempt: int = 0, elapsed: float = 0, timeout: float = 60) -> dict:
+        """轉換為 GUI 可用的字典格式"""
+        return {
+            'can_ready': self.can_ready,
+            'gps_ready': self.gps_ready,
+            'gpio_ready': self.gpio_ready,
+            'can_error': self.can_error,
+            'gps_error': self.gps_error,
+            'gpio_error': self.gpio_error,
+            'can_interface': self.can_interface,
+            'gps_port': self.gps_port,
+            'attempt': attempt,
+            'elapsed': elapsed,
+            'timeout': timeout
+        }
 
 
 class HardwareInitializer:
@@ -85,7 +101,7 @@ class HardwareInitializer:
     
     # 配置參數
     DEFAULT_TIMEOUT = 60.0       # 預設超時（秒）
-    RETRY_INTERVAL = 2.0         # 重試間隔（秒）
+    RETRY_INTERVAL = 0.5         # 重試間隔（秒）- 縮短以提供更快的反應
     CAN_BITRATE = 500000         # CAN Bus 速率
     GPS_BAUD_RATES = [9600, 115200, 38400]  # GPS 嘗試的波特率
     

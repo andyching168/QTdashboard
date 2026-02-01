@@ -44,6 +44,9 @@ class StartupProgressWindow(QWidget):
     update_signal = pyqtSignal(str, str, int)
     close_signal = pyqtSignal()
     
+    # 信號：硬體狀態更新（用於跨執行緒更新）
+    hardware_status_signal = pyqtSignal(dict)  # {can: bool, gps: bool, gpio: bool, can_err: str, ...}
+    
     def __init__(self):
         super().__init__()
         
@@ -53,6 +56,10 @@ class StartupProgressWindow(QWidget):
         
         # 設置黑色背景
         self.setStyleSheet("background-color: #0a0a10;")
+        
+        # 硬體重試模式
+        self._hardware_retry_mode = False
+        self._hardware_labels = {}
         
         # 初始化 UI
         self._init_ui()
@@ -64,6 +71,7 @@ class StartupProgressWindow(QWidget):
         # 連接信號
         self.update_signal.connect(self._do_update)
         self.close_signal.connect(self._do_close)
+        self.hardware_status_signal.connect(self._do_update_hardware_status)
         
     def _init_ui(self):
         """初始化 UI"""
@@ -127,17 +135,47 @@ class StartupProgressWindow(QWidget):
         self.detail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.detail_label)
         
+        # === 硬體狀態區域（預設隱藏）===
+        self.hardware_container = QWidget()
+        self.hardware_container.setStyleSheet("background: transparent;")
+        hw_layout = QVBoxLayout(self.hardware_container)
+        hw_layout.setContentsMargins(100, 10, 100, 10)
+        hw_layout.setSpacing(8)
+        
+        # 重試計時資訊
+        self.retry_info_label = QLabel("")
+        self.retry_info_label.setStyleSheet("color: #888; font-size: 12px;")
+        self.retry_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hw_layout.addWidget(self.retry_info_label)
+        
+        # 硬體狀態標籤
+        hw_items = [
+            ("can", "🔌 CAN Bus"),
+            ("gps", "📍 GPS"),
+            ("gpio", "🎮 GPIO")
+        ]
+        
+        for key, label_text in hw_items:
+            row = QLabel(f"{label_text}: ⏳ 檢測中...")
+            row.setStyleSheet("color: #aaa; font-size: 14px;")
+            row.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            hw_layout.addWidget(row)
+            self._hardware_labels[key] = row
+        
+        self.hardware_container.hide()  # 預設隱藏
+        layout.addWidget(self.hardware_container)
+        
         # 下方留空
         layout.addStretch(3)
         
         # 版權/提示
-        footer_label = QLabel("系統啟動中，請稍候...")
-        footer_label.setStyleSheet("""
+        self.footer_label = QLabel("系統啟動中，請稍候...")
+        self.footer_label.setStyleSheet("""
             color: #444;
             font-size: 12px;
         """)
-        footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(footer_label)
+        self.footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.footer_label)
     
     def set_steps(self, steps):
         """設置步驟列表
@@ -190,6 +228,137 @@ class StartupProgressWindow(QWidget):
         """執行關閉（在主執行緒中）"""
         self.complete()
     
+    # === 硬體重試模式相關方法 ===
+    
+    def set_hardware_retry_mode(self, enabled: bool):
+        """
+        切換硬體重試模式
+        
+        Args:
+            enabled: True 啟用硬體重試模式（顯示 CAN/GPS/GPIO 狀態）
+        """
+        self._hardware_retry_mode = enabled
+        if enabled:
+            self.hardware_container.show()
+            self.status_label.setText("🔧 檢測硬體中...")
+            self.detail_label.setText("等待配套硬體就緒")
+            self.footer_label.setText("硬體未就緒時會持續重試，或按 ESC 跳過")
+            # 重置進度條為無限模式（來回跑動）
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setMaximum(0)  # 0 = 無限模式
+        else:
+            self.hardware_container.hide()
+            self.progress_bar.setMaximum(100)
+            self.footer_label.setText("系統啟動中，請稍候...")
+        QApplication.processEvents()
+    
+    def update_hardware_status(self, status_dict: dict):
+        """
+        更新硬體狀態顯示
+        
+        Args:
+            status_dict: 包含以下鍵值的字典
+                - can_ready: bool
+                - gps_ready: bool  
+                - gpio_ready: bool
+                - can_error: str (錯誤訊息)
+                - gps_error: str
+                - gpio_error: str
+                - can_interface: str (成功時的介面名稱)
+                - gps_port: str
+                - attempt: int (當前重試次數)
+                - elapsed: float (已用時間)
+                - timeout: float (超時時間)
+        """
+        # 如果在其他執行緒中呼叫，使用信號
+        self.hardware_status_signal.emit(status_dict)
+    
+    def _do_update_hardware_status(self, status_dict: dict):
+        """在主執行緒中更新硬體狀態"""
+        if not self._hardware_retry_mode:
+            return
+        
+        # 更新重試資訊
+        attempt = status_dict.get('attempt', 0)
+        elapsed = status_dict.get('elapsed', 0)
+        timeout = status_dict.get('timeout', 60)
+        remaining = max(0, timeout - elapsed)
+        
+        self.retry_info_label.setText(
+            f"嘗試 #{attempt} | 已用時: {elapsed:.0f}s | 剩餘: {remaining:.0f}s"
+        )
+        
+        # 更新各硬體狀態
+        hw_status = {
+            'can': (status_dict.get('can_ready', False), 
+                    status_dict.get('can_interface', ''),
+                    status_dict.get('can_error', '未知')),
+            'gps': (status_dict.get('gps_ready', False),
+                    status_dict.get('gps_port', ''),
+                    status_dict.get('gps_error', '未知')),
+            'gpio': (status_dict.get('gpio_ready', False),
+                     '',
+                     status_dict.get('gpio_error', '未知'))
+        }
+        
+        hw_names = {
+            'can': '🔌 CAN Bus',
+            'gps': '📍 GPS',
+            'gpio': '🎮 GPIO'
+        }
+        
+        for key, (ready, info, error) in hw_status.items():
+            label = self._hardware_labels.get(key)
+            if label:
+                if ready:
+                    display_info = info if info else "已就緒"
+                    label.setText(f"{hw_names[key]}: ✅ {display_info}")
+                    label.setStyleSheet("color: #6f6; font-size: 14px;")
+                else:
+                    label.setText(f"{hw_names[key]}: ❌ {error}")
+                    label.setStyleSheet("color: #f66; font-size: 14px;")
+        
+        # 計算就緒數量
+        ready_count = sum(1 for r, _, _ in hw_status.values() if r)
+        total_count = len(hw_status)
+        
+        if ready_count == total_count:
+            self.status_label.setText("✅ 所有硬體就緒")
+            self.detail_label.setText("正在啟動系統...")
+        else:
+            self.status_label.setText(f"🔧 檢測硬體中... ({ready_count}/{total_count})")
+            self.detail_label.setText("等待配套硬體就緒")
+        
+        QApplication.processEvents()
+    
+    def hardware_init_complete(self, success: bool, can_only: bool = False):
+        """
+        硬體初始化完成
+        
+        Args:
+            success: 是否成功
+            can_only: 是否僅 CAN 成功（其他硬體失敗但可繼續）
+        """
+        self._hardware_retry_mode = False
+        self.hardware_container.hide()
+        self.progress_bar.setMaximum(100)
+        
+        if success:
+            if can_only:
+                self.status_label.setText("⚠️ 部分硬體就緒")
+                self.detail_label.setText("CAN Bus 已連接，繼續啟動...")
+            else:
+                self.status_label.setText("✅ 硬體初始化完成")
+                self.detail_label.setText("正在啟動儀表板...")
+            self.progress_bar.setValue(50)
+        else:
+            self.status_label.setText("❌ 硬體初始化失敗")
+            self.detail_label.setText("請檢查硬體連線")
+            self.progress_bar.setValue(0)
+        
+        self.footer_label.setText("系統啟動中，請稍候...")
+        QApplication.processEvents()
+
     def advance_step(self, status_text=None, detail_text=None):
         """前進到下一步"""
         self.show_step(self.current_step + 1, status_text, detail_text)

@@ -1095,10 +1095,15 @@ def obd_query(bus, signals):
 def main():
     global current_mode, stop_threads
     
-    bus = None
-    db = None
-    interface_type = None
-    hw_status = None
+    # 使用類別來存儲共享狀態（避免閉包問題）
+    class SharedState:
+        bus = None
+        db = None
+        interface_type = None
+        skip_splash = False
+        signals = None
+    
+    state = SharedState()
     
     try:
         logger.info("=" * 50)
@@ -1112,105 +1117,141 @@ def main():
             title="啟動中"
         ))
         
-        # === 硬體初始化（RPi 會持續重試直到超時或所有硬體就緒）===
-        # 在 Raspberry Pi 上：
-        #   - 持續檢測 CAN Bus、GPS、GPIO
-        #   - 如果硬體未就緒，會每 2 秒重試一次
-        #   - 預設超時 60 秒
-        #   - CAN Bus 是必需的，GPS 和 GPIO 可選
-        # 在開發環境（Mac/Windows）：
-        #   - 跳過硬體檢測，直接使用舊有的 init_can_bus()
-        
-        if hw_is_raspberry_pi():
-            # RPi 環境：使用新的硬體初始化流程（含重試機制）
-            console.print("[cyan]🔧 Raspberry Pi 環境，啟動硬體檢測...[/cyan]")
-            logger.info("Raspberry Pi 環境，啟動硬體重試檢測機制")
+        # === 硬體初始化回調（在 GUI 進度視窗中執行）===
+        def hardware_init_with_gui(progress_window, timeout):
+            """
+            硬體初始化回調函數 - 在 GUI 進度視窗中執行
             
-            # 硬體初始化參數
-            HW_INIT_TIMEOUT = 60.0  # 超時時間（秒）
+            Args:
+                progress_window: StartupProgressWindow 實例
+                timeout: 超時時間（秒）
             
-            success, hw_status, initialized_bus = initialize_hardware(
-                timeout=HW_INIT_TIMEOUT,
-                require_gps=False,   # GPS 不是必需的（有更好，沒有也能運行）
-                require_gpio=False,  # GPIO 不是必需的（可以用觸控/鍵盤）
-                show_progress=True
+            Returns:
+                (success, hw_status): 是否成功和硬體狀態
+            """
+            from hardware_init import HardwareInitializer, HardwareStatus
+            from PyQt6.QtWidgets import QApplication
+            
+            logger.info("在 GUI 中執行硬體初始化...")
+            
+            # 建立初始化器
+            initializer = HardwareInitializer(
+                timeout=timeout,
+                retry_interval=0.5,  # 快速重試
+                require_gps=False,
+                require_gpio=False
             )
             
-            if success and initialized_bus:
-                bus = initialized_bus
-                interface_type = hw_status.can_interface
-                logger.info(f"硬體初始化成功: {hw_status.summary()}")
-            else:
-                # 如果 hardware_init 模組的初始化失敗，嘗試使用舊的 init_can_bus()
-                console.print("[yellow]⚠️  硬體初始化模組失敗，嘗試備用方案...[/yellow]")
-                logger.warning("硬體初始化模組失敗，嘗試備用 init_can_bus()")
-                bus, interface_type = init_can_bus(bitrate=500000, max_retries=5, retry_delay=3.0)
-        else:
-            # 開發環境：使用原有的 init_can_bus()
+            start_time = time.time()
+            attempt = 0
+            
+            while not initializer._stop_requested:
+                attempt += 1
+                elapsed = time.time() - start_time
+                
+                # 檢查超時
+                if timeout > 0 and elapsed >= timeout:
+                    logger.error(f"硬體初始化超時 ({timeout:.0f}秒)")
+                    break
+                
+                # 檢測各項硬體
+                if not initializer._status.can_ready:
+                    initializer._check_can()
+                
+                if not initializer._status.gps_ready:
+                    initializer._check_gps()
+                
+                if not initializer._status.gpio_ready:
+                    initializer._check_gpio()
+                
+                # 更新 GUI 進度
+                gui_dict = initializer._status.to_gui_dict(
+                    attempt=attempt,
+                    elapsed=elapsed,
+                    timeout=timeout
+                )
+                progress_window.update_hardware_status(gui_dict)
+                QApplication.processEvents()
+                
+                # 終端機也顯示狀態（除錯用）
+                if attempt % 10 == 1:  # 每 5 秒左右顯示一次
+                    console.print(
+                        f"[cyan]嘗試 #{attempt}[/cyan] "
+                        f"CAN: {'✓' if initializer._status.can_ready else '✗'} "
+                        f"GPS: {'✓' if initializer._status.gps_ready else '✗'} "
+                        f"GPIO: {'✓' if initializer._status.gpio_ready else '✗'}"
+                    )
+                
+                # 檢查是否 CAN 已就緒（CAN 是必需的）
+                if initializer._status.can_ready:
+                    logger.info(f"CAN Bus 就緒: {initializer._status.can_interface}")
+                    state.bus = initializer._can_bus
+                    state.interface_type = initializer._status.can_interface
+                    return True, initializer._status
+                
+                # 等待後重試
+                time.sleep(0.5)
+                QApplication.processEvents()
+            
+            # 超時但 CAN 未就緒
+            return False, initializer._status
+        
+        # === 開發環境的快速初始化（不使用 GUI 進度視窗）===
+        if not hw_is_raspberry_pi():
             console.print("[yellow]💻 開發環境，使用標準 CAN 初始化流程[/yellow]")
-            bus, interface_type = init_can_bus(bitrate=500000)
+            state.bus, state.interface_type = init_can_bus(bitrate=500000)
+            
+            if state.bus is None:
+                logger.error("無法初始化 CAN Bus，程式退出")
+                console.print("[red]無法連接 CAN Bus！請檢查硬體連線。[/red]")
+                return
         
-        if bus is None:
-            logger.error("無法初始化 CAN Bus，程式退出")
-            console.print("[red]無法連接 CAN Bus！請檢查硬體連線。[/red]")
-            if hw_status:
-                console.print(f"[red]硬體狀態:\n{hw_status.summary()}[/red]")
-            return
-        
-        logger.info(f"CAN Bus 連線模式: {interface_type}")
-        
-        # 2. 快速檔位檢測（決定是否跳過開機動畫）
-        console.print("[cyan]檢測當前檔位...[/cyan]")
-        current_gear = quick_read_gear(bus, timeout=1.0)
-        skip_splash = False
-        
-        if current_gear is None:
-            console.print("[yellow]⚠️  無法讀取檔位，將播放開機動畫[/yellow]")
-        elif current_gear == "P":
-            console.print(f"[green]檔位: P（停車檔），播放開機動畫[/green]")
-        else:
-            console.print(f"[yellow]🚗 檔位: {current_gear}（非停車檔），跳過開機動畫[/yellow]")
-            skip_splash = True
-        
-        # 3. 載入 DBC 檔案
+        # === 載入 DBC 檔案（在硬體初始化之前，兩種環境都需要）===
         try:
             logger.info("正在載入 DBC 檔案...")
-            db = cantools.database.load_file('luxgen_m7_2009.dbc')
-            logger.info(f"DBC 檔案已載入，共 {len(db.messages)} 個訊息定義")
+            state.db = cantools.database.load_file('luxgen_m7_2009.dbc')
+            logger.info(f"DBC 檔案已載入，共 {len(state.db.messages)} 個訊息定義")
         except FileNotFoundError:
             console.print("[red]DBC 檔案遺失！將無法解碼 CAN 訊號[/red]")
             return
-
-        # 4. 建立信號物件
-        signals = WorkerSignals()
         
+        # === 建立信號物件 ===
+        state.signals = WorkerSignals()
+        
+        # === 設定資料來源回調 ===
         def setup_can_data_source(dashboard):
             """設定 CAN Bus 資料來源 - 在 dashboard 準備好後呼叫"""
             
+            # 如果是 RPi 環境，此時 state.bus 應該已經由 hardware_init_with_gui 設定好
+            # 如果是開發環境，state.bus 在上面已經初始化
+            
+            if state.bus is None:
+                logger.error("CAN Bus 未初始化，無法設定資料來源")
+                return None
+            
             # 連接信號到 Dashboard
-            signals.update_rpm.connect(dashboard.set_rpm)
-            signals.update_speed.connect(dashboard.set_speed)
-            signals.update_temp.connect(dashboard.set_temperature)
-            signals.update_fuel.connect(dashboard.set_fuel)
-            signals.update_gear.connect(dashboard.set_gear)
-            signals.update_turn_signal.connect(dashboard.set_turn_signal)
-            signals.update_door_status.connect(dashboard.set_door_status)
-            # signals.update_cruise.connect(dashboard.set_cruise)  # [DEBUG] 暫時停用
-            signals.update_turbo.connect(dashboard.set_turbo)
-            signals.update_battery.connect(dashboard.set_battery)
-            signals.update_fuel_consumption.connect(dashboard.set_fuel_consumption)
+            state.signals.update_rpm.connect(dashboard.set_rpm)
+            state.signals.update_speed.connect(dashboard.set_speed)
+            state.signals.update_temp.connect(dashboard.set_temperature)
+            state.signals.update_fuel.connect(dashboard.set_fuel)
+            state.signals.update_gear.connect(dashboard.set_gear)
+            state.signals.update_turn_signal.connect(dashboard.set_turn_signal)
+            state.signals.update_door_status.connect(dashboard.set_door_status)
+            state.signals.update_turbo.connect(dashboard.set_turbo)
+            state.signals.update_battery.connect(dashboard.set_battery)
+            state.signals.update_fuel_consumption.connect(dashboard.set_fuel_consumption)
             
             # 啟動背景執行緒
             logger.info("正在啟動背景執行緒...")
             t_receiver = threading.Thread(
                 target=unified_receiver, 
-                args=(bus, db, signals), 
+                args=(state.bus, state.db, state.signals), 
                 daemon=True, 
                 name="CAN-Receiver"
             )
             t_query = threading.Thread(
                 target=obd_query, 
-                args=(bus, signals), 
+                args=(state.bus, state.signals), 
                 daemon=True, 
                 name="OBD-Query"
             )
@@ -1225,25 +1266,43 @@ def main():
                 global stop_threads
                 logger.info("正在關閉系統...")
                 stop_threads = True
-                if bus:
+                if state.bus:
                     try:
-                        bus.shutdown()
+                        state.bus.shutdown()
                     except:
                         pass
                 console.print("[green]程式已安全結束[/green]")
             
             return cleanup
         
-        # 5. 使用統一啟動流程
+        # === 檔位檢測回調（在硬體初始化完成後執行）===
+        def on_dashboard_ready(dashboard):
+            """Dashboard 準備好後的回調"""
+            # 快速檔位檢測（決定是否跳過開機動畫）- 現在只用於日誌
+            if state.bus:
+                console.print("[cyan]檢測當前檔位...[/cyan]")
+                current_gear = quick_read_gear(state.bus, timeout=0.5)
+                if current_gear:
+                    console.print(f"[green]當前檔位: {current_gear}[/green]")
+            return None
+        
+        # === 使用統一啟動流程 ===
         console.print("[green]啟動儀表板前端...[/green]")
         
-        # 根據連線模式設定視窗標題
-        window_title = f"Luxgen M7 儀表板 - {interface_type}"
+        # 根據環境決定視窗標題
+        window_title = f"Luxgen M7 儀表板 - {state.interface_type if state.interface_type else '初始化中'}"
+        
+        # 硬體初始化參數
+        HW_INIT_TIMEOUT = 60.0  # 超時時間（秒）
         
         run_dashboard(
             window_title=window_title,
             setup_data_source=setup_can_data_source,
-            skip_splash=skip_splash  # 非 P 檔時跳過開機動畫
+            on_dashboard_ready=on_dashboard_ready,
+            skip_splash=state.skip_splash,
+            # RPi 專用：硬體初始化回調（會在 GUI 進度視窗中執行）
+            hardware_init_callback=hardware_init_with_gui if hw_is_raspberry_pi() else None,
+            hardware_init_timeout=HW_INIT_TIMEOUT
         )
 
     except KeyboardInterrupt:
@@ -1256,3 +1315,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -11744,18 +11744,21 @@ def run_dashboard(
     window_title=None,
     setup_data_source=None,
     startup_info=None,
-    skip_splash=False
+    skip_splash=False,
+    hardware_init_callback=None,
+    hardware_init_timeout=60.0
 ):
     """
     統一的儀表板啟動函數 - 所有入口點都應使用此函數
     
     這個函數處理：
     1. QApplication 初始化
-    2. 啟動進度視窗顯示（如果提供 startup_info）
-    3. Dashboard 建立
-    4. SplashScreen 播放（如果有）
-    5. 正確的啟動順序（splash 結束後才啟動 dashboard 邏輯）
-    6. 資料來源設定
+    2. 啟動進度視窗顯示（如果提供 startup_info 或 hardware_init_callback）
+    3. 硬體初始化（如果在 RPi 上且提供 hardware_init_callback）
+    4. Dashboard 建立
+    5. SplashScreen 播放（如果有）
+    6. 正確的啟動順序（splash 結束後才啟動 dashboard 邏輯）
+    7. 資料來源設定
     
     Args:
         on_dashboard_ready: 可選的回調函數，在 dashboard 完全準備好後呼叫
@@ -11768,6 +11771,12 @@ def run_dashboard(
         startup_info: 可選的啟動資訊列表，用於顯示進度視窗
                      格式: [(step_name, detail_text), ...]
         skip_splash: 是否跳過開機動畫（例如：車輛不在 P 檔時）
+        hardware_init_callback: 可選的硬體初始化回調函數（用於 RPi）
+                               簽名: callback(progress_window, timeout) -> (success, result_data)
+                               - progress_window: StartupProgressWindow 實例，用於更新 GUI
+                               - timeout: 超時時間（秒）
+                               - 返回: (success: bool, result_data: any)
+        hardware_init_timeout: 硬體初始化超時時間（秒），預設 60 秒
     
     Returns:
         不返回（進入 Qt 事件循環）
@@ -11798,6 +11807,13 @@ def run_dashboard(
         
         # 跳過開機動畫（例如車輛不在 P 檔）
         run_dashboard(skip_splash=True)
+        
+        # 帶硬體初始化（RPi 專用）
+        def init_hardware(progress_window, timeout):
+            # 在這裡執行硬體初始化，可以呼叫 progress_window.update_hardware_status() 更新 GUI
+            ...
+            return success, can_bus
+        run_dashboard(hardware_init_callback=init_hardware)
     """
     app = QApplication(sys.argv)
     
@@ -11812,32 +11828,65 @@ def run_dashboard(
         app.setOverrideCursor(Qt.CursorShape.BlankCursor)
         print("已隱藏滑鼠游標")
     
-    # === 啟動進度視窗 ===
+    # === 啟動進度視窗 & 硬體初始化 ===
     progress_window = None
-    if startup_info and len(startup_info) > 0:
+    hardware_init_result = None  # 儲存硬體初始化結果
+    
+    # 決定是否需要顯示進度視窗
+    need_progress_window = (startup_info and len(startup_info) > 0) or (hardware_init_callback and is_production)
+    
+    if need_progress_window:
         progress_window = StartupProgressWindow()
-        progress_window.set_steps(startup_info)
         
         if is_production:
             progress_window.showFullScreen()
         else:
-            progress_window.resize(800, 200)
+            progress_window.resize(800, 300)  # 增加高度以容納硬體狀態
             progress_window.show()
         
-        # 顯示第一步
-        progress_window.show_step(0)
         QApplication.processEvents()
         
-        # 模擬步驟執行（每步 0.3 秒）
-        for i in range(len(startup_info)):
-            progress_window.show_step(i)
+        # === 階段 1: 硬體初始化（如果有回調）===
+        if hardware_init_callback and is_production:
+            print("🔧 開始硬體初始化...")
+            progress_window.set_hardware_retry_mode(True)
             QApplication.processEvents()
-            time.sleep(0.3)
+            
+            # 執行硬體初始化回調
+            # 回調函數會使用 progress_window.update_hardware_status() 更新 GUI
+            try:
+                success, result = hardware_init_callback(progress_window, hardware_init_timeout)
+                hardware_init_result = (success, result)
+                
+                # 硬體初始化完成
+                can_only = success and not getattr(result, 'all_ready', True) if hasattr(result, 'all_ready') else False
+                progress_window.hardware_init_complete(success, can_only=can_only)
+                QApplication.processEvents()
+                
+                if not success:
+                    print("❌ 硬體初始化失敗")
+                    # 顯示錯誤訊息但繼續
+                    time.sleep(2.0)
+            except Exception as e:
+                print(f"❌ 硬體初始化異常: {e}")
+                hardware_init_result = (False, None)
+                progress_window.hardware_init_complete(False)
+                time.sleep(2.0)
+        
+        # === 階段 2: 啟動步驟（如果有）===
+        if startup_info and len(startup_info) > 0:
+            progress_window.set_steps(startup_info)
+            
+            # 模擬步驟執行（每步 0.2 秒）
+            for i in range(len(startup_info)):
+                progress_window.show_step(i)
+                QApplication.processEvents()
+                time.sleep(0.2)
         
         # 完成並關閉進度視窗
         progress_window.complete()
         QApplication.processEvents()
-        time.sleep(0.5)
+        time.sleep(0.3)
         progress_window.close()
         progress_window = None
     
