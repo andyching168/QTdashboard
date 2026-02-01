@@ -20,6 +20,7 @@ WATCHDOG_LOG="/tmp/dashboard_watchdog.log"
 LOCK_FILE="/tmp/.dashboard_watchdog.lock"
 COOLDOWN_FILE="/tmp/.dashboard_watchdog_cooldown"
 COOLDOWN_SECONDS=120  # 冷卻時間 2 分鐘，避免重複觸發
+BOOT_FLAG="/tmp/.dashboard_booting"
 
 # 取得鎖，避免多個 watchdog 同時執行
 exec 200>"$LOCK_FILE"
@@ -41,6 +42,11 @@ if [ -f "$COOLDOWN_FILE" ]; then
         # 仍在冷卻中，靜默退出
         exit 0
     fi
+fi
+
+# 開機啟動中，避免重複啟動
+if [ -f "$BOOT_FLAG" ]; then
+    exit 0
 fi
 
 # 檢查 X Server 狀態
@@ -88,9 +94,9 @@ if [ "$X_RUNNING" = "true" ] && [ "$DASHBOARD_RUNNING" = "false" ] && [ "$MANUAL
         PYTHON_CMD="python3"
     fi
     
-    # 偵測 CAN Bus
+    # 偵測 CAN Bus（不限介面名稱）
     CAN_MODE="demo"
-    if ip link show can0 2>/dev/null | grep -q "UP"; then
+    if ip -o link show type can 2>/dev/null | grep -q ": "; then
         CAN_MODE="can"
     elif ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null | head -1 | xargs -I{} sh -c 'lsusb 2>/dev/null | grep -qi canable && echo found' | grep -q found; then
         CAN_MODE="can"

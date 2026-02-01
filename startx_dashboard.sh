@@ -18,12 +18,17 @@
 
 SCRIPT_DIR="/home/ac/QTdashboard"
 STARTUP_LOG="/tmp/dashboard_startup.log"
+BOOT_FLAG="/tmp/.dashboard_booting"
 cd "$SCRIPT_DIR"
 
 # === 記錄啟動時間 ===
 echo "" >> "$STARTUP_LOG"
 echo "=============================================" >> "$STARTUP_LOG"
 echo "$(date): startx_dashboard.sh 開始執行" >> "$STARTUP_LOG"
+
+# 標記開機啟動中，避免 watchdog 重複啟動
+touch "$BOOT_FLAG"
+trap 'rm -f "$BOOT_FLAG"' EXIT
 echo "  PID: $$" >> "$STARTUP_LOG"
 echo "  TTY: $(tty 2>/dev/null || echo 'N/A')" >> "$STARTUP_LOG"
 echo "  DISPLAY: ${DISPLAY:-未設定}" >> "$STARTUP_LOG"
