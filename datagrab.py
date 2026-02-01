@@ -1226,8 +1226,16 @@ def main():
             # 如果是開發環境，state.bus 在上面已經初始化
             
             if state.bus is None:
-                logger.error("CAN Bus 未初始化，無法設定資料來源")
-                return None
+                # CAN Bus 未初始化 - 在 RPi 環境下顯示 "--" 而不是退出
+                if hw_is_raspberry_pi():
+                    logger.warning("CAN Bus 未初始化，儀表板將顯示 '--'")
+                    console.print("[yellow]⚠️  CAN Bus 未連接，儀表板將顯示 '--'[/yellow]")
+                    console.print("[yellow]   儀表板仍正常運行，等待 CAN 設備...[/yellow]")
+                    # 不設定資料來源，Dashboard 會顯示預設值 "--"
+                    return None
+                else:
+                    logger.error("CAN Bus 未初始化，無法設定資料來源")
+                    return None
             
             # 連接信號到 Dashboard
             state.signals.update_rpm.connect(dashboard.set_rpm)
@@ -1290,7 +1298,12 @@ def main():
         console.print("[green]啟動儀表板前端...[/green]")
         
         # 根據環境決定視窗標題
-        window_title = f"Luxgen M7 儀表板 - {state.interface_type if state.interface_type else '初始化中'}"
+        if state.interface_type:
+            window_title = f"Luxgen M7 儀表板 - {state.interface_type}"
+        elif hw_is_raspberry_pi():
+            window_title = "Luxgen M7 儀表板 - 無 CAN 連線"
+        else:
+            window_title = "Luxgen M7 儀表板 - 初始化中"
         
         # 硬體初始化參數
         HW_INIT_TIMEOUT = 60.0  # 超時時間（秒）
