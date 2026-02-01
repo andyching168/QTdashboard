@@ -71,9 +71,18 @@ class GPIOButtonHandler(QObject):
         self._button_a_held_triggered = False
         self._button_b_held_triggered = False
         
+        # 延遲重試配置
+        self._retry_interval = 5.0   # 重試間隔（秒）
+        self._max_retries = 10       # 最大重試次數
+        self._retry_count = 0        # 當前重試次數
+        self._retry_thread = None    # 重試執行緒
+        self._retry_running = False  # 重試執行緒是否運行中
+        
         # 初始化 GPIO
         self._initialized = False
-        self._init_gpio()
+        if not self._init_gpio():
+            # 初始化失敗，啟動背景重試
+            self._start_retry_thread()
     
     def _init_gpio(self) -> bool:
         """初始化 GPIO 按鈕"""
@@ -144,6 +153,51 @@ class GPIOButtonHandler(QObject):
         """檢查 GPIO 是否可用"""
         return self._initialized
     
+    # === 延遲重試機制 ===
+    def _start_retry_thread(self):
+        """啟動背景重試執行緒"""
+        if self._retry_running:
+            return
+        
+        self._retry_running = True
+        self._retry_count = 0
+        
+        import threading
+        self._retry_thread = threading.Thread(
+            target=self._retry_gpio_init,
+            daemon=True,
+            name="GPIO-Retry"
+        )
+        self._retry_thread.start()
+        print(f"[GPIO] 啟動背景重試（每 {self._retry_interval} 秒嘗試一次，最多 {self._max_retries} 次）")
+    
+    def _retry_gpio_init(self):
+        """背景重試 GPIO 初始化"""
+        while self._retry_running and self._retry_count < self._max_retries:
+            time.sleep(self._retry_interval)
+            
+            if not self._retry_running:
+                break
+            
+            self._retry_count += 1
+            print(f"[GPIO] 重試初始化 ({self._retry_count}/{self._max_retries})...")
+            
+            if self._init_gpio():
+                print(f"[GPIO] ✓ 重試成功！GPIO 按鈕已就緒")
+                self._retry_running = False
+                return
+            else:
+                print(f"[GPIO] ✗ 重試失敗")
+        
+        if self._retry_count >= self._max_retries:
+            print(f"[GPIO] 已達最大重試次數 ({self._max_retries})，放棄 GPIO 初始化")
+        
+        self._retry_running = False
+    
+    def stop_retry(self):
+        """停止重試"""
+        self._retry_running = False
+    
     # === 按鈕 A 事件處理 ===
     def _on_button_a_held(self):
         """按鈕 A 長按"""
@@ -207,6 +261,9 @@ class GPIOButtonHandler(QObject):
     
     def cleanup(self):
         """清理 GPIO 資源"""
+        # 停止重試執行緒
+        self._retry_running = False
+        
         # 停止手煞車監控執行緒
         self._parking_brake_running = False
         

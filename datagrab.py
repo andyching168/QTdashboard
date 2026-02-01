@@ -1134,13 +1134,19 @@ def main():
             
             logger.info("在 GUI 中執行硬體初始化...")
             
-            # 建立初始化器
+            # 建立初始化器（GPS 和 GPIO 不是必需的，會自動跳過）
             initializer = HardwareInitializer(
                 timeout=timeout,
                 retry_interval=0.5,  # 快速重試
-                require_gps=False,
-                require_gpio=False
+                require_gps=False,   # 不需要 GPS - 會自動標記為「跳過」
+                require_gpio=False   # 不需要 GPIO - 會自動標記為「跳過」
             )
+            
+            # GPS 和 GPIO 預先標記為「已跳過」
+            initializer._status.gps_ready = True
+            initializer._status.gps_port = "跳過（非必需）"
+            initializer._status.gpio_ready = True
+            initializer._status.gpio_error = ""
             
             start_time = time.time()
             attempt = 0
@@ -1154,15 +1160,9 @@ def main():
                     logger.error(f"硬體初始化超時 ({timeout:.0f}秒)")
                     break
                 
-                # 檢測各項硬體
+                # 只檢測 CAN Bus（GPS 和 GPIO 已經跳過）
                 if not initializer._status.can_ready:
                     initializer._check_can()
-                
-                if not initializer._status.gps_ready:
-                    initializer._check_gps()
-                
-                if not initializer._status.gpio_ready:
-                    initializer._check_gpio()
                 
                 # 更新 GUI 進度
                 gui_dict = initializer._status.to_gui_dict(
@@ -1174,12 +1174,10 @@ def main():
                 QApplication.processEvents()
                 
                 # 終端機也顯示狀態（除錯用）
-                if attempt % 10 == 1:  # 每 5 秒左右顯示一次
+                if attempt == 1 or attempt % 20 == 0:  # 第一次和之後每 10 秒顯示一次
                     console.print(
                         f"[cyan]嘗試 #{attempt}[/cyan] "
-                        f"CAN: {'✓' if initializer._status.can_ready else '✗'} "
-                        f"GPS: {'✓' if initializer._status.gps_ready else '✗'} "
-                        f"GPIO: {'✓' if initializer._status.gpio_ready else '✗'}"
+                        f"CAN: {'✓' if initializer._status.can_ready else '✗ ' + initializer._status.can_error}"
                     )
                 
                 # 檢查是否 CAN 已就緒（CAN 是必需的）
@@ -1187,6 +1185,7 @@ def main():
                     logger.info(f"CAN Bus 就緒: {initializer._status.can_interface}")
                     state.bus = initializer._can_bus
                     state.interface_type = initializer._status.can_interface
+                    console.print(f"[green]✓ CAN Bus 連接成功: {initializer._status.can_interface}[/green]")
                     return True, initializer._status
                 
                 # 等待後重試
@@ -1194,6 +1193,7 @@ def main():
                 QApplication.processEvents()
             
             # 超時但 CAN 未就緒
+            console.print(f"[red]✗ CAN Bus 初始化失敗: {initializer._status.can_error}[/red]")
             return False, initializer._status
         
         # === 開發環境的快速初始化（不使用 GUI 進度視窗）===

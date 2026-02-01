@@ -147,176 +147,162 @@ class HardwareInitializer:
     
     def _check_can(self) -> bool:
         """
-        檢測 CAN Bus
+        檢測 CAN Bus（簡化版）
+        
+        優先順序：
+        1. 嘗試 SocketCAN can0（最常見的設定）
+        2. 嘗試 SLCAN（掃描 USB 串口）
         
         Returns:
             bool: True 如果 CAN Bus 可用
         """
         try:
             import can
-            import serial.tools.list_ports
             
-            # === 1. 檢測 SocketCAN (Linux only) ===
+            # === 1. 直接嘗試 SocketCAN can0 ===
             if platform.system() == 'Linux':
-                import subprocess
-                result = subprocess.run(
-                    ['ip', '-details', 'link', 'show', 'type', 'can'],
-                    capture_output=True, text=True, timeout=5
-                )
-                
-                if result.returncode == 0 and result.stdout.strip():
-                    lines = result.stdout.strip().split('\n')
-                    for line in lines:
-                        if ': ' in line and not line.startswith(' '):
-                            parts = line.split(': ')
-                            if len(parts) >= 2:
-                                iface = parts[1].split('@')[0]
-                                is_up = 'UP' in line and 'LOWER_UP' in line
-                                
-                                if is_up:
-                                    # 嘗試連接
-                                    try:
-                                        bus = can.interface.Bus(
-                                            interface='socketcan',
-                                            channel=iface,
-                                            bitrate=self.CAN_BITRATE,
-                                            receive_own_messages=False
-                                        )
-                                        self._can_bus = bus
-                                        self._status.can_interface = f"SocketCAN ({iface})"
-                                        self._status.can_ready = True
-                                        self._status.can_error = ""
-                                        return True
-                                    except Exception as e:
-                                        logger.debug(f"SocketCAN {iface} 連線失敗: {e}")
-                                        continue
+                try:
+                    bus = can.interface.Bus(
+                        interface='socketcan',
+                        channel='can0',
+                        bitrate=self.CAN_BITRATE,
+                        receive_own_messages=False
+                    )
+                    self._can_bus = bus
+                    self._status.can_interface = "SocketCAN (can0)"
+                    self._status.can_ready = True
+                    self._status.can_error = ""
+                    logger.info("CAN Bus 連接成功: SocketCAN can0")
+                    return True
+                except Exception as e:
+                    logger.debug(f"SocketCAN can0 失敗: {e}")
+                    self._status.can_error = f"can0: {str(e)[:30]}"
             
-            # === 2. 檢測 SLCAN (USB CAN adapter) ===
-            ports = list(serial.tools.list_ports.comports())
-            for port in ports:
-                # 優先檢測 CANable 裝置
-                if 'canable' in port.description.lower():
+            # === 2. 嘗試 SLCAN（掃描所有 USB 串口）===
+            try:
+                import serial.tools.list_ports
+                ports = list(serial.tools.list_ports.comports())
+                
+                for port in ports:
+                    # 跳過藍牙等非 USB 裝置
+                    if 'bluetooth' in port.device.lower():
+                        continue
+                    
                     try:
                         bus = can.interface.Bus(
                             interface='slcan',
                             channel=port.device,
                             bitrate=self.CAN_BITRATE,
-                            timeout=0.01,
+                            timeout=0.1,
                             receive_own_messages=False
                         )
                         self._can_bus = bus
                         self._status.can_interface = f"SLCAN ({port.device})"
                         self._status.can_ready = True
                         self._status.can_error = ""
+                        logger.info(f"CAN Bus 連接成功: SLCAN {port.device}")
                         return True
                     except Exception as e:
-                        logger.debug(f"SLCAN {port.device} 連線失敗: {e}")
+                        logger.debug(f"SLCAN {port.device} 失敗: {e}")
+                        continue
+                
+                if not self._status.can_error:
+                    self._status.can_error = "未找到 CAN 裝置"
+            except ImportError:
+                self._status.can_error = "缺少 pyserial"
             
-            self._status.can_error = "未找到 CAN 裝置"
             return False
             
         except ImportError as e:
-            self._status.can_error = f"缺少套件: {e}"
+            self._status.can_error = f"缺少 python-can"
             return False
         except Exception as e:
-            self._status.can_error = str(e)
+            self._status.can_error = str(e)[:50]
             return False
     
     def _check_gps(self) -> bool:
         """
-        檢測 GPS 模組
+        檢測 GPS 模組（簡化版 - 快速檢測）
+        
+        GPS 不是必需的，所以只做簡單檢測
         
         Returns:
             bool: True 如果 GPS 可用
         """
+        # GPS 是可選的，如果不需要就直接標記為「已跳過」
+        if not self.require_gps:
+            self._status.gps_ready = True
+            self._status.gps_error = ""
+            self._status.gps_port = "跳過（非必需）"
+            return True
+        
         try:
             import serial
             import serial.tools.list_ports
-            import glob
             
-            # 尋找可能的 GPS 串口
-            candidate_ports = []
+            # 快速掃描常見的 GPS 串口
+            gps_ports = ['/dev/ttyUSB0', '/dev/ttyACM0', '/dev/ttyAMA0']
             
-            # 從 pyserial 列出的串口
-            for port in serial.tools.list_ports.comports():
-                # GPS 通常是 USB 轉串口或內建 UART
-                if any(keyword in port.description.lower() for keyword in 
-                       ['gps', 'u-blox', 'uart', 'usb', 'serial', 'cp210', 'ch340', 'ft232']):
-                    candidate_ports.append(port.device)
+            for port_path in gps_ports:
+                try:
+                    ser = serial.Serial(port_path, 9600, timeout=0.5)
+                    # 快速讀取，看是否有 NMEA 數據
+                    for _ in range(3):
+                        line = ser.readline().decode('ascii', errors='ignore')
+                        if line.startswith('$GP') or line.startswith('$GN'):
+                            ser.close()
+                            self._status.gps_port = port_path
+                            self._status.gps_ready = True
+                            self._status.gps_error = ""
+                            return True
+                    ser.close()
+                except:
+                    continue
             
-            # 手動添加常見的 GPS 串口路徑
-            for pattern in ['/dev/ttyUSB*', '/dev/ttyACM*', '/dev/ttyAMA*', '/dev/serial*']:
-                candidate_ports.extend(glob.glob(pattern))
-            
-            # 去重
-            candidate_ports = list(set(candidate_ports))
-            
-            if not candidate_ports:
-                self._status.gps_error = "未找到串口裝置"
-                return False
-            
-            # 嘗試連接每個串口
-            for port in candidate_ports:
-                for baud in self.GPS_BAUD_RATES:
-                    try:
-                        ser = serial.Serial(port, baud, timeout=1.0)
-                        # 讀取幾秒，檢查是否有 NMEA 數據
-                        start = time.time()
-                        while time.time() - start < 2.0:
-                            line = ser.readline().decode('ascii', errors='ignore')
-                            if line.startswith('$GP') or line.startswith('$GN'):
-                                # 找到 GPS NMEA 數據
-                                ser.close()
-                                self._status.gps_port = f"{port} @ {baud}"
-                                self._status.gps_ready = True
-                                self._status.gps_error = ""
-                                return True
-                        ser.close()
-                    except Exception as e:
-                        logger.debug(f"GPS 檢測失敗 {port}@{baud}: {e}")
-                        continue
-            
-            self._status.gps_error = "未收到 NMEA 數據"
+            self._status.gps_error = "未找到 GPS"
             return False
             
-        except ImportError as e:
-            self._status.gps_error = f"缺少套件: {e}"
+        except ImportError:
+            self._status.gps_error = "缺少 pyserial"
             return False
         except Exception as e:
-            self._status.gps_error = str(e)
+            self._status.gps_error = str(e)[:30]
             return False
     
     def _check_gpio(self) -> bool:
         """
-        檢測 GPIO
+        檢測 GPIO（簡化版 - 快速檢測）
+        
+        GPIO 不是必需的，只做基本檢測
         
         Returns:
             bool: True 如果 GPIO 可用
         """
+        # GPIO 是可選的，如果不需要就直接標記為「已跳過」
+        if not self.require_gpio:
+            self._status.gpio_ready = True
+            self._status.gpio_error = ""
+            return True
+        
         try:
-            from gpiozero import Button
-            from gpiozero.exc import BadPinFactory
+            from gpiozero import Device
+            from gpiozero.pins.rpigpio import RPiGPIOFactory
             
-            # 嘗試初始化一個測試按鈕
-            test_pin = 26  # 使用 GPIO26 測試
+            # 嘗試設定 GPIO factory
             try:
-                btn = Button(test_pin, pull_up=True)
-                btn.close()  # 立即釋放
+                Device.pin_factory = RPiGPIOFactory()
                 self._status.gpio_ready = True
                 self._status.gpio_error = ""
                 return True
-            except BadPinFactory as e:
-                self._status.gpio_error = "非 Raspberry Pi 環境"
-                return False
             except Exception as e:
-                self._status.gpio_error = str(e)
+                self._status.gpio_error = f"GPIO 不可用: {str(e)[:20]}"
                 return False
                 
         except ImportError:
             self._status.gpio_error = "gpiozero 未安裝"
             return False
         except Exception as e:
-            self._status.gpio_error = str(e)
+            self._status.gpio_error = str(e)[:30]
             return False
     
     def initialize(self, show_progress: bool = True) -> Tuple[bool, HardwareStatus]:
