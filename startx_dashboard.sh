@@ -190,8 +190,8 @@ CAN_TYPE=""
 log_info "等待 CAN 設備就緒..."
 CAN_DEVICE_READY=false
 for i in {1..20}; do
-    # 檢查 SocketCAN 介面
-    if ip link show type can 2>/dev/null | grep -q "can"; then
+    # 檢查 SocketCAN 介面（任意名稱）
+    if ip -o link show type can 2>/dev/null | grep -q ": "; then
         CAN_DEVICE_READY=true
         log_info "SocketCAN 介面就緒 (嘗試 $i)"
         break
@@ -211,28 +211,42 @@ fi
 
 update_progress "🔌 掃描 CAN Bus 裝置" "偵測 SocketCAN / CANable..." 65
 
-# 方法 1: 優先檢查 SocketCAN 介面 (can0, can1, vcan0 等)
-if ip link show type can 2>/dev/null | grep -q "can"; then
-    # 找到 CAN 介面，檢查是否有已啟動的
-    for iface in can0 can1 slcan0; do
+# 方法 1: 優先檢查 SocketCAN 介面（不限名稱）
+CAN_CANDIDATES=()
+while IFS= read -r line; do
+    iface=$(echo "$line" | awk -F': ' '{print $2}' | awk '{print $1}' | cut -d'@' -f1)
+    if [ -n "$iface" ]; then
+        CAN_CANDIDATES+=("$iface")
+    fi
+done < <(ip -o link show type can 2>/dev/null)
+
+if [ ${#CAN_CANDIDATES[@]} -gt 0 ]; then
+    # 先找已啟動的
+    for iface in "${CAN_CANDIDATES[@]}"; do
         if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
             CAN_INTERFACE="$iface"
             CAN_TYPE="socketcan"
             echo "✅ 偵測到 SocketCAN 介面: $iface (已啟動)"
             break
-        elif ip link show "$iface" 2>/dev/null | grep -q "state DOWN"; then
-            # 介面存在但未啟動，嘗試啟動
-            echo "⚙️  偵測到 SocketCAN 介面 $iface (未啟動)，嘗試設定..."
-            sudo ip link set "$iface" type can bitrate 500000 2>/dev/null
-            sudo ip link set "$iface" up 2>/dev/null
-            if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
-                CAN_INTERFACE="$iface"
-                CAN_TYPE="socketcan"
-                echo "✅ SocketCAN 介面 $iface 已啟動"
-                break
-            fi
         fi
     done
+
+    # 若都未啟動，嘗試逐一啟動
+    if [ -z "$CAN_INTERFACE" ]; then
+        for iface in "${CAN_CANDIDATES[@]}"; do
+            if ip link show "$iface" 2>/dev/null | grep -q "state DOWN"; then
+                echo "⚙️  偵測到 SocketCAN 介面 $iface (未啟動)，嘗試設定..."
+                sudo ip link set "$iface" type can bitrate 500000 2>/dev/null
+                sudo ip link set "$iface" up 2>/dev/null
+                if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
+                    CAN_INTERFACE="$iface"
+                    CAN_TYPE="socketcan"
+                    echo "✅ SocketCAN 介面 $iface 已啟動"
+                    break
+                fi
+            fi
+        done
+    fi
 fi
 
 # 方法 2: 如果沒有 SocketCAN，檢查 Serial Port (SLCAN 模式)

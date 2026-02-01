@@ -135,26 +135,41 @@ echo "🔍 掃描 CAN Bus 裝置..."
 
 if [ "$IS_RPI" = true ] || [ "$(uname)" = "Linux" ]; then
     # 檢查是否有 CAN 類型的網路介面
-    if ip link show type can 2>/dev/null | grep -q "can"; then
-        for iface in can0 can1 slcan0; do
+    CAN_CANDIDATES=()
+    while IFS= read -r line; do
+        iface=$(echo "$line" | awk -F': ' '{print $2}' | awk '{print $1}' | cut -d'@' -f1)
+        if [ -n "$iface" ]; then
+            CAN_CANDIDATES+=("$iface")
+        fi
+    done < <(ip -o link show type can 2>/dev/null)
+
+    if [ ${#CAN_CANDIDATES[@]} -gt 0 ]; then
+        # 先找已啟動的
+        for iface in "${CAN_CANDIDATES[@]}"; do
             if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
                 CAN_INTERFACE="$iface"
                 CAN_TYPE="socketcan"
                 echo "✅ 偵測到 SocketCAN 介面: $iface (已啟動)"
                 break
-            elif ip link show "$iface" 2>/dev/null | grep -q "state DOWN"; then
-                # 介面存在但未啟動，嘗試啟動
-                echo "⚙️  偵測到 SocketCAN 介面 $iface (未啟動)，嘗試設定..."
-                sudo ip link set "$iface" type can bitrate 500000 2>/dev/null
-                sudo ip link set "$iface" up 2>/dev/null
-                if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
-                    CAN_INTERFACE="$iface"
-                    CAN_TYPE="socketcan"
-                    echo "✅ SocketCAN 介面 $iface 已啟動"
-                    break
-                fi
             fi
         done
+
+        # 若都未啟動，嘗試逐一啟動
+        if [ -z "$CAN_INTERFACE" ]; then
+            for iface in "${CAN_CANDIDATES[@]}"; do
+                if ip link show "$iface" 2>/dev/null | grep -q "state DOWN"; then
+                    echo "⚙️  偵測到 SocketCAN 介面 $iface (未啟動)，嘗試設定..."
+                    sudo ip link set "$iface" type can bitrate 500000 2>/dev/null
+                    sudo ip link set "$iface" up 2>/dev/null
+                    if ip link show "$iface" 2>/dev/null | grep -q "UP"; then
+                        CAN_INTERFACE="$iface"
+                        CAN_TYPE="socketcan"
+                        echo "✅ SocketCAN 介面 $iface 已啟動"
+                        break
+                    fi
+                fi
+            done
+        fi
     fi
 fi
 
