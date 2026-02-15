@@ -240,6 +240,13 @@ class SpotifyListener:
     def _handle_track_change(self, track: Dict[str, Any], playback: Dict[str, Any]):
         """處理歌曲變更"""
         try:
+            # [BUG FIX] 修復進度條在換歌時瘋狂跳動的問題
+            # 當歌曲變更時，需要立即重置本地進度追蹤，避免 race condition
+            # 因為 Spotify API 在換歌後可能返回 progress_ms=0 但 duration_ms 尚未更新
+            self.local_progress_ms = 0
+            self.local_duration_ms = track['duration_ms']  # 立即使用新歌曲的時長
+            self.last_sync_time = time.time()  # 重置同步時間
+            
             # 提取歌曲資訊
             track_info = {
                 'id': track['id'],
