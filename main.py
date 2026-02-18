@@ -8802,6 +8802,9 @@ class Dashboard(QWidget):
         # 連接無電壓訊號超時信號（3 分鐘沒收到 OBD 電壓數據）
         self._shutdown_monitor.no_signal_timeout.connect(self._on_no_voltage_signal_timeout)
         
+        # 連接轉速信號到關機監控器（用於判斷是否低於 300 RPM）
+        self.signal_update_rpm.connect(lambda rpm: self._shutdown_monitor.update_rpm(rpm * 1000))
+        
         # 啟動無訊號監控
         self._shutdown_monitor.start_no_signal_monitoring()
         

@@ -310,12 +310,14 @@ class ShutdownDialog(QDialog):
 
 
 class ShutdownMonitor(QObject):
-    """關機監控器 - 監測電壓變化
+    """關機監控器 - 監測電壓變化與轉速
     
     功能：
-    1. 電壓掉落偵測：當電壓從正常值掉到接近 0 時，觸發關機
-    2. 無訊號超時偵測：當 OBD 連續 3 分鐘沒有收到電壓訊號時，觸發關機
+    1. 電壓掉落偵測：當電壓從正常值掉到接近 0 時，且轉速低於 300 RPM，觸發關機
+    2. 無訊號超時偵測：當 OBD 連續 3 分鐘沒有收到電壓訊號時，且轉速低於 300 RPM，觸發關機
        （用於儀表開機但車子從未發動的情況）
+    3. 快速斷電檢測：當電壓訊號連續 15 秒未更新，且轉速低於 300 RPM，觸發關機
+       （用於熄火場景）
     """
     
     # 信號
@@ -375,6 +377,7 @@ class ShutdownMonitor(QObject):
         self.current_avg_fuel = None
         self.trip_elapsed_time = None  # 字串格式 "hh:mm"
         self.trip_distance = None
+        self.current_rpm = 0.0  # 當前轉速 (RPM)
 
     def update_fuel_level(self, level: float):
         """更新油量"""
@@ -383,6 +386,10 @@ class ShutdownMonitor(QObject):
     def update_avg_fuel(self, avg_fuel: float):
         """更新平均油耗"""
         self.current_avg_fuel = avg_fuel
+    
+    def update_rpm(self, rpm: float):
+        """更新轉速 (RPM)"""
+        self.current_rpm = rpm
 
     def update_trip_info(self, elapsed_time: str, distance: float, avg_fuel: float = None):
         """更新本次行程資訊"""
@@ -433,8 +440,8 @@ class ShutdownMonitor(QObject):
     def _check_quick_power_loss(self):
         """檢查快速斷電（熄火）
         
-        當 was_powered=True（曾經有正常電壓）且連續 5 秒沒有收到電壓更新時，
-        視為車輛熄火，立即觸發關機流程。
+        當 was_powered=True（曾經有正常電壓）且連續 15 秒沒有收到電壓更新時，
+        並且轉速低於 300 RPM，視為車輛熄火，立即觸發關機流程。
         """
         import time
         
@@ -456,10 +463,15 @@ class ShutdownMonitor(QObject):
         elapsed = time.time() - self.last_voltage_received_time
         
         if elapsed >= self.QUICK_POWER_LOSS_TIMEOUT:
+            # 檢查轉速條件：必須低於 300 RPM 才觸發關機
+            if self.current_rpm >= 300:
+                print(f"⚠️ [ShutdownMonitor] 快速斷電偵測: 已 {elapsed:.1f} 秒未收到 OBD 電壓數據，但轉速 {self.current_rpm:.0f} RPM >= 300，不觸發關機")
+                return
+            
             self._quick_power_loss_triggered = True
             self.power_lost_triggered = True  # 防止重複觸發
             print(f"🔴 [ShutdownMonitor] 快速斷電偵測！已 {elapsed:.1f} 秒未收到 OBD 電壓數據")
-            print(f"   上次電壓: {self.last_voltage:.1f}V，判定為熄火")
+            print(f"   上次電壓: {self.last_voltage:.1f}V，當前轉速: {self.current_rpm:.0f} RPM，判定為熄火")
             
             # 啟動位置通知 (背景執行)
             print("[ShutdownMonitor] 觸發位置通知...")
@@ -552,8 +564,14 @@ class ShutdownMonitor(QObject):
             
             # 連續多次低電壓才觸發 (防抖動)
             if self.low_voltage_count >= self.debounce_count and not self.power_lost_triggered:
+                # 檢查轉速條件：必須低於 300 RPM 才觸發關機
+                if self.current_rpm >= 300:
+                    print(f"⚠️ [ShutdownMonitor] 電壓掉落偵測: {self.last_voltage:.1f}V → {voltage:.1f}V，但轉速 {self.current_rpm:.0f} RPM >= 300，不觸發關機")
+                    self.low_voltage_count = 0  # 重置計數器
+                    return
+                
                 self.power_lost_triggered = True
-                print(f"🔴 電源中斷偵測: {self.last_voltage:.1f}V → {voltage:.1f}V")
+                print(f"🔴 電源中斷偵測: {self.last_voltage:.1f}V → {voltage:.1f}V，轉速: {self.current_rpm:.0f} RPM")
                 
                 # 啟動位置通知 (背景執行)
                 print("[ShutdownMonitor] 觸發位置通知...")
