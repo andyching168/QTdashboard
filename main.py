@@ -9623,6 +9623,30 @@ class Dashboard(QWidget):
         """處理導航訊息（Slot - 在主執行緒執行）"""
         print(f"[Navigation] _slot_update_navigation 被呼叫")
         print(f"[Navigation] 資料: direction={data.get('direction')}, distance={data.get('totalDistance')}")
+        
+        # 檢查 timestamp 新鮮度 (15秒內)
+        timestamp_str = data.get('timestamp')
+        if timestamp_str:
+            try:
+                from datetime import datetime, timezone
+                # 解析 ISO 8601 格式的 timestamp
+                msg_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                current_time = datetime.now(timezone.utc)
+                time_diff = abs((current_time - msg_time).total_seconds())
+                
+                print(f"[Navigation] 訊息時間: {timestamp_str}, 時間差: {time_diff:.1f}秒")
+                
+                if time_diff > 15:
+                    print(f"[Navigation] ⚠️ 訊息過時 (相差 {time_diff:.1f}秒)，顯示無導航畫面")
+                    # 訊息過時，顯示無導航資訊畫面
+                    if hasattr(self, 'nav_card'):
+                        self.nav_card.show_no_nav_ui()
+                    return
+            except Exception as e:
+                print(f"[Navigation] ⚠️ 解析 timestamp 失敗: {e}，仍繼續處理")
+        else:
+            print("[Navigation] ⚠️ 訊息無 timestamp，仍繼續處理")
+        
         if hasattr(self, 'nav_card'):
             self.nav_card.update_navigation(data)
             print(f"[Navigation] 已更新導航資訊: {data.get('direction', '')}")
