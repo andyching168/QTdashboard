@@ -1388,6 +1388,7 @@ class QuadGaugeCard(QWidget):
         if not is_danger:
             if timer:
                 timer.stop()
+                timer.deleteLater()  # 確保 Qt 物件被正確釋放
                 self._flash_timers[index] = None
                 self._flash_state[index] = False
             self._set_label_style(index, danger_color)  # 恢復當前色
@@ -4126,10 +4127,15 @@ class MarqueeLabel(QLabel):
         self.update()
     
     def __del__(self):
-        """清理實例 - WeakSet 會自動處理引用移除，這裡只是安全起見"""
-        # WeakSet 會在物件被 GC 時自動移除引用
-        # 不需要手動清理
-        pass
+        """清理實例 - 確保 timer 被正確停止和釋放"""
+        try:
+            if hasattr(self, '_timer') and self._timer is not None:
+                if self._timer.isActive():
+                    self._timer.stop()
+                self._timer.deleteLater()
+        except RuntimeError:
+            # Qt 物件可能已經被刪除，忽略錯誤
+            pass
 
 
 class MusicCard(QWidget):
@@ -10048,6 +10054,17 @@ class Dashboard(QWidget):
             return
             
         self.last_physics_time = current_time
+        
+        # === 低頻率垃圾回收 ===
+        # 每 5 分鐘執行一次 GC，清理累積的記憶體
+        # 使用低頻率避免影響正常運作的流暢度
+        if not hasattr(self, '_last_gc_time'):
+            self._last_gc_time = current_time
+        
+        if current_time - self._last_gc_time >= 300:  # 300 秒 = 5 分鐘
+            gc.collect()
+            self._last_gc_time = current_time
+            print(f"[GC] 執行定期垃圾回收 @ {time.strftime('%H:%M:%S')}")
         
         # 取得當前速度 (來自 _slot_set_speed 的最新 raw 值)
         # 如果還沒初始化過，就預設為 0
