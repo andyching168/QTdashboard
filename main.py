@@ -9533,13 +9533,21 @@ class Dashboard(QWidget):
         current_rpm = int(self.rpm * 1000) if self.rpm else 0
         current_battery = self.battery if self.battery is not None else 0.0
 
+        # 判斷引擎狀態：
+        # 1. 電壓從 >= 10V 掉到 0V：斷電，判定為熄火
+        # 2. RPM > 500：引擎運轉中
+        # 3. RPM <= 500：引擎熄火（怠速一般 600-900 rpm，低於 500 視為熄火）
+        
         if self._last_battery_for_status >= 10 and current_battery == 0:
-            # 電壓掉到 0 優先判斷為熄火，不管 RPM
+            # 電壓掉到 0 優先判斷為熄火（斷電情況）
             self._engine_status = False
-        elif current_rpm > 100:
-            # 轉速高於 100 rpm 視為引擎運轉
+        elif current_rpm > 500:
+            # 轉速高於 500 rpm 視為引擎運轉
             self._engine_status = True
-        # 其他情況維持原狀態
+        elif current_rpm <= 500:
+            # 轉速低於或等於 500 rpm 視為熄火
+            self._engine_status = False
+        # 不應該有其他情況，但如果有則維持原狀態
 
         self._last_battery_for_status = current_battery
         status_fell = prev_status and not self._engine_status
