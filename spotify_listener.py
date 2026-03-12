@@ -244,8 +244,16 @@ class SpotifyListener:
             # 當歌曲變更時，需要立即重置本地進度追蹤，避免 race condition
             # 因為 Spotify API 在換歌後可能返回 progress_ms=0 但 duration_ms 尚未更新
             self.local_progress_ms = 0
-            self.local_duration_ms = track['duration_ms']  # 立即使用新歌曲的時長
+            self.local_duration_ms = track['duration_ms']  # 先用 API 返回的值
             self.last_sync_time = time.time()  # 重置同步時間
+            
+            # [Solution 2] 立即觸發額外 API 呼叫，確保取得正確的 duration_ms
+            # 因為 Spotify API 在換歌後 metadata 會延遲更新，需要再次查詢
+            threading.Thread(
+                target=self._delayed_refresh_after_track_change,
+                args=(track['id'],),
+                daemon=True
+            ).start()
             
             # 提取歌曲資訊
             track_info = {
@@ -283,6 +291,46 @@ class SpotifyListener:
                 
         except Exception as e:
             logger.error(f"處理歌曲變更失敗: {e}")
+    
+    def _delayed_refresh_after_track_change(self, expected_track_id: str):
+        """
+        歌曲變更後延遲刷新（立即觸發額外 API 呼叫）
+        
+        用於解決 Spotify API 在換歌後返回錯誤 duration_ms 的問題
+        
+        Args:
+            expected_track_id: 預期的歌曲 ID（用於驗證）
+        """
+        time.sleep(0.5)  # 等待 500ms 讓 Spotify API 更新 metadata
+        
+        if not self.running or self.last_track_id != expected_track_id:
+            return
+        
+        try:
+            sp = self.auth_manager.get_client()
+            if not sp:
+                return
+                
+            playback = sp.current_playback()
+            if playback and playback.get('item'):
+                track = playback['item']
+                if track['id'] == expected_track_id:
+                    # 驗證 duration_ms 是否已更新（與本地快取不同表示已更新）
+                    if track['duration_ms'] != self.local_duration_ms:
+                        logger.info(f"刷新獲取正確的 duration_ms: {track['duration_ms']}")
+                        self.local_duration_ms = track['duration_ms']
+                        self.local_progress_ms = playback.get('progress_ms', 0)
+                        self.last_sync_time = time.time()
+                        
+                        # 觸發進度更新回調
+                        if self.callbacks['on_progress_update']:
+                            self.callbacks['on_progress_update']({
+                                'progress_ms': self.local_progress_ms,
+                                'duration_ms': self.local_duration_ms,
+                                'is_playing': playback.get('is_playing', True),
+                            })
+        except Exception as e:
+            logger.debug(f"刷新 track metadata 失敗: {e}")
     
     def _download_album_art_async(self, url: str, track_id: str):
         """
