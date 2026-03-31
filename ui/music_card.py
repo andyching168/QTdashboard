@@ -5,6 +5,7 @@ from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
 from core.utils import perf_track
+from ui.common import MarqueeLabel
 
 
 class MusicCard(QWidget):
