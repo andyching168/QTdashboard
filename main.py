@@ -5,6 +5,18 @@ import platform
 import gc
 from collections import deque
 
+# 專案根目錄
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+def get_spotify_config_path():
+    return os.path.join(PROJECT_ROOT, "spotify", "spotify_config.json")
+
+def get_spotify_cache_path():
+    return os.path.join(PROJECT_ROOT, "spotify", ".spotify_cache")
+
+def get_mqtt_config_path():
+    return os.path.join(PROJECT_ROOT, "mqtt_config.json")
+
 from PyQt6.QtWidgets import QWidget, QApplication, QStackedWidget, QLabel, QGridLayout, QHBoxLayout, QVBoxLayout, QSizePolicy
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSlot, QPoint, QPropertyAnimation, QEasingCurve, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QLinearGradient, QKeyEvent
@@ -1134,8 +1146,8 @@ class Dashboard(QWidget):
 
     def check_spotify_config(self):
         """檢查 Spotify 設定並初始化"""
-        config_path = "spotify_config.json"
-        cache_path = ".spotify_cache"
+        config_path = get_spotify_config_path()
+        cache_path = get_spotify_cache_path()
         
         # 只有當配置檔和快取都存在時才自動初始化
         if os.path.exists(config_path) and os.path.exists(cache_path):
@@ -1413,14 +1425,14 @@ class Dashboard(QWidget):
         
         # 1. 重連 Spotify（如果尚未連線且有設定檔）
         if not self._spotify_connected:
-            config_path = "spotify_config.json"
-            cache_path = ".spotify_cache"
+            config_path = get_spotify_config_path()
+            cache_path = get_spotify_cache_path()
             if os.path.exists(config_path) and os.path.exists(cache_path):
                 print("[重連] 嘗試重新連接 Spotify...")
                 self._reconnect_spotify()
         
         # 2. 重連 MQTT（如果有設定檔但客戶端未連線）
-        config_file = "mqtt_config.json"
+        config_file = get_mqtt_config_path()
         if os.path.exists(config_file):
             if not hasattr(self, 'mqtt_client') or self.mqtt_client is None or not self._mqtt_connected:
                 print("[重連] 嘗試重新連接 MQTT...")
@@ -1467,15 +1479,15 @@ class Dashboard(QWidget):
             return
         
         # 檢查 Spotify 狀態
-        config_path = "spotify_config.json"
-        cache_path = ".spotify_cache"
+        config_path = get_spotify_config_path()
+        cache_path = get_spotify_cache_path()
         if os.path.exists(config_path) and os.path.exists(cache_path):
             if not self._spotify_connected and self._spotify_init_attempts < 3:
                 print("[健康檢查] Spotify 未連線，嘗試重連...")
                 self._reconnect_spotify()
         
         # 檢查 MQTT 狀態
-        config_file = "mqtt_config.json"
+        config_file = get_mqtt_config_path()
         if os.path.exists(config_file):
             if not self._mqtt_connected:
                 print("[健康檢查] MQTT 未連線，嘗試重連...")
@@ -1483,7 +1495,7 @@ class Dashboard(QWidget):
     
     def _check_mqtt_config(self):
         """檢查 MQTT 設定並自動連線"""
-        config_file = "mqtt_config.json"
+        config_file = get_mqtt_config_path()
         if os.path.exists(config_file):
             print("[MQTT] 發現設定檔，嘗試自動連線...")
             self._init_mqtt_client()
@@ -1492,7 +1504,7 @@ class Dashboard(QWidget):
     
     def _init_mqtt_client(self):
         """初始化 MQTT 客戶端（支援自動重連）"""
-        config_file = "mqtt_config.json"
+        config_file = get_mqtt_config_path()
         if not os.path.exists(config_file):
             print("[MQTT] 設定檔不存在")
             return
@@ -1680,7 +1692,7 @@ class Dashboard(QWidget):
             }
             
             # 讀取發布主題
-            config_file = "mqtt_config.json"
+            config_file = get_mqtt_config_path()
             publish_topic = "car/telemetry"
             if os.path.exists(config_file):
                 try:

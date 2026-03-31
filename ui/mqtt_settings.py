@@ -1,5 +1,6 @@
 # Auto-extracted from main.py
 import time
+import os
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
@@ -14,7 +15,7 @@ class MQTTSettingsSignals(QObject):
 class MQTTSettingsDialog(QWidget):
     """MQTT 設定對話框 - 透過 QR Code 讓使用者用手機填寫設定"""
     
-    CONFIG_FILE = "mqtt_config.json"
+    CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "mqtt_config.json")
     
     def __init__(self, parent=None):
         super().__init__(parent)
