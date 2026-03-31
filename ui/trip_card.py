@@ -6,6 +6,11 @@ from PyQt6.QtGui import *
 
 from core.utils import OdometerStorage
 
+# Late import to avoid circular dependency
+def get_dashboard_class():
+    from main import Dashboard
+    return Dashboard
+
 class OdometerCard(QWidget):
     """總里程表卡片 (Odometer) - 內嵌虛擬鍵盤"""
     
@@ -1245,6 +1250,7 @@ class OdometerCardWide(QWidget):
     
     def _get_dashboard(self):
         """獲取 Dashboard 實例"""
+        Dashboard = get_dashboard_class()
         parent = self.parent()
         while parent:
             if isinstance(parent, Dashboard):
