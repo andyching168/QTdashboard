@@ -3,8 +3,8 @@ Spotify 整合到 datagrab.py 主程式
 """
 
 import logging
-from spotify.auth import SpotifyAuthManager
-from spotify.listener import SpotifyListener
+from spotify.spotify_auth import SpotifyAuthManager
+from spotify.spotify_listener import SpotifyListener
 
 logger = logging.getLogger(__name__)
 

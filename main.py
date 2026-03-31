@@ -24,6 +24,7 @@ from ui.scalable_window import ScalableWindow
 from ui.numeric_keypad import NumericKeypad
 
 from spotify.spotify_auth import SpotifyAuthManager
+from spotify.spotify_qr_auth import SpotifyQRAuthDialog
 
 from hardware.gpio_buttons import setup_gpio_buttons, get_gpio_handler
 

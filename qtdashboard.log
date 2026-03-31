@@ -24290,3 +24290,18 @@ cantools.database.errors.UnsupportedDatabaseFormatError: DBC: "The signals TRANS
 2026-03-31 23:43:46,053 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
 2026-03-31 23:44:00,813 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
 2026-03-31 23:44:36,379 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:45:01,300 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:45:20,486 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:45:25,109 - spotify.spotify_auth - ERROR - 找不到配置檔: spotify_config.json
+2026-03-31 23:45:25,109 - spotify.spotify_auth - INFO - 請複製 spotify_config.json.example 並填入您的 Spotify API 憑證
+2026-03-31 23:46:47,640 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:46:49,281 - spotify.spotify_auth - ERROR - 找不到配置檔: spotify_config.json
+2026-03-31 23:46:49,282 - spotify.spotify_auth - INFO - 請複製 spotify_config.json.example 並填入您的 Spotify API 憑證
+2026-03-31 23:49:20,303 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:49:23,094 - spotify.spotify_auth - ERROR - 找不到配置檔: spotify_config.json
+2026-03-31 23:49:23,095 - spotify.spotify_auth - INFO - 請複製 spotify_config.json.example 並填入您的 Spotify API 憑證
+2026-03-31 23:49:53,982 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:49:55,531 - spotify.spotify_auth - ERROR - 找不到配置檔: spotify_config.json
+2026-03-31 23:49:55,531 - spotify.spotify_auth - INFO - 請複製 spotify_config.json.example 並填入您的 Spotify API 憑證
+2026-03-31 23:50:02,749 - spotify.spotify_auth - ERROR - 找不到配置檔: spotify_config.json
+2026-03-31 23:50:02,749 - spotify.spotify_auth - INFO - 請複製 spotify_config.json.example 並填入您的 Spotify API 憑證
