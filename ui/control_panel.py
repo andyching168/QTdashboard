@@ -1,4 +1,5 @@
 # Auto-extracted from main.py
+import os
 import time
 import platform
 from PyQt6.QtWidgets import *
@@ -992,7 +993,7 @@ class ControlPanel(QWidget):
     
     def do_auto_update(self):
         """執行自動更新"""
-        from PyQt6.QtWidgets import QMessageBox, QApplication
+        from PyQt6.QtWidgets import QMessageBox, QApplication, QComboBox, QDialog, QVBoxLayout, QLabel
         import subprocess
         import sys
         
@@ -1007,13 +1008,84 @@ class ControlPanel(QWidget):
             msg.exec()
             return
         
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            # 取得目前分支
+            current_branch_result = subprocess.run(
+                ['git', 'branch', '--show-current'],
+                cwd=script_dir,
+                capture_output=True,
+                text=True
+            )
+            current_branch = current_branch_result.stdout.strip()
+            
+            # 取得所有遠端分支
+            remote_branches_result = subprocess.run(
+                ['git', 'branch', '-r'],
+                cwd=script_dir,
+                capture_output=True,
+                text=True
+            )
+            remote_branches = []
+            for line in remote_branches_result.stdout.strip().split('\n'):
+                line = line.strip()
+                if line and not line.startswith('HEAD'):
+                    branch = line.replace('origin/', '')
+                    remote_branches.append(branch)
+            
+            if not remote_branches:
+                msg = QMessageBox()
+                msg.setWindowTitle("無法更新")
+                msg.setText("找不到遠端分支，請確認已設定 Git 遠端。")
+                msg.setIcon(QMessageBox.Icon.Warning)
+                msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+                msg.exec()
+                return
+            
+            # 選擇分支對話框
+            dialog = QDialog()
+            dialog.setWindowTitle("選擇分支")
+            dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            layout = QVBoxLayout(dialog)
+            
+            label = QLabel("請選擇要更新的分支：")
+            layout.addWidget(label)
+            
+            combo = QComboBox()
+            combo.addItems(remote_branches)
+            if current_branch in remote_branches:
+                combo.setCurrentText(current_branch)
+            layout.addWidget(combo)
+            
+            button_box = QDialogButtonBox(
+                QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+            )
+            button_box.accepted.connect(dialog.accept)
+            button_box.rejected.connect(dialog.reject)
+            layout.addWidget(button_box)
+            
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            
+            selected_branch = combo.currentText()
+            
+        except Exception as e:
+            err_box = QMessageBox()
+            err_box.setWindowTitle("取得分支失敗")
+            err_box.setText(f"無法取得分支列表：\n{str(e)}")
+            err_box.setIcon(QMessageBox.Icon.Critical)
+            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            err_box.exec()
+            return
+        
         # 確認對話框
         msg = QMessageBox()
         msg.setWindowTitle("自動更新")
-        msg.setText("是否要從 GitHub 拉取最新版本並重新啟動？")
+        msg.setText(f"是否要從「{selected_branch}」分支拉取最新版本並重新啟動？")
         msg.setInformativeText(
             "這將會：\n"
-            "• 執行 git pull 取得最新程式碼\n"
+            f"• 執行 git pull origin {selected_branch}\n"
             "• 關閉目前程式\n"
             "• 重新啟動儀表板"
         )
@@ -1026,14 +1098,11 @@ class ControlPanel(QWidget):
             return
         
         try:
-            # 取得腳本所在目錄
-            import os
             script_dir = os.path.dirname(os.path.abspath(__file__))
             
-            # 執行 git pull
-            print("[更新] 正在執行 git pull...")
+            print(f"[更新] 正在執行 git pull origin {selected_branch}...")
             result = subprocess.run(
-                ['git', 'pull'],
+                ['git', 'pull', 'origin', selected_branch],
                 cwd=script_dir,
                 capture_output=True,
                 text=True,
