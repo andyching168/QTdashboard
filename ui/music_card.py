@@ -4,6 +4,9 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
+from core.utils import perf_track
+
+
 class MusicCard(QWidget):
     """音樂播放器卡片"""
     
