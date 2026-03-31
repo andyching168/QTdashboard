@@ -321,7 +321,7 @@ launch_dashboard() {
         
         if [ "$mode" = "can" ]; then
             # CAN Bus 模式
-            $PYTHON_CMD "$SCRIPT_DIR/datagrab.py" 2>&1 | tee -a "$STARTUP_LOG"
+            $PYTHON_CMD "$SCRIPT_DIR/vehicle/datagrab.py" 2>&1 | tee -a "$STARTUP_LOG"
             PYTHON_EXIT=${PIPESTATUS[0]}
         else
             # Demo 模式

@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButt
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
 import threading
-from location_notifier import notify_current_location
+from navigation.location_notifier import notify_current_location
 
 
 def is_raspberry_pi():

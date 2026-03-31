@@ -2,15 +2,9 @@
 Spotify 整合到 datagrab.py 主程式
 """
 
-import sys
-import os
-
-# 添加專案根目錄到路徑
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 import logging
-from spotify_auth import SpotifyAuthManager
-from spotify_listener import SpotifyListener
+from spotify.auth import SpotifyAuthManager
+from spotify.listener import SpotifyListener
 
 logger = logging.getLogger(__name__)
 

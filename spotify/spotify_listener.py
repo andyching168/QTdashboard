@@ -412,7 +412,7 @@ class SpotifyListener:
 def main():
     """測試監聽器"""
     import logging
-    from spotify_auth import SpotifyAuthManager
+    from spotify.auth import SpotifyAuthManager
     
     logging.basicConfig(
         level=logging.INFO,

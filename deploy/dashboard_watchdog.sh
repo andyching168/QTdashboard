@@ -106,7 +106,7 @@ if [ "$X_RUNNING" = "true" ] && [ "$DASHBOARD_RUNNING" = "false" ] && [ "$MANUAL
     
     if [ "$CAN_MODE" = "can" ]; then
         log_msg "啟動 CAN Bus 模式 (datagrab.py)"
-        nohup $PYTHON_CMD "$SCRIPT_DIR/datagrab.py" >> "$WATCHDOG_LOG" 2>&1 &
+        nohup $PYTHON_CMD "$SCRIPT_DIR/vehicle/datagrab.py" >> "$WATCHDOG_LOG" 2>&1 &
     else
         log_msg "啟動演示模式 (demo_mode.py)"
         echo "2" | nohup $PYTHON_CMD "$SCRIPT_DIR/demo_mode.py" --spotify >> "$WATCHDOG_LOG" 2>&1 &

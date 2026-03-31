@@ -51,19 +51,19 @@ case $choice in
         
         echo ""
         echo "在新終端執行模擬器:"
-        echo "  python simple_simulator.py $sim_port"
+        echo "  python vehicle/simple_simulator.py $sim_port"
         echo ""
         echo "按 Enter 繼續執行主程式 (請選擇另一個 port)..."
         read
         
-        python datagrab.py
+        python vehicle/datagrab.py
         ;;
     
     3)
         echo ""
         echo "=== 連接實際硬體模式 ==="
         echo ""
-        python datagrab.py
+        python vehicle/datagrab.py
         ;;
     
     4)

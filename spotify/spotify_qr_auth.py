@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout,
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QPixmap, QImage, QFont, QClipboard
 
-from spotify_auth import SpotifyAuthManager
+from spotify.auth import SpotifyAuthManager
 
 logger = logging.getLogger(__name__)
 

@@ -119,7 +119,7 @@ def check_io_operations():
     
     # 檢查圖片載入時間
     print("\n圖片載入檢查:")
-    sprite_path = os.path.join(os.path.dirname(__file__), 'carSprite')
+    sprite_path = os.path.join(os.path.dirname(__file__), 'assets', 'sprites', 'carSprite')
     if os.path.exists(sprite_path):
         for img_file in ['closed_base.png', 'FL.png', 'FR.png']:
             img_path = os.path.join(sprite_path, img_file)

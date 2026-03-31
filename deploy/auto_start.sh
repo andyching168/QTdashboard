@@ -231,7 +231,7 @@ if [ -n "$CAN_INTERFACE" ]; then
     echo ""
     
     # 使用 datagrab.py (CAN Bus 模式)
-    $PYTHON_CMD datagrab.py
+    $PYTHON_CMD "$SCRIPT_DIR/vehicle/datagrab.py"
     
 else
     echo "=============================================="

@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.align import Align
 
 # 硬體初始化模組（RPi 啟動時的硬體重試檢測）
-from hardware_init import initialize_hardware, is_raspberry_pi as hw_is_raspberry_pi, HardwareStatus
+from vehicle.hardware_init import initialize_hardware, is_raspberry_pi as hw_is_raspberry_pi, HardwareStatus
 
 # 設定入口點環境變數 (供程式重啟時判斷)
 os.environ['DASHBOARD_ENTRY'] = 'datagrab'
@@ -1129,7 +1129,7 @@ def main():
             Returns:
                 (success, hw_status): 是否成功和硬體狀態
             """
-            from hardware_init import HardwareInitializer, HardwareStatus
+            from vehicle.hardware_init import HardwareInitializer, HardwareStatus
             from PyQt6.QtWidgets import QApplication
             
             logger.info("在 GUI 中執行硬體初始化...")
