@@ -24343,3 +24343,76 @@ cantools.database.errors.UnsupportedDatabaseFormatError: DBC: "The signals TRANS
 2026-04-01 00:34:45,378 - spotify.spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 10.0秒）
 2026-04-01 00:34:45,378 - spotify.spotify_integration - INFO - Spotify 整合已啟用
 2026-04-01 00:34:59,895 - spotify.spotify_listener - INFO - Spotify 更新間隔已變更: 10.0秒 -> 10.0秒
+2026-04-01 00:42:58,523 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-04-01 00:42:59,251 - spotify.spotify_integration - INFO - 正在初始化 Spotify 連線...
+2026-04-01 00:42:59,386 - spotify.spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2026-04-01 00:42:59,386 - spotify.spotify_integration - INFO - Spotify 認證成功
+2026-04-01 00:42:59,386 - spotify.spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 10.0秒）
+2026-04-01 00:42:59,386 - spotify.spotify_integration - INFO - Spotify 整合已啟用
+2026-04-01 00:44:26,779 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-04-01 00:44:27,499 - spotify.spotify_integration - INFO - 正在初始化 Spotify 連線...
+2026-04-01 00:44:27,662 - spotify.spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2026-04-01 00:44:27,662 - spotify.spotify_integration - INFO - Spotify 認證成功
+2026-04-01 00:44:27,663 - spotify.spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 10.0秒）
+2026-04-01 00:44:27,663 - spotify.spotify_integration - INFO - Spotify 整合已啟用
+2026-04-01 00:45:10,179 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-04-01 00:45:10,897 - spotify.spotify_integration - INFO - 正在初始化 Spotify 連線...
+2026-04-01 00:45:11,051 - spotify.spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2026-04-01 00:45:11,051 - spotify.spotify_integration - INFO - Spotify 認證成功
+2026-04-01 00:45:11,051 - spotify.spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 10.0秒）
+2026-04-01 00:45:11,051 - spotify.spotify_integration - INFO - Spotify 整合已啟用
+2026-04-01 00:46:55,082 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-04-01 00:46:55,809 - spotify.spotify_integration - INFO - 正在初始化 Spotify 連線...
+2026-04-01 00:46:55,986 - spotify.spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2026-04-01 00:46:55,986 - spotify.spotify_integration - INFO - Spotify 認證成功
+2026-04-01 00:46:55,986 - spotify.spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 10.0秒）
+2026-04-01 00:46:55,986 - spotify.spotify_integration - INFO - Spotify 整合已啟用
+2026-04-01 00:47:04,389 - __main__ - INFO - ==================================================
+2026-04-01 00:47:04,390 - __main__ - INFO - Luxgen M7 儀表板系統啟動
+2026-04-01 00:47:04,390 - __main__ - INFO - 平台: Darwin
+2026-04-01 00:47:04,390 - __main__ - INFO - ==================================================
+2026-04-01 00:47:04,397 - __main__ - CRITICAL - 主程式崩潰: EOF when reading a line
+Traceback (most recent call last):
+  File "/Users/andyching168/Documents/QTdashboard/vehicle/datagrab.py", line 1202, in main
+    state.bus, state.interface_type = init_can_bus(bitrate=500000)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/andyching168/Documents/QTdashboard/vehicle/datagrab.py", line 387, in init_can_bus
+    port = select_serial_port()
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/Users/andyching168/Documents/QTdashboard/vehicle/datagrab.py", line 473, in select_serial_port
+    choice = console.input("請輸入裝置編號或路徑 [0]: ").strip()
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/andyching168/miniconda3/envs/qtdashboard/lib/python3.11/site-packages/rich/console.py", line 2174, in input
+    result = input()
+             ^^^^^^^
+EOFError: EOF when reading a line
+2026-04-01 00:48:25,472 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-04-01 00:48:26,201 - spotify.spotify_integration - INFO - 正在初始化 Spotify 連線...
+2026-04-01 00:48:26,361 - spotify.spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2026-04-01 00:48:26,361 - spotify.spotify_integration - INFO - Spotify 認證成功
+2026-04-01 00:48:26,361 - spotify.spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 10.0秒）
+2026-04-01 00:48:26,361 - spotify.spotify_integration - INFO - Spotify 整合已啟用
+2026-04-01 00:48:36,175 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-04-01 00:48:36,887 - spotify.spotify_integration - INFO - 正在初始化 Spotify 連線...
+2026-04-01 00:48:36,986 - spotify.spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2026-04-01 00:48:36,986 - spotify.spotify_integration - INFO - Spotify 認證成功
+2026-04-01 00:48:36,986 - spotify.spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 10.0秒）
+2026-04-01 00:48:36,986 - spotify.spotify_integration - INFO - Spotify 整合已啟用
+2026-04-01 00:48:53,226 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-04-01 00:48:53,956 - spotify.spotify_integration - INFO - 正在初始化 Spotify 連線...
+2026-04-01 00:48:54,103 - spotify.spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2026-04-01 00:48:54,103 - spotify.spotify_integration - INFO - Spotify 認證成功
+2026-04-01 00:48:54,103 - spotify.spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 10.0秒）
+2026-04-01 00:48:54,103 - spotify.spotify_integration - INFO - Spotify 整合已啟用
+2026-04-01 00:50:10,842 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-04-01 00:50:11,571 - spotify.spotify_integration - INFO - 正在初始化 Spotify 連線...
+2026-04-01 00:50:11,691 - spotify.spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2026-04-01 00:50:11,691 - spotify.spotify_integration - INFO - Spotify 認證成功
+2026-04-01 00:50:11,691 - spotify.spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 10.0秒）
+2026-04-01 00:50:11,692 - spotify.spotify_integration - INFO - Spotify 整合已啟用
+2026-04-01 00:51:41,670 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-04-01 00:51:42,397 - spotify.spotify_integration - INFO - 正在初始化 Spotify 連線...
+2026-04-01 00:51:42,534 - spotify.spotify_auth - INFO - 成功認證 Spotify 使用者: andyching168
+2026-04-01 00:51:42,534 - spotify.spotify_integration - INFO - Spotify 認證成功
+2026-04-01 00:51:42,535 - spotify.spotify_listener - INFO - Spotify 監聽器已啟動（API 間隔: 10.0秒）
+2026-04-01 00:51:42,535 - spotify.spotify_integration - INFO - Spotify 整合已啟用

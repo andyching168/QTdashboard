@@ -1391,7 +1391,11 @@ class ControlPanel(QWidget):
                 except:
                     pass
                 self._show_power_countdown("關閉程式", 1)
-                QTimer.singleShot(1000, lambda: QApplication.instance().quit())
+                def force_exit():
+                    print("[電源] 強制退出應用程式...")
+                    import os
+                    os._exit(0)
+                QTimer.singleShot(1000, force_exit)
             # 取消則不做任何事
             return
             
@@ -1492,6 +1496,8 @@ class ControlPanel(QWidget):
         python_exe = sys.executable
         env = os.environ.copy()
         
+        project_root = os.path.dirname(script_dir)
+        
         # 檢查入口點
         # 方法 1: 檢查 sys.argv[0] (啟動腳本)
         entry_script = os.path.basename(sys.argv[0]) if sys.argv else ''
@@ -1503,35 +1509,60 @@ class ControlPanel(QWidget):
         
         restart_script = None
         restart_args = []
+        restart_cwd = project_root
         
-        if 'datagrab' in entry_script or main_entry == 'datagrab':
-            restart_script = os.path.join(script_dir, 'datagrab.py')
+        if entry_script == 'main.py':
+            restart_script = os.path.join(project_root, 'main.py')
+            restart_args = []
+            print(f"[重啟] 使用 main.py 模式: {restart_script}")
+        elif 'datagrab' in entry_script or (main_entry == 'datagrab' and entry_script != 'main.py'):
+            for candidate in ['datagrab.py', 'vehicle/datagrab.py']:
+                candidate_path = os.path.join(project_root, candidate)
+                if os.path.exists(candidate_path):
+                    restart_script = candidate_path
+                    break
+            restart_args = ['-m', 'vehicle.datagrab']
             print(f"[重啟] 使用 CAN Bus 模式: {restart_script}")
         elif 'demo_mode' in entry_script or main_entry == 'demo':
-            restart_script = os.path.join(script_dir, 'demo_mode.py')
-            restart_args = ['--spotify']
+            for candidate in ['demo_mode.py', 'vehicle/demo_mode.py']:
+                candidate_path = os.path.join(project_root, candidate)
+                if os.path.exists(candidate_path):
+                    restart_script = candidate_path
+                    restart_args = ['--spotify']
+                    break
+            if not restart_script:
+                restart_args = ['-m', 'vehicle.demo_mode', '--spotify']
             print(f"[重啟] 使用演示模式: {restart_script}")
         else:
             # 無法判斷入口點，嘗試使用 sys.argv[0] 的完整路徑
             if sys.argv and os.path.exists(sys.argv[0]):
                 restart_script = os.path.abspath(sys.argv[0])
+                restart_args = []
+                restart_cwd = os.path.dirname(restart_script)
                 print(f"[重啟] 使用原始啟動腳本: {restart_script}")
             else:
-                # 最後手段：直接啟動 demo_mode.py (有完整功能)
-                restart_script = os.path.join(script_dir, 'demo_mode.py')
-                restart_args = ['--spotify']
-                print(f"[重啟] 找不到入口點，使用演示模式: {restart_script}")
+                # 最後手段：直接啟動 main.py
+                restart_script = os.path.join(project_root, 'main.py')
+                restart_args = []
+                print(f"[重啟] 找不到入口點，使用 main.py: {restart_script}")
         
+        use_module = False
         if restart_script and os.path.exists(restart_script):
-            print(f"[重啟] 正在啟動 {restart_script} {restart_args}...")
+            if restart_args and restart_args[0] == '-m':
+                use_module = True
+                module_name = restart_args[1]
+                cmd = [python_exe, '-m', module_name] + restart_args[2:]
+                print(f"[重啟] 正在啟動 module {module_name}...")
+            else:
+                cmd = [python_exe, restart_script] + restart_args
+                print(f"[重啟] 正在啟動 {restart_script} {restart_args}...")
             
-            # 給新程序一點時間啟動
             subprocess.Popen(
-                [python_exe, restart_script] + restart_args,
-                cwd=script_dir,
+                cmd,
+                cwd=restart_cwd,
                 env=env,
                 start_new_session=True,
-                stdin=subprocess.DEVNULL  # 避免等待輸入
+                stdin=subprocess.DEVNULL
             )
         else:
             print(f"[重啟] 錯誤: 找不到重啟腳本 {restart_script}")
