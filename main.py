@@ -17,7 +17,7 @@ from ui.common import GaugeStyle, RadarOverlay, ClickableLabel, MarqueeLabel
 from ui.splash_screen import SplashScreen
 from ui.door_card import DoorStatusCard
 from ui.trip_card import OdometerCard, TripCard
-from ui.music_card import MusicCard
+from ui.music_card import MusicCard, MusicCardWide
 from ui.navigation_card import NavigationCard
 from ui.threads import GPSMonitorThread, RadarMonitorThread
 from ui.scalable_window import ScalableWindow
