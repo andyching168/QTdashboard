@@ -1,5 +1,8 @@
 # Auto-extracted from main.py
 import time
+import glob
+import os
+import platform
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *

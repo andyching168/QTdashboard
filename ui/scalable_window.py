@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QMainWindow
+from PyQt6.QtWidgets import QMainWindow, QGraphicsScene, QGraphicsView, QGraphicsProxyWidget
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPainter, QTransform
 

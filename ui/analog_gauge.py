@@ -1,5 +1,6 @@
 # Auto-extracted from main.py
 import time
+import math
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *

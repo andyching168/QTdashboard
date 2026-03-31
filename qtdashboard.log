@@ -24277,3 +24277,16 @@ cantools.database.errors.UnsupportedDatabaseFormatError: DBC: "The signals TRANS
 2026-01-24 00:56:00,469 - spotify_listener - INFO - Spotify 更新間隔已變更: 10.0秒 -> 10.0秒
 2026-01-24 00:56:01,914 - spotify_listener - INFO - 強制立即更新 Spotify 資訊
 2026-01-24 00:56:01,953 - spotify_listener - INFO - Spotify 更新間隔已變更: 10.0秒 -> 2.0秒
+2026-03-31 23:40:49,468 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:41:08,892 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:41:25,318 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:41:37,058 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:41:54,143 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:42:10,403 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:42:43,749 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:42:58,357 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:43:12,914 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:43:25,262 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:43:46,053 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:44:00,813 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False
+2026-03-31 23:44:36,379 - vehicle.datagrab - INFO - 速度模式切換為 calibrated，gps_speed_mode=False

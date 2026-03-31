@@ -4,6 +4,8 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
+from core.utils import OdometerStorage
+
 class OdometerCard(QWidget):
     """總里程表卡片 (Odometer) - 內嵌虛擬鍵盤"""
     

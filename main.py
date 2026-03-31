@@ -6,7 +6,7 @@ import gc
 from collections import deque
 
 from PyQt6.QtWidgets import QWidget, QApplication, QStackedWidget, QLabel, QGridLayout, QHBoxLayout, QVBoxLayout, QSizePolicy
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSlot, QPoint, QPropertyAnimation, QEasingCurve, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QLinearGradient, QKeyEvent
 
 from ui.control_panel import TurnSignalBar, ControlPanel
@@ -25,6 +25,8 @@ from ui.numeric_keypad import NumericKeypad
 
 from spotify.spotify_auth import SpotifyAuthManager
 
+from hardware.gpio_buttons import setup_gpio_buttons, get_gpio_handler
+
 from core.utils import (
     PerformanceMonitor,
     JankDetector,
@@ -33,6 +35,9 @@ from core.utils import (
     is_raspberry_pi,
     is_production_environment,
 )
+
+from core.shutdown_monitor import get_shutdown_monitor
+from core.max_value_logger import get_max_value_logger
 
 
 class Dashboard(QWidget):
@@ -197,7 +202,7 @@ class Dashboard(QWidget):
         # 更新左上角的 GPS 速度顯示
         if self.is_gps_fixed:
             # 檢查是否在校正模式
-            import datagrab
+            import vehicle.datagrab as datagrab
             try:
                 calibration_enabled = datagrab.is_speed_calibration_enabled()
             except:
@@ -218,7 +223,7 @@ class Dashboard(QWidget):
         
         # 檢查是否應該顯示 GPS 速度
         # 條件: 速度同步開啟(datagrab.gps_speed_mode) AND GPS 定位完成 AND OBD速度 >= 20
-        import datagrab
+        import vehicle.datagrab as datagrab
         use_gps = (datagrab.gps_speed_mode and 
                    self.is_gps_fixed and 
                    self.speed >= 20.0)
@@ -989,7 +994,7 @@ class Dashboard(QWidget):
         self._last_battery_for_status = 0.0  # 追蹤上一次電壓用於判斷熄火
 
         # 速度校正狀態
-        import datagrab
+        import vehicle.datagrab as datagrab
         self.speed_correction = datagrab.get_speed_correction()
         self._last_speed_cali_ts = 0
         
@@ -1735,7 +1740,7 @@ class Dashboard(QWidget):
             self.control_panel.set_speed_sync_state(mode)
 
         try:
-            import datagrab
+            import vehicle.datagrab as datagrab
             datagrab.set_speed_sync_mode(mode)
         except Exception as e:
             print(f"[速度同步] 更新 datagrab 失敗: {e}")
@@ -1984,7 +1989,7 @@ class Dashboard(QWidget):
     def _slot_set_speed(self, speed):
         """Slot: 在主執行緒中更新速度顯示"""
         # 如果 GPS 速度優先且已定位且且速度 >= 20，則忽略 CAN 速度更新 (顯示部分)
-        import datagrab
+        import vehicle.datagrab as datagrab
         use_gps = (datagrab.gps_speed_mode and 
                    self.is_gps_fixed and 
                    speed >= 20.0) # 這裡用傳入的 speed (即 OBD 速度)
@@ -2077,7 +2082,7 @@ class Dashboard(QWidget):
         if obd_speed is None or not self.is_gps_fixed:
             return
         try:
-            import datagrab
+            import vehicle.datagrab as datagrab
             if getattr(datagrab, "speed_sync_mode", "calibrated") == "fixed":
                 return
             if hasattr(datagrab, "is_speed_calibration_enabled") and not datagrab.is_speed_calibration_enabled():
@@ -2097,7 +2102,7 @@ class Dashboard(QWidget):
         ratio = gps_speed / max(obd_speed, 0.1)
         ratio = max(0.7, min(1.3, ratio))
 
-        import datagrab
+        import vehicle.datagrab as datagrab
         prev = datagrab.get_speed_correction()
         alpha = 0.05  # 漸進式更新，避免瞬間跳動
         new_value = (1 - alpha) * prev + alpha * ratio
@@ -3660,7 +3665,7 @@ class Dashboard(QWidget):
             self.fuel_percent_label.setText(f"{self.fuel:.0f}%")
         
         # 決定顯示哪個速度
-        import datagrab
+        import vehicle.datagrab as datagrab
         # 邏輯: 僅當 (速度同步開啟 AND GPS定位完成 AND OBD速度 >= 20) 時使用 GPS 速度
         # 這是為了避免低速時的 GPS 漂移
         use_gps = (datagrab.gps_speed_mode and 
