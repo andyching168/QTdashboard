@@ -32,7 +32,7 @@ class SpotifyAuthManager:
         "user-read-recently-played",    # 讀取最近播放
     ]
     
-    def __init__(self, config_path=None, cache_path=".spotify_cache"):
+    def __init__(self, config_path=None, cache_path=None):
         """
         初始化認證管理器
         
@@ -42,6 +42,8 @@ class SpotifyAuthManager:
         """
         if config_path is None:
             config_path = os.path.join(os.path.dirname(__file__), "spotify_config.json")
+        if cache_path is None:
+            cache_path = os.path.join(os.path.dirname(__file__), ".spotify_cache")
         self.config_path = config_path
         self.cache_path = cache_path
         self.sp = None
