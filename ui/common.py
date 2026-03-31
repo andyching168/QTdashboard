@@ -1,7 +1,6 @@
-from PyQt6.QtWidgets import QWidget
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtWidgets import QWidget, QLabel
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QFont, QPixmap
-from PyQt6.QtCore import QRectF
 import weakref
 
 
