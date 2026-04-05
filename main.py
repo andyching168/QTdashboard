@@ -65,6 +65,8 @@ from spotify.spotify_auth import SpotifyAuthManager
 from spotify.spotify_qr_auth import SpotifyQRAuthDialog
 from spotify.spotify_integration import setup_spotify
 
+from navigation.speed_limit import get_speed_limit_loader, query_speed_limit
+
 from hardware.gpio_buttons import setup_gpio_buttons, get_gpio_handler
 
 from core.utils import (
@@ -130,6 +132,11 @@ class Dashboard(QWidget):
         self.is_using_external_gps = False
         self.is_external_gps_fresh = True
         self.current_gps_speed = 0.0
+        self.current_speed_limit = None
+        self.current_speed_limit_dual = None  # For "N:XX / S:XX" display
+        self.current_bearing = None
+        self._speed_limit_flashing = False
+        self._speed_limit_timer = 0
         
         # 連接 Signals 到 Slots
         self.signal_update_rpm.connect(self._slot_set_rpm)
@@ -221,6 +228,28 @@ class Dashboard(QWidget):
         """更新 GPS 狀態圖示"""
         self.is_gps_fixed = is_fixed
         self._apply_gps_styles()
+        
+        # GPS 穩定時啟動速限查詢計時器，否則暫停
+        if is_fixed:
+            if not self.speed_limit_query_timer.isActive():
+                self.speed_limit_query_timer.start()
+                print("[SpeedLimit] GPS fixed, starting query timer")
+        else:
+            if self.speed_limit_query_timer.isActive():
+                self.speed_limit_query_timer.stop()
+                # 立即隱藏速限
+                self.current_speed_limit = None
+                self.current_speed_limit_dual = None
+                self.speed_limit_label.setText("--")
+                self.speed_limit_label.setStyleSheet("""
+                    QLabel {
+                        color: #888;
+                        font-size: 48px;
+                        font-weight: bold;
+                        background: transparent;
+                    }
+                """)
+                print("[SpeedLimit] GPS lost, stopping query timer")
         
     def _update_gps_source(self, is_internal: bool, is_fresh: bool = True):
         """更新 GPS 來源（內部/外部 MQTT）
@@ -320,9 +349,108 @@ class Dashboard(QWidget):
             self.speed_label.setText(f"{int(speed_kmh)}")
     
     def _update_gps_position(self, lat, lon):
-        """更新 GPS 座標"""
+        """更新 GPS 座標（速限由計時器每 5 秒查詢一次）"""
         self.gps_lat = lat
         self.gps_lon = lon
+    
+    def _update_speed_limit(self):
+        """根據 GPS 座標更新速限（計時器控制，GPS 不可靠時計時器會停止）"""
+        if self.gps_lat is None or self.gps_lon is None:
+            return
+        
+        limit, direction, dual_limits = query_speed_limit(self.gps_lat, self.gps_lon, self.current_bearing)
+        
+        if limit != self.current_speed_limit or dual_limits != self.current_speed_limit_dual:
+            self.current_speed_limit = limit
+            self.current_speed_limit_dual = dual_limits
+            print(f"[SpeedLimit] 更新速限: {limit} km/h, direction={direction}, dual={dual_limits}")
+            self._apply_speed_limit_style()
+    
+    def _apply_speed_limit_style(self):
+        """應用速限標籤樣式"""
+        limit = self.current_speed_limit
+        dual_limits = self.current_speed_limit_dual
+        
+        if limit is None and not dual_limits:
+            self.speed_limit_label.setText("--")
+            self.speed_limit_label.setStyleSheet("""
+                color: #666;
+                font-size: 24px;
+                font-family: Arial;
+                background: transparent;
+            """)
+            self._speed_limit_flashing = False
+            return
+        
+        # 處理雙向速限顯示 (N:XX / S:XX)
+        if dual_limits:
+            n_speed = dual_limits.get('N', '-')
+            s_speed = dual_limits.get('S', '-')
+            self.speed_limit_label.setText(f"N:{n_speed} S:{s_speed}")
+            # 雙向顯示時不閃爍
+            self._speed_limit_flashing = False
+            self.speed_limit_label.setStyleSheet("""
+                color: #fff;
+                font-size: 20px;
+                font-family: Arial;
+                background: transparent;
+            """)
+            return
+        
+        # 一般單一速限
+        if limit is None:
+            self.speed_limit_label.setText("--")
+            self._speed_limit_flashing = False
+            return
+        
+        # 檢查是否超速 (超過速限 10 km/h 以上)
+        current_speed = getattr(self, 'speed', 0)
+        if current_speed > limit + 10:
+            # 紅色閃爍
+            self._speed_limit_flashing = True
+            self.speed_limit_label.setStyleSheet("""
+                color: #ef4444;
+                font-size: 24px;
+                font-weight: bold;
+                font-family: Arial;
+                background: transparent;
+            """)
+        else:
+            self._speed_limit_flashing = False
+            self.speed_limit_label.setStyleSheet("""
+                color: #fff;
+                font-size: 24px;
+                font-family: Arial;
+                background: transparent;
+            """)
+        
+        self.speed_limit_label.setText(str(limit))
+    
+    def _update_speed_limit_flash(self):
+        """速限閃爍計時器 callback"""
+        if not self._speed_limit_flashing:
+            return
+        
+        self._speed_limit_timer += 1
+        if self._speed_limit_timer % 10 == 0:  # 每 10 ticks 切換一次 (約 0.5 秒)
+            current = self.speed_limit_label.styleSheet()
+            if 'opacity: 0.3' in current:
+                self.speed_limit_label.setStyleSheet("""
+                    color: #ef4444;
+                    font-size: 24px;
+                    font-weight: bold;
+                    font-family: Arial;
+                    background: transparent;
+                """)
+            else:
+                self.speed_limit_label.setStyleSheet("""
+                    color: #ef4444;
+                    font-size: 24px;
+                    font-weight: bold;
+                    font-family: Arial;
+                    background: transparent;
+                    opacity: 0.3;
+                """)
     
     def create_status_bar(self):
         """創建頂部狀態欄，包含方向燈指示"""
@@ -798,9 +926,22 @@ class Dashboard(QWidget):
         self.unit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.unit_label.setFixedWidth(300)  # 與時速同寬確保置中
         
+        # 速限標籤
+        self.speed_limit_label = QLabel("--")
+        self.speed_limit_label.setStyleSheet("""
+            color: #888;
+            font-size: 24px;
+            font-family: Arial;
+            background: transparent;
+        """)
+        self.speed_limit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.speed_limit_label.setFixedWidth(300)
+        self.speed_limit_label.setToolTip("速限")
+        
         speed_layout.addStretch()
         speed_layout.addWidget(self.speed_label)
         speed_layout.addWidget(self.unit_label)
+        speed_layout.addWidget(self.speed_limit_label)
         speed_layout.addStretch()
         
         speed_gear_layout.addWidget(self.gear_label)
@@ -1130,6 +1271,16 @@ class Dashboard(QWidget):
         
         # 啟動方向燈動畫 Timer
         self.animation_timer.start(16)  # 約 60 FPS
+        
+        # 啟動速限閃爍 Timer
+        self.speed_limit_timer = QTimer()
+        self.speed_limit_timer.timeout.connect(self._update_speed_limit_flash)
+        self.speed_limit_timer.start(50)  # 50ms = 約 20 FPS
+        
+        # 啟動速限查詢 Timer（每 5 秒查詢一次）
+        self.speed_limit_query_timer = QTimer()
+        self.speed_limit_query_timer.timeout.connect(self._update_speed_limit)
+        self.speed_limit_query_timer.start(5000)  # 5000ms = 5 秒
         
         # 啟動物理心跳 Timer（里程累積）
         self.last_physics_time = time.time()  # 重設時間基準
@@ -1813,9 +1964,16 @@ class Dashboard(QWidget):
                 speed = data.get('speed')
                 bearing = data.get('bearing', 0)
                 
-                if lat is not None and lon is not None and not self.is_gps_fixed:
-                    print(f"[Navigation] 內部 GPS 未定位，使用 MQTT GPS: lat={lat}, lon={lon}, speed={speed}")
-                    self.gps_monitor_thread.inject_external_gps(lat, lon, speed or 0, bearing, timestamp_str)
+                # 更新 bearing (用於速限查詢)
+                self.current_bearing = bearing
+                
+                if lat is not None and lon is not None:
+                    if not self.is_gps_fixed:
+                        print(f"[Navigation] 內部 GPS 未定位，使用 MQTT GPS: lat={lat}, lon={lon}, speed={speed}")
+                        self.gps_monitor_thread.inject_external_gps(lat, lon, speed or 0, bearing, timestamp_str)
+                    # 更新 GPS 位置（速限由計時器每 5 秒查詢一次）
+                    self.gps_lat = lat
+                    self.gps_lon = lon
                     
             except Exception as e:
                 print(f"[Navigation] ⚠️ 解析 timestamp 失敗: {e}，仍繼續處理")
@@ -2170,6 +2328,10 @@ class Dashboard(QWidget):
         
         # 更新速度狀態
         self.speed = new_speed
+        
+        # 更新速限顯示（檢查是否超速）
+        if self.current_speed_limit is not None:
+            self._apply_speed_limit_style()
         
         if new_displayed != current_displayed:
             self._displayed_speed_int = new_displayed

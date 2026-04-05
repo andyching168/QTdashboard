@@ -222,11 +222,18 @@ class GPSMonitorThread(QThread):
             # 發射來源變更信號 (is_internal=False, is_fresh)
             self.gps_source_changed.emit(False, is_fresh)
         
-        # 發射固定信號（外部 GPS 視為已定位）
-        if not self._last_fix_status:
-            self._last_fix_status = True
-            self.gps_fixed_changed.emit(True)
-            print("[GPS] External GPS: Status changed to FIXED")
+        # 只有數據新鮮時才視為 fixed，過時的數據不視為有效定位
+        if is_fresh:
+            if not self._last_fix_status:
+                self._last_fix_status = True
+                self.gps_fixed_changed.emit(True)
+                print("[GPS] External GPS: Status changed to FIXED (fresh data)")
+        else:
+            # 數據過時，不應視為 fixed
+            if self._last_fix_status:
+                self._last_fix_status = False
+                self.gps_fixed_changed.emit(False)
+                print("[GPS] External GPS: Status changed to STALE (data too old)")
         
         # 不發射速度信號（使用者說速度不用）
         
