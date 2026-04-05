@@ -15,10 +15,13 @@ class GPSMonitorThread(QThread):
     - 使用 38400 baud detection
     - 監控是否定位完成 (Fix)
     - 提取座標資訊
+    - 支援外部 GPS 注入（MQTT 導航 payload）
     """
     gps_fixed_changed = pyqtSignal(bool)
     gps_speed_changed = pyqtSignal(float)
     gps_position_changed = pyqtSignal(float, float)  # lat, lon
+    gps_source_changed = pyqtSignal(bool, bool)  # (is_internal, is_fresh)
+    gps_device_status_changed = pyqtSignal(bool)  # True=device found, False=no device
     
     def __init__(self):
         super().__init__()
@@ -28,6 +31,10 @@ class GPSMonitorThread(QThread):
         self._current_port = None
         self._last_lat = None
         self._last_lon = None
+        self._using_external_gps = False
+        self._external_gps_timestamp = None
+        self._has_device = None  # None=unknown, True=device found, False=no device
+        self._search_without_device_count = 0  # 連續搜尋無結果次數
         
     def run(self):
         print("[GPS] Starting monitor thread...")
@@ -36,9 +43,12 @@ class GPSMonitorThread(QThread):
             if not self._current_port:
                 ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
                 if not ports:
-                    self._update_status(False)
+                    self._update_device_status(found=False)
                     time.sleep(2)
                     continue
+                
+                # 發現至少一個 port，標記有裝置
+                self._update_device_status(found=True)
                 
                 # 簡單策略：嘗試每一個 port
                 found = False
@@ -169,12 +179,90 @@ class GPSMonitorThread(QThread):
         self.wait() # 等待執行緒結束
         print("[GPS] Monitor thread stopped.")
 
+    def inject_external_gps(self, lat: float, lon: float, speed: float, bearing: float, timestamp: str):
+        """注入外部 GPS 資料（來自 MQTT 導航 payload）
+        
+        當內部 GPS 未定位時使用。
+        Args:
+            lat: 緯度
+            lon: 經度
+            speed: 速度 (km/h)
+            bearing: 方向角度
+            timestamp: ISO 格式時間戳
+        """
+        from datetime import datetime, timezone
+        
+        FRESH_THRESHOLD = 30      # 30 秒內：即時位置
+        STALE_THRESHOLD = 300     # 5 分鐘內：最後位置
+        # 超過 5 分鐘：忽略
+        
+        try:
+            msg_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            current_time = datetime.now(timezone.utc)
+            time_diff = abs((current_time - msg_time).total_seconds())
+            
+            # 超過 5 分鐘不使用
+            if time_diff > STALE_THRESHOLD:
+                print(f"[GPS] External GPS data too old ({time_diff:.1f}s), ignoring")
+                return
+            
+            # 判斷是否為即時位置
+            is_fresh = time_diff <= FRESH_THRESHOLD
+            freshness_label = "fresh" if is_fresh else "stale"
+            print(f"[GPS] Injecting external GPS: lat={lat}, lon={lon}, age={time_diff:.1f}s ({freshness_label})")
+            
+        except Exception as e:
+            print(f"[GPS] Failed to parse external GPS timestamp: {e}")
+            return
+        
+        # 標記使用外部 GPS
+        if not self._using_external_gps:
+            self._using_external_gps = True
+            self._external_gps_timestamp = timestamp
+            # 發射來源變更信號 (is_internal=False, is_fresh)
+            self.gps_source_changed.emit(False, is_fresh)
+        
+        # 發射固定信號（外部 GPS 視為已定位）
+        if not self._last_fix_status:
+            self._last_fix_status = True
+            self.gps_fixed_changed.emit(True)
+            print("[GPS] External GPS: Status changed to FIXED")
+        
+        # 不發射速度信號（使用者說速度不用）
+        
+        # 發射位置信號（只在變化時）
+        if self._last_lat != lat or self._last_lon != lon:
+            self._last_lat = lat
+            self._last_lon = lon
+            self.gps_position_changed.emit(lat, lon)
+
     def _update_status(self, is_fixed):
         if is_fixed != self._last_fix_status:
             self._last_fix_status = is_fixed
             self.gps_fixed_changed.emit(is_fixed)
             status = "FIXED" if is_fixed else "SEARCHING"
             print(f"[GPS] Status changed: {status}")
+            
+            # 如果內部 GPS 恢復定位，切換回內部來源
+            if is_fixed and self._using_external_gps:
+                self._using_external_gps = False
+                self._external_gps_timestamp = None
+                self.gps_source_changed.emit(True, True)  # True = internal, True = fresh
+                print("[GPS] Reverted to internal GPS")
+
+    def _update_device_status(self, found: bool):
+        """更新裝置狀態"""
+        if self._has_device != found:
+            self._has_device = found
+            self.gps_device_status_changed.emit(found)
+            if found:
+                print("[GPS] Device found")
+            else:
+                print("[GPS] No device detected")
+    
+    def is_using_external_gps(self) -> bool:
+        """回傳是否正在使用外部 GPS"""
+        return self._using_external_gps
 
 
 class RadarMonitorThread(QThread):

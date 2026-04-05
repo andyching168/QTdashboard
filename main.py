@@ -127,6 +127,8 @@ class Dashboard(QWidget):
         
         # GPS 速度優先邏輯變數 (必須在 init_data 之前初始化)
         self.is_gps_fixed = False
+        self.is_using_external_gps = False
+        self.is_external_gps_fresh = True
         self.current_gps_speed = 0.0
         
         # 連接 Signals 到 Slots
@@ -201,7 +203,11 @@ class Dashboard(QWidget):
         self.gps_monitor_thread.gps_fixed_changed.connect(self._update_gps_status)
         self.gps_monitor_thread.gps_speed_changed.connect(self._update_gps_speed)
         self.gps_monitor_thread.gps_position_changed.connect(self._update_gps_position)
+        self.gps_monitor_thread.gps_source_changed.connect(self._update_gps_source)
+        self.gps_monitor_thread.gps_device_status_changed.connect(self._update_gps_device)
         self.gps_monitor_thread.start()
+        self.is_using_external_gps = False
+        self.gps_device_found = None  # None=unknown, True=found, False=not found
         
         # 初始化雷達監控器
         self.radar_monitor_thread = RadarMonitorThread()
@@ -214,23 +220,63 @@ class Dashboard(QWidget):
     def _update_gps_status(self, is_fixed):
         """更新 GPS 狀態圖示"""
         self.is_gps_fixed = is_fixed
+        self._apply_gps_styles()
         
-        if is_fixed:
-            # 綠色 (Fix)
-            self.gps_icon_label.setText("GPS") 
-            self.gps_icon_label.setStyleSheet("color: #4ade80; font-size: 18px; font-weight: bold; background: transparent;")
-            self.gps_icon_label.setToolTip("GPS: Fixed (3D)")
-            # GPS 速度標籤也變綠色
-            self.gps_speed_label.setStyleSheet("color: #4ade80; font-size: 16px; font-weight: bold; background: transparent;")
+    def _update_gps_source(self, is_internal: bool, is_fresh: bool = True):
+        """更新 GPS 來源（內部/外部 MQTT）
+        
+        Args:
+            is_internal: True=內部 GPS, False=外部 MQTT GPS
+            is_fresh: 是否為即時位置（僅對外部 GPS 有意義）
+        """
+        self.is_using_external_gps = not is_internal
+        self.is_external_gps_fresh = is_fresh if not is_internal else True
+        print(f"[GPS] Source changed: {'Internal' if is_internal else 'External (MQTT)'}, fresh={is_fresh}")
+        self._apply_gps_styles()
+    
+    def _update_gps_device(self, found: bool):
+        """更新 GPS 裝置狀態"""
+        self.gps_device_found = found
+        print(f"[GPS] Device status: {'Found' if found else 'Not found'}")
+        self._apply_gps_styles()
+    
+    def _apply_gps_styles(self):
+        """根據 GPS 狀態和來源應用樣式"""
+        # 優先判斷：無裝置
+        if self.gps_device_found == False:
+            self.gps_icon_label.setText("GPS!")
+            self.gps_icon_label.setStyleSheet("color: #ef4444; font-size: 18px; font-weight: bold; background: transparent;")
+            self.gps_icon_label.setToolTip("GPS: 未偵測到裝置")
+            self.gps_speed_label.setText("--")
+            self.gps_speed_label.setStyleSheet("color: #ef4444; font-size: 16px; font-weight: bold; background: transparent;")
+        elif self.is_gps_fixed:
+            if self.is_using_external_gps:
+                if self.is_external_gps_fresh:
+                    # 黃色 (External GPS - 即時)
+                    self.gps_icon_label.setText("GPS*")
+                    self.gps_icon_label.setStyleSheet("color: #facc15; font-size: 18px; font-weight: bold; background: transparent;")
+                    self.gps_icon_label.setToolTip("GPS: External (MQTT) - 即時")
+                    self.gps_speed_label.setStyleSheet("color: #facc15; font-size: 16px; font-weight: bold; background: transparent;")
+                else:
+                    # 灰色 (External GPS - 過時但可用)
+                    self.gps_icon_label.setText("GPS*")
+                    self.gps_icon_label.setStyleSheet("color: #888; font-size: 18px; font-weight: bold; background: transparent;")
+                    self.gps_icon_label.setToolTip("GPS: External (MQTT) - 最後位置")
+                    self.gps_speed_label.setStyleSheet("color: #888; font-size: 16px; font-weight: bold; background: transparent;")
+            else:
+                # 綠色 (Internal Fix)
+                self.gps_icon_label.setText("GPS")
+                self.gps_icon_label.setStyleSheet("color: #4ade80; font-size: 18px; font-weight: bold; background: transparent;")
+                self.gps_icon_label.setToolTip("GPS: Fixed (3D)")
+                self.gps_speed_label.setStyleSheet("color: #4ade80; font-size: 16px; font-weight: bold; background: transparent;")
         else:
-            # 灰色 (No Fix)
-            self.gps_icon_label.setText("GPS") 
+            # 灰色 (No Fix - 搜尋中)
+            self.gps_icon_label.setText("GPS")
             self.gps_icon_label.setStyleSheet("color: #444; font-size: 18px; font-weight: bold; background: transparent;")
             self.gps_icon_label.setToolTip("GPS: Searching...")
-            # GPS 速度標籤顯示 "--" 並變灰色
             self.gps_speed_label.setText("--")
             self.gps_speed_label.setStyleSheet("color: #444; font-size: 16px; font-weight: bold; background: transparent;")
-            
+        
         # Force Style Update
         self.gps_icon_label.style().unpolish(self.gps_icon_label)
         self.gps_icon_label.style().polish(self.gps_icon_label)
@@ -1760,6 +1806,17 @@ class Dashboard(QWidget):
                     if hasattr(self, 'nav_card'):
                         self.nav_card.show_no_nav_ui()
                     return
+                
+                # 如果內部 GPS 未定位，嘗試使用 MQTT GPS 作為備援
+                lat = data.get('latitude')
+                lon = data.get('longitude')
+                speed = data.get('speed')
+                bearing = data.get('bearing', 0)
+                
+                if lat is not None and lon is not None and not self.is_gps_fixed:
+                    print(f"[Navigation] 內部 GPS 未定位，使用 MQTT GPS: lat={lat}, lon={lon}, speed={speed}")
+                    self.gps_monitor_thread.inject_external_gps(lat, lon, speed or 0, bearing, timestamp_str)
+                    
             except Exception as e:
                 print(f"[Navigation] ⚠️ 解析 timestamp 失敗: {e}，仍繼續處理")
         else:
