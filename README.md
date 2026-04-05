@@ -50,9 +50,9 @@
 | 按鈕 | 功能 |
 |------|------|
 | 📶 WiFi | 開啟 WiFi 管理器，掃描並連接無線網路 |
-| 🔵 藍牙 | 藍牙設定（待實現）|
 | ☀ 亮度 | 軟體亮度調節：100% → 75% → 50% 循環 |
-| 🔄 更新 | 自動更新：執行 git pull 並重新啟動 |
+| ⏰ 校正 | 時間校正（需網路連線）|
+| 🔄 更新 | 自動更新：選擇分支後執行 git pull 並重啟 |
 | ⏻ 電源 | 電源選項：程式重啟 / 系統重啟 / 關機 |
 | ⚙ 設定 | 開啟 MQTT 設定 QR Code |
 
@@ -120,7 +120,27 @@ sudo bash setup_sudoers.sh
 
 ## 使用方法
 
-### 方式 1: 自動啟動腳本 (推薦)
+### 方式 1: 直接啟動 (推薦)
+
+```bash
+python main.py
+```
+
+會自動偵測 CAN Bus 裝置：
+- 有 CANable → 使用實車模式
+- 無 CANable → 使用演示模式
+
+### 方式 2: 手動指定模式
+
+```bash
+# 實車模式（需有 CANable 裝置）
+python main.py
+
+# 演示模式（模擬數據，無需硬體）
+python main.py --mode demo
+```
+
+### 方式 3: 自動啟動腳本
 
 ```bash
 ./auto_start.sh
@@ -129,30 +149,8 @@ sudo bash setup_sudoers.sh
 腳本會自動：
 1. 偵測 Python 環境 (conda / venv)
 2. 檢查網路連線並進行 NTP 時間同步
-3. 偵測 CANable 裝置
-   - 有 CANable → 執行 `datagrab.py` (實車模式)
-   - 無 CANable → 執行 `demo_mode.py` (演示模式)
+3. 偵測 CANable 裝置並選擇模式
 4. 處理 Spotify 認證
-
-### 方式 2: 完整 CAN Bus 模式 (實車環境)
-
-```bash
-python datagrab.py
-```
-
-程式會自動偵測並選擇標有 "canable" 的 COM Port。
-
-### 方式 3: Demo 模式 (測試/展示用)
-
-```bash
-python demo_mode.py
-```
-
-Demo 模式提供：
-- 模擬車輛數據 (怠速 → 加速 → 巡航 → 減速循環)
-- Spotify 整合測試
-- 鍵盤互動控制
-- 無需連接實車硬體
 
 ## 儀表板介面
 
@@ -229,43 +227,48 @@ Demo 模式提供：
 
 ## 專案結構
 
-### 核心檔案
-
-#### 主程式
-| 檔案 | 說明 |
-|------|------|
-| `main.py` | PyQt6 儀表板前端介面 |
-| `datagrab.py` | CAN Bus 和 OBD-II 資料擷取 |
-| `demo_mode.py` | 演示模式 |
-| `auto_start.sh` | 自動啟動腳本 |
-
-#### CAN Bus 相關
-| 檔案 | 說明 |
-|------|------|
-| `luxgen_m7_2009.dbc` | CAN Bus 資料庫定義檔 |
-| `can_simulator.py` | 完整 CAN Bus 模擬器 |
-| `simple_simulator.py` | 簡易 SLCAN 模擬器 |
-
-#### Spotify 整合
-| 檔案 | 說明 |
-|------|------|
-| `spotify_integration.py` | Spotify 整合主模組 |
-| `spotify_auth.py` | OAuth 認證管理器 |
-| `spotify_qr_auth.py` | QR Code 授權對話框 |
-| `spotify_listener.py` | 播放狀態監聯器 |
-
-#### 系統功能
-| 檔案 | 說明 |
-|------|------|
-| `wifi_manager.py` | WiFi 管理器 |
-| `setup_sudoers.sh` | 免密碼權限設定腳本 |
+```
+QTdashboard/
+├── main.py                    # 主程式入口（整合前端介面）
+├── vehicle/
+│   ├── datagrab.py           # CAN Bus 和 OBD-II 資料擷取
+│   └── demo_mode.py          # 演示模式（模擬數據）
+├── ui/                       # UI 模組（已從 main.py 拆出）
+│   ├── control_panel.py      # 下拉控制面板
+│   ├── trip_card.py         # 里程/Trip 卡片
+│   ├── music_card.py        # Spotify 音樂卡片
+│   ├── navigation_card.py   # MQTT 導航卡片
+│   ├── door_card.py         # 車門狀態卡片
+│   ├── gauge_card.py        # 四宮格儀表卡片
+│   ├── analog_gauge.py      # 類比錶盤元件
+│   ├── splash_screen.py     # 啟動畫面
+│   ├── scalable_window.py   # 可縮放視窗（開發環境）
+│   └── ...
+├── core/                     # 核心工具模組
+│   ├── shutdown_monitor.py  # 電源監控
+│   ├── max_value_logger.py # 最大值日誌記錄器
+│   └── utils.py            # 工具函數（效能監控、里程儲存等）
+├── spotify/                  # Spotify 整合
+│   ├── spotify_integration.py
+│   ├── spotify_auth.py
+│   ├── spotify_qr_auth.py
+│   └── spotify_listener.py
+├── hardware/                 # 硬體相關
+│   └── gpio_buttons.py     # GPIO 按鈕處理
+├── deploy/                   # 部署腳本
+│   ├── auto_start.sh
+│   └── setup_sudoers.sh
+└── assets/                   # 靜態資源
+    ├── sprites/             # 車輛精靈圖
+    └── video/               # 啟動影片
+```
 
 #### 設定檔
 | 檔案 | 說明 |
 |------|------|
-| `spotify_config.json` | Spotify API 設定 |
+| `spotify/spotify_config.json` | Spotify API 設定 |
 | `mqtt_config.json` | MQTT Broker 設定 |
-| `mileage_data.json` | 里程資料 (自動生成) |
+| `~/.config/qtdashboard/mileage_data.json` | 里程資料 |
 
 ## Raspberry Pi 部署
 
@@ -391,6 +394,15 @@ rm .spotify_cache
 ```
 
 ## 變更記錄
+
+### v2.0 (2026-04) - 代碼重構版
+- 🎉 **架構重構**：從 12,000 行單一檔案重構為模組化結構
+- 🎉 **可維護性**：UI 元件拆分至 `ui/` 目錄，核心功能拆分至 `core/`
+- 🎉 **協作友善**：新人不再需要面對 12K 行怪物
+- ✨ 新增「時間校正」功能
+- 🔧 修正更新功能：可選擇分支
+- 🔧 修正重啟功能：正確偵測入口點
+- 🔧 修正關機功能：正確關閉程式
 
 ### v1.5 (2025-12)
 - ✨ 新增下拉控制面板（WiFi/亮度/更新/電源/設定）
