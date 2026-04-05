@@ -4,6 +4,7 @@
 - 預設自動模擬怠速/加速/巡航/減速
 - --control-data 可改為鍵盤直接調整數據，停用自動場景
 - PERF_MONITOR=1 或 --perf 可開啟效能監控
+- --mock-gps 可開啟 Mock GPS 座標（用於測試速限顯示）
 """
 
 import argparse
@@ -19,6 +20,16 @@ os.environ['DASHBOARD_ENTRY'] = 'demo'
 from PyQt6.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
 
 from main import run_dashboard
+
+
+# Mock GPS 測試座標
+MOCK_GPS_COORDS = [
+    (24.9850, 121.4921, "國3 35K 北上"),      # 速限 90
+    (24.9850, 121.4921, "國3 35K 南下"),      # 速限 110
+    (23.6751, 120.5846, "國3 267K"),          # 速限 90
+    (22.7090, 120.3604, "國10 0K"),           # 速限 80
+    (25.0330, 121.5654, "台北市區"),           # 非國道
+]
 
 
 class VehicleSignals(QObject):
@@ -230,6 +241,7 @@ def main() -> None:
     parser.add_argument("--test-shutdown", type=float, nargs="?", const=5.0, default=None, metavar="DELAY", help="電壓歸零測試：幾秒後觸發 (預設 5 秒)")
     parser.add_argument("--control-data", action="store_true", help="控制數據模式：鍵盤直接調整數值，停用自動模擬")
     parser.add_argument("--spotify", action="store_true", help="啟用 Spotify Connect 整合（如未安裝模組則忽略）")
+    parser.add_argument("--mock-gps", action="store_true", help="啟用 Mock GPS 座標（用於測試速限顯示）")
     args = parser.parse_args()
 
     if args.perf:
@@ -240,6 +252,7 @@ def main() -> None:
     shutdown_delay = args.test_shutdown if test_shutdown_mode else 5.0
 
     control_data_mode = args.control_data
+    mock_gps_mode = args.mock_gps
 
     if args.spotify:
         try:
@@ -266,6 +279,10 @@ def main() -> None:
         print()
     else:
         print("自動場景：怠速 → 加速 → 巡航 → 減速 循環")
+        print()
+
+    if mock_gps_mode:
+        print("📍 Mock GPS 模式已啟用")
         print()
 
     signals = VehicleSignals()
@@ -305,6 +322,39 @@ def main() -> None:
         timer.timeout.connect(tick)
         timer.start(100)
 
+        # Mock GPS 模式
+        gps_timer = QTimer()
+        gps_coord_index = [0]  # 用 list 以便在 nested function 中修改
+
+        def gps_tick():
+            if not mock_gps_mode:
+                return
+            # 切換到下一個座標
+            gps_coord_index[0] = (gps_coord_index[0] + 1) % len(MOCK_GPS_COORDS)
+            lat, lon, desc = MOCK_GPS_COORDS[gps_coord_index[0]]
+            print(f"   Mock GPS: {desc} ({lat}, {lon})")
+            # 發射 GPS 訊號
+            dashboard._update_gps_status(True)  # GPS fixed
+            dashboard._update_gps_source(is_internal=True, is_fresh=True)  # Internal GPS
+            dashboard._update_gps_device(True)  # Device found
+            dashboard._update_gps_position(lat, lon)
+            dashboard.gps_lat = lat
+            dashboard.gps_lon = lon
+
+        if mock_gps_mode:
+            # 初始 GPS 狀態
+            lat, lon, desc = MOCK_GPS_COORDS[0]
+            print(f"   Mock GPS: {desc} ({lat}, {lon})")
+            dashboard._update_gps_status(True)
+            dashboard._update_gps_source(is_internal=True, is_fresh=True)
+            dashboard._update_gps_device(True)
+            dashboard._update_gps_position(lat, lon)
+            dashboard.gps_lat = lat
+            dashboard.gps_lon = lon
+            # 定期更新（每 5 秒切換座標）
+            gps_timer.timeout.connect(gps_tick)
+            gps_timer.start(5000)
+
         # 連接 Dashboard 接收端
         signals.update_rpm.connect(dashboard.set_rpm)
         signals.update_speed.connect(dashboard.set_speed)
@@ -316,6 +366,8 @@ def main() -> None:
 
         def cleanup():
             timer.stop()
+            if mock_gps_mode:
+                gps_timer.stop()
             if control_data_mode and qt_app and event_filter:
                 qt_app.removeEventFilter(event_filter)
 
@@ -328,6 +380,7 @@ def main() -> None:
     run_dashboard(
         window_title=window_title,
         setup_data_source=setup_demo_data,
+        skip_gps=mock_gps_mode,
     )
 
 

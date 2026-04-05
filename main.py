@@ -43,7 +43,7 @@ def get_spotify_cache_path():
 def get_mqtt_config_path():
     return os.path.join(PROJECT_ROOT, "mqtt_config.json")
 
-from PyQt6.QtWidgets import QWidget, QApplication, QStackedWidget, QLabel, QGridLayout, QHBoxLayout, QVBoxLayout, QSizePolicy
+from PyQt6.QtWidgets import QWidget, QApplication, QStackedWidget, QStackedLayout, QLabel, QGridLayout, QHBoxLayout, QVBoxLayout, QSizePolicy
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSlot, QPoint, QPropertyAnimation, QEasingCurve, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QLinearGradient, QKeyEvent
 
@@ -116,7 +116,7 @@ class Dashboard(QWidget):
     # MQTT telemetry Signal (用於跨執行緒啟動 timer)
     signal_start_mqtt_telemetry = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, skip_gps=False):
         super().__init__()
         
         # === 禁用 Python 自動 GC ===
@@ -135,6 +135,7 @@ class Dashboard(QWidget):
         self.current_speed_limit = None
         self.current_speed_limit_dual = None  # For "N:XX / S:XX" display
         self.current_bearing = None
+        self._skip_gps = skip_gps  # 標記是否跳過 GPS 初始化
         self._speed_limit_flashing = False
         self._speed_limit_timer = 0
         
@@ -206,15 +207,22 @@ class Dashboard(QWidget):
         self._init_shutdown_monitor()
         
         # 初始化 GPS 監控器
-        self.gps_monitor_thread = GPSMonitorThread()
-        self.gps_monitor_thread.gps_fixed_changed.connect(self._update_gps_status)
-        self.gps_monitor_thread.gps_speed_changed.connect(self._update_gps_speed)
-        self.gps_monitor_thread.gps_position_changed.connect(self._update_gps_position)
-        self.gps_monitor_thread.gps_source_changed.connect(self._update_gps_source)
-        self.gps_monitor_thread.gps_device_status_changed.connect(self._update_gps_device)
-        self.gps_monitor_thread.start()
-        self.is_using_external_gps = False
-        self.gps_device_found = None  # None=unknown, True=found, False=not found
+        if skip_gps:
+            print("[GPS] 跳過 GPS 初始化（Mock 模式）")
+            self.gps_monitor_thread = None
+            self.gps_device_found = True  # 假設有裝置
+            # 直接設定 GPS 狀態為可用
+            self._update_gps_status(True)
+            self._update_gps_device(True)
+        else:
+            self.gps_monitor_thread = GPSMonitorThread()
+            self.gps_monitor_thread.gps_fixed_changed.connect(self._update_gps_status)
+            self.gps_monitor_thread.gps_speed_changed.connect(self._update_gps_speed)
+            self.gps_monitor_thread.gps_position_changed.connect(self._update_gps_position)
+            self.gps_monitor_thread.gps_source_changed.connect(self._update_gps_source)
+            self.gps_monitor_thread.gps_device_status_changed.connect(self._update_gps_device)
+            self.gps_monitor_thread.start()
+            self.gps_device_found = None  # None=unknown, True=found, False=not found
         
         # 初始化雷達監控器
         self.radar_monitor_thread = RadarMonitorThread()
@@ -231,11 +239,11 @@ class Dashboard(QWidget):
         
         # GPS 穩定時啟動速限查詢計時器，否則暫停
         if is_fixed:
-            if not self.speed_limit_query_timer.isActive():
+            if hasattr(self, 'speed_limit_query_timer') and not self.speed_limit_query_timer.isActive():
                 self.speed_limit_query_timer.start()
                 print("[SpeedLimit] GPS fixed, starting query timer")
         else:
-            if self.speed_limit_query_timer.isActive():
+            if hasattr(self, 'speed_limit_query_timer') and self.speed_limit_query_timer.isActive():
                 self.speed_limit_query_timer.stop()
                 # 立即隱藏速限
                 self.current_speed_limit = None
@@ -371,60 +379,52 @@ class Dashboard(QWidget):
         limit = self.current_speed_limit
         dual_limits = self.current_speed_limit_dual
         
+        # "--" 或無速限：不顯示
         if limit is None and not dual_limits:
-            self.speed_limit_label.setText("--")
-            self.speed_limit_label.setStyleSheet("""
-                color: #666;
-                font-size: 24px;
-                font-family: Arial;
-                background: transparent;
-            """)
+            self.speed_limit_label.hide()
+            self.speed_limit_container.hide()
             self._speed_limit_flashing = False
             return
         
-        # 處理雙向速限顯示 (N:XX / S:XX)
+        # 處理雙向速限顯示 (N:XX / S:XX)：顯示紅邊白底黑字
         if dual_limits:
             n_speed = dual_limits.get('N', '-')
             s_speed = dual_limits.get('S', '-')
             self.speed_limit_label.setText(f"N:{n_speed} S:{s_speed}")
-            # 雙向顯示時不閃爍
-            self._speed_limit_flashing = False
             self.speed_limit_label.setStyleSheet("""
-                color: #fff;
-                font-size: 20px;
-                font-family: Arial;
-                background: transparent;
-            """)
-            return
-        
-        # 一般單一速限
-        if limit is None:
-            self.speed_limit_label.setText("--")
-            self._speed_limit_flashing = False
-            return
-        
-        # 檢查是否超速 (超過速限 10 km/h 以上)
-        current_speed = getattr(self, 'speed', 0)
-        if current_speed > limit + 10:
-            # 紅色閃爍
-            self._speed_limit_flashing = True
-            self.speed_limit_label.setStyleSheet("""
-                color: #ef4444;
-                font-size: 24px;
+                color: #000;
+                font-size: 32px;
                 font-weight: bold;
                 font-family: Arial;
-                background: transparent;
+                background: #fff;
+                border: 4px solid #ef4444;
+                border-radius: 8px;
+                padding: 8px 16px;
             """)
-        else:
+            self.speed_limit_label.show()
+            self.speed_limit_container.hide()
             self._speed_limit_flashing = False
-            self.speed_limit_label.setStyleSheet("""
-                color: #fff;
-                font-size: 24px;
-                font-family: Arial;
-                background: transparent;
-            """)
+            return
         
-        self.speed_limit_label.setText(str(limit))
+        # 一般單一速限：顯示圓形
+        if limit is None:
+            self.speed_limit_label.show()
+            self.speed_limit_container.hide()
+            self._speed_limit_flashing = False
+            return
+        
+        # 顯示圓形
+        self.speed_limit_label.hide()
+        
+        # 檢查是否超速 (超過速限 10 km/h 以上) - 圓形border已經是紅色
+        current_speed = getattr(self, 'speed', 0)
+        self._speed_limit_flashing = (current_speed > limit + 10)
+        
+        # 非閃爍時直接顯示，閃爍時讓計時器處理
+        if not self._speed_limit_flashing:
+            self.speed_limit_container.show()
+        
+        self.speed_limit_circle_label.setText(str(limit))
     
     def _update_speed_limit_flash(self):
         """速限閃爍計時器 callback"""
@@ -432,25 +432,11 @@ class Dashboard(QWidget):
             return
         
         self._speed_limit_timer += 1
-        if self._speed_limit_timer % 10 == 0:  # 每 10 ticks 切換一次 (約 0.5 秒)
-            current = self.speed_limit_label.styleSheet()
-            if 'opacity: 0.3' in current:
-                self.speed_limit_label.setStyleSheet("""
-                    color: #ef4444;
-                    font-size: 24px;
-                    font-weight: bold;
-                    font-family: Arial;
-                    background: transparent;
-                """)
+        if self._speed_limit_timer % 10 == 0:  # 每 10 ticks 切換一次 (0.5 秒)
+            if self.speed_limit_container.isVisible():
+                self.speed_limit_container.hide()
             else:
-                self.speed_limit_label.setStyleSheet("""
-                    color: #ef4444;
-                    font-size: 24px;
-                    font-weight: bold;
-                    font-family: Arial;
-                    background: transparent;
-                    opacity: 0.3;
-                """)
+                self.speed_limit_container.show()
     
     def create_status_bar(self):
         """創建頂部狀態欄，包含方向燈指示"""
@@ -880,6 +866,7 @@ class Dashboard(QWidget):
         speed_gear_layout = QHBoxLayout(speed_gear_widget)
         speed_gear_layout.setContentsMargins(0, 0, 0, 0)
         speed_gear_layout.setSpacing(10)
+        speed_gear_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         
         # 檔位顯示（左側）- 可點擊切換顯示模式
         self.gear_label = ClickableLabel("P")
@@ -928,29 +915,79 @@ class Dashboard(QWidget):
         
         # 速限標籤
         self.speed_limit_label = QLabel("--")
+        self.speed_limit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.speed_limit_label.setStyleSheet("""
             color: #888;
-            font-size: 24px;
+            font-size: 36px;
+            font-weight: bold;
             font-family: Arial;
             background: transparent;
         """)
-        self.speed_limit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.speed_limit_label.setFixedWidth(300)
-        self.speed_limit_label.setToolTip("速限")
+        self.speed_limit_label.hide()
         
-        speed_layout.addStretch()
+        # 速限圓形容器
+        self.speed_limit_container = QWidget()
+        self.speed_limit_container.setFixedSize(80, 80)
+        self.speed_limit_container.setStyleSheet("""
+            background: #fff;
+            border: 4px solid #ef4444;
+            border-radius: 40px;
+        """)
+        self.speed_limit_container.setToolTip("速限")
+        speed_limit_circle_layout = QVBoxLayout(self.speed_limit_container)
+        speed_limit_circle_layout.setContentsMargins(0, 0, 0, 0)
+        speed_limit_circle_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.speed_limit_circle_label = QLabel("--")
+        self.speed_limit_circle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.speed_limit_circle_label.setStyleSheet("""
+            color: #000;
+            font-size: 36px;
+            font-weight: bold;
+            font-family: Arial;
+            background: transparent;
+            border: none;
+        """)
+        speed_limit_circle_layout.addWidget(self.speed_limit_circle_label)
+        self.speed_limit_container.hide()
+        
         speed_layout.addWidget(self.speed_label)
         speed_layout.addWidget(self.unit_label)
-        speed_layout.addWidget(self.speed_limit_label)
-        speed_layout.addStretch()
         
         speed_gear_layout.addWidget(self.gear_label)
         speed_gear_layout.addWidget(speed_container, 1)
         
-        # 組合中央區域佈局
+        # 速限文字浮動區（疊加在底部，右下角）
+        speed_limit_float_widget = QWidget()
+        speed_limit_float_widget.setFixedWidth(440)
+        speed_limit_float_widget.setStyleSheet("background: transparent;")
+        speed_limit_float_layout = QGridLayout(speed_limit_float_widget)
+        speed_limit_float_layout.setContentsMargins(0, 0, 0, 0)
+        speed_limit_float_layout.setSpacing(0)
+        speed_limit_float_layout.addWidget(self.speed_limit_label, 1, 1, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
+        
+        # 速限圓形浮動區（疊加在底部，右下角）
+        speed_limit_circle_float_widget = QWidget()
+        speed_limit_circle_float_widget.setFixedWidth(440)
+        speed_limit_circle_float_widget.setStyleSheet("background: transparent;")
+        speed_limit_circle_float_layout = QGridLayout(speed_limit_circle_float_widget)
+        speed_limit_circle_float_layout.setContentsMargins(0, 0, 0, 0)
+        speed_limit_circle_float_layout.setSpacing(0)
+        speed_limit_circle_float_layout.addWidget(self.speed_limit_container, 1, 1, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
+        
+        # 組合中央區域佈局（使用 StackedLayout 實現疊加效果）
+        center_stack_layout = QStackedLayout()
+        center_stack_layout.setStackingMode(QStackedLayout.StackingMode.StackAll)
+        center_stack_layout.addWidget(speed_gear_widget)
+        center_stack_layout.addWidget(speed_limit_float_widget)
+        center_stack_layout.addWidget(speed_limit_circle_float_widget)
+        
+        # 疊加層容器
+        stack_container = QWidget()
+        stack_container.setLayout(center_stack_layout)
+        stack_container.setStyleSheet("background: transparent;")
+        
         center_layout.addWidget(indicator_row)
-        center_layout.addWidget(speed_gear_widget, 1)
-        center_layout.addSpacing(20)
+        center_layout.addWidget(stack_container, 1)
         
         # ========================================
         # 右側區域：寬卡片（雙層，可左右滑動）
@@ -1109,7 +1146,7 @@ class Dashboard(QWidget):
         print("⚠️ 偵測到電源中斷，顯示關機對話框")
         
         # 釋放 GPS 資源，讓 location_notifier 可以接手
-        if hasattr(self, 'gps_monitor_thread'):
+        if hasattr(self, 'gps_monitor_thread') and self.gps_monitor_thread is not None:
             self.gps_monitor_thread.stop()
             
         self._shutdown_monitor.show_shutdown_dialog(self)
@@ -1128,7 +1165,7 @@ class Dashboard(QWidget):
         print("   可能原因: 儀表開機但車輛從未發動，OBD 無回應")
         
         # 釋放 GPS 資源
-        if hasattr(self, 'gps_monitor_thread'):
+        if hasattr(self, 'gps_monitor_thread') and self.gps_monitor_thread is not None:
             self.gps_monitor_thread.stop()
         
         # 顯示關機對話框（與電源中斷相同的處理）
@@ -1970,7 +2007,8 @@ class Dashboard(QWidget):
                 if lat is not None and lon is not None:
                     if not self.is_gps_fixed:
                         print(f"[Navigation] 內部 GPS 未定位，使用 MQTT GPS: lat={lat}, lon={lon}, speed={speed}")
-                        self.gps_monitor_thread.inject_external_gps(lat, lon, speed or 0, bearing, timestamp_str)
+                        if self.gps_monitor_thread is not None:
+                            self.gps_monitor_thread.inject_external_gps(lat, lon, speed or 0, bearing, timestamp_str)
                     # 更新 GPS 位置（速限由計時器每 5 秒查詢一次）
                     self.gps_lat = lat
                     self.gps_lon = lon
@@ -3972,7 +4010,8 @@ def run_dashboard(
     startup_info=None,
     skip_splash=False,
     hardware_init_callback=None,
-    hardware_init_timeout=60.0
+    hardware_init_timeout=60.0,
+    skip_gps=False
 ):
     """
     統一的儀表板啟動函數 - 所有入口點都應使用此函數
@@ -4117,7 +4156,7 @@ def run_dashboard(
         progress_window = None
     
     # 建立主儀表板
-    dashboard = Dashboard()
+    dashboard = Dashboard(skip_gps=skip_gps)
     
     # 開發環境：建立可縮放的視窗包裝器
     scalable_window = None
