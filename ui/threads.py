@@ -3,6 +3,7 @@ import time
 import glob
 import os
 import platform
+import serial
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
@@ -33,7 +34,7 @@ class GPSMonitorThread(QThread):
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
             if not self._current_port:
-                ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*') + glob.glob('/dev/pts/*')
+                ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
                 if not ports:
                     self._update_status(False)
                     time.sleep(2)
@@ -67,7 +68,9 @@ class GPSMonitorThread(QThread):
                     line = ser.readline()
                     try:
                         line_str = line.decode('ascii', errors='ignore').strip()
-                        if line_str.startswith('$'):
+                        if ((line_str.startswith('$GPGGA') or line_str.startswith('$GNGGA') or
+                             line_str.startswith('$GPRMC') or line_str.startswith('$GNRMC')) and
+                                ',' in line_str):
                             print(f"[GPS] Found GPS on {port} @ {self.baud_rate}")
                             return True
                     except:
@@ -194,7 +197,7 @@ class RadarMonitorThread(QThread):
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
             if not self._current_port:
-                ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*') + glob.glob('/dev/pts/*')
+                ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
                 # 在 macOS 上增加額外的裝置路徑模式
                 if platform.system() == 'Darwin':
                     ports += glob.glob('/dev/cu.usb*') + glob.glob('/dev/cu.SLAB*')

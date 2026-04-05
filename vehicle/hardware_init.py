@@ -260,24 +260,39 @@ class HardwareInitializer:
             import serial
             import serial.tools.list_ports
             
-            # 快速掃描常見的 GPS 串口
-            gps_ports = ['/dev/ttyUSB0', '/dev/ttyACM0', '/dev/ttyAMA0']
+            # 掃描所有 USB 串口
+            gps_ports = []
+            try:
+                ports = serial.tools.list_ports.comports()
+                for port in ports:
+                    if 'bluetooth' not in port.device.lower():
+                        gps_ports.append(port.device)
+            except:
+                # Fallback 到常見端口
+                for i in range(4):
+                    gps_ports.append(f'/dev/ttyUSB{i}')
+                    gps_ports.append(f'/dev/ttyACM{i}')
+            
+            # 嘗試多種波特率
+            baud_rates = [9600, 115200, 38400, 4800]
             
             for port_path in gps_ports:
-                try:
-                    ser = serial.Serial(port_path, 9600, timeout=0.5)
-                    # 快速讀取，看是否有 NMEA 數據
-                    for _ in range(3):
-                        line = ser.readline().decode('ascii', errors='ignore')
-                        if line.startswith('$GP') or line.startswith('$GN'):
-                            ser.close()
-                            self._status.gps_port = port_path
-                            self._status.gps_ready = True
-                            self._status.gps_error = ""
-                            return True
-                    ser.close()
-                except:
-                    continue
+                for baud in baud_rates:
+                    try:
+                        ser = serial.Serial(port_path, baud, timeout=0.5)
+                        # 快速讀取，看是否有 NMEA 數據
+                        for _ in range(3):
+                            line = ser.readline().decode('ascii', errors='ignore')
+                            if line.startswith('$GP') or line.startswith('$GN'):
+                                ser.close()
+                                self._status.gps_port = f"{port_path}@{baud}"
+                                self._status.gps_ready = True
+                                self._status.gps_error = ""
+                                logger.info(f"GPS 找到: {port_path} @ {baud}")
+                                return True
+                        ser.close()
+                    except:
+                        continue
             
             self._status.gps_error = "未找到 GPS"
             return False
