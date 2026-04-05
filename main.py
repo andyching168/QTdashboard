@@ -7,6 +7,15 @@ import json
 import subprocess
 from collections import deque
 
+# === 螢幕電源管理設定 ===
+try:
+    subprocess.run(['xset', 's', 'off'], capture_output=True)        # 關閉螢幕保護
+    subprocess.run(['xset', 's', 'noblank'], capture_output=True)  # 關閉黑屏
+    subprocess.run(['xset', '-dpms'], capture_output=True)          # 禁用 DPMS
+    print("[Display] 螢幕保護已停用")
+except Exception as e:
+    print(f"[Display] 設定失敗: {e}")
+
 # === 啟動 CAN Bus 介面（必須在最前面）===
 try:
     result = subprocess.run(
