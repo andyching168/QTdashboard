@@ -158,6 +158,26 @@ class HardwareInitializer:
         """
         try:
             import can
+            import subprocess
+            
+            # === 0. 嘗試啟動 CAN 介面（如果存在的話）===
+            if platform.system() == 'Linux':
+                try:
+                    # 檢查介面是否存在
+                    result = subprocess.run(
+                        ['ip', '-details', 'link', 'show', 'can0'],
+                        capture_output=True, text=True, timeout=2
+                    )
+                    if result.returncode == 0 and 'can0' in result.stdout:
+                        # 介面存在但可能沒有啟動，嘗試啟動它
+                        subprocess.run(
+                            ['sudo', 'ip', 'link', 'set', 'can0', 'up', 'type', 'can', 
+                             'bitrate', str(self.CAN_BITRATE)],
+                            capture_output=True, timeout=5
+                        )
+                        logger.info("CAN 介面 can0 已啟動")
+                except Exception as e:
+                    logger.debug(f"嘗試啟動 CAN 介面失敗: {e}")
             
             # === 1. 直接嘗試 SocketCAN can0 ===
             if platform.system() == 'Linux':

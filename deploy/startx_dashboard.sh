@@ -21,6 +21,10 @@ STARTUP_LOG="/tmp/dashboard_startup.log"
 BOOT_FLAG="/tmp/.dashboard_booting"
 cd "$SCRIPT_DIR"
 
+# === 啟動 CAN Bus 介面 ===
+log_info "啟動 CAN Bus 介面..."
+sudo -n ip link set can0 up type can bitrate 500000 2>/dev/null || true
+
 # === 記錄啟動時間 ===
 echo "" >> "$STARTUP_LOG"
 echo "=============================================" >> "$STARTUP_LOG"
@@ -90,14 +94,15 @@ else
     xrandr --listmonitors >> "$STARTUP_LOG" 2>&1
 fi
 
-# --- 檢查 venv 環境 ---
-if [ ! -f "$SCRIPT_DIR/venv/bin/python" ]; then
-    log_error "venv 環境不存在: $SCRIPT_DIR/venv/bin/python"
+# --- 檢查 conda 環境 ---
+if [ ! -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+    log_error "Conda 環境不存在: $HOME/miniconda3/etc/profile.d/conda.sh"
     log_info "嘗試使用系統 Python..."
     PYTHON_CMD="python3"
 else
-    PYTHON_CMD="$SCRIPT_DIR/venv/bin/python"
-    source "$SCRIPT_DIR/venv/bin/activate"
+    source "$HOME/miniconda3/etc/profile.d/conda.sh"
+    conda activate qt_dashboard
+    PYTHON_CMD="$HOME/miniconda3/envs/qt_dashboard/bin/python"
 fi
 
 # 進度更新函數 (必須在 PYTHON_CMD 設定後定義)

@@ -3,7 +3,24 @@ import sys
 import time
 import platform
 import gc
+import json
+import subprocess
 from collections import deque
+
+# === 啟動 CAN Bus 介面（必須在最前面）===
+try:
+    result = subprocess.run(
+        ['ip', '-details', 'link', 'show', 'can0'],
+        capture_output=True, text=True, timeout=2
+    )
+    if result.returncode == 0 and 'can0' in result.stdout:
+        subprocess.run(
+            ['sudo', 'ip', 'link', 'set', 'can0', 'up', 'type', 'can', 'bitrate', '500000'],
+            capture_output=True, timeout=5
+        )
+        print("[CAN] 介面 can0 已啟動")
+except Exception as e:
+    print(f"[CAN] 啟動失敗: {e}")
 
 # 專案根目錄
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -52,6 +69,7 @@ from core.utils import (
 
 from core.shutdown_monitor import get_shutdown_monitor
 from core.max_value_logger import get_max_value_logger
+from core.startup_progress import StartupProgressWindow
 
 
 class Dashboard(QWidget):
@@ -3978,9 +3996,101 @@ def run_dashboard(
     
     sys.exit(exit_code)
 
+# 全域變數儲存硬體初始化結果
+_hardware_init_result = None
+
+
 def main():
     """主程式進入點"""
-    run_dashboard()
+    from vehicle.hardware_init import initialize_hardware
+    from vehicle import datagrab
+    import cantools
+    global _hardware_init_result
+    
+    def init_hardware(progress_window, timeout):
+        """硬體初始化回調 - 初始化 CAN Bus、GPIO 等"""
+        global _hardware_init_result
+        success, status, can_bus = initialize_hardware(
+            timeout=timeout,
+            require_gps=False,  # GPS 不是必需的
+            require_gpio=False,  # GPIO 不是必需的（可用鍵盤）
+            show_progress=True
+        )
+        
+        # 載入 DBC 文件
+        db = None
+        try:
+            dbc_path = os.path.join(os.path.dirname(__file__), 'luxgen_m7_2009.dbc')
+            if os.path.exists(dbc_path):
+                db = cantools.database.load_file(dbc_path)
+                print(f"[OK] DBC 文件已載入: {dbc_path}")
+            else:
+                print(f"[WARNING] DBC 文件不存在: {dbc_path}")
+        except Exception as e:
+            print(f"[ERROR] 載入 DBC 文件失敗: {e}")
+        
+        _hardware_init_result = (success, status, can_bus, db)
+        return success, status
+    
+    def setup_data_source(dashboard):
+        """設定 CAN Bus 資料來源 - 在 dashboard 啟動後呼叫"""
+        global _hardware_init_result
+        
+        if _hardware_init_result is None:
+            print("[ERROR] 硬體初始化結果不存在")
+            return None
+        
+        success, status, can_bus, db = _hardware_init_result
+        
+        if can_bus is None:
+            print("[WARNING] CAN Bus 未初始化，儀表板將顯示預設值 '--'")
+            return None
+        
+        # 連接信號到 Dashboard
+        signals = datagrab.WorkerSignals()
+        signals.update_rpm.connect(dashboard.set_rpm)
+        signals.update_speed.connect(dashboard.set_speed)
+        signals.update_temp.connect(dashboard.set_temperature)
+        signals.update_fuel.connect(dashboard.set_fuel)
+        signals.update_gear.connect(dashboard.set_gear)
+        signals.update_turn_signal.connect(dashboard.set_turn_signal)
+        signals.update_door_status.connect(dashboard.set_door_status)
+        signals.update_turbo.connect(dashboard.set_turbo)
+        signals.update_battery.connect(dashboard.set_battery)
+        signals.update_fuel_consumption.connect(dashboard.set_fuel_consumption)
+        
+        # 啟動背景執行緒
+        import threading
+        t_receiver = threading.Thread(
+            target=datagrab.unified_receiver, 
+            args=(can_bus, db, signals), 
+            daemon=True, 
+            name="CAN-Receiver"
+        )
+        t_query = threading.Thread(
+            target=datagrab.obd_query, 
+            args=(can_bus, signals), 
+            daemon=True, 
+            name="OBD-Query"
+        )
+        
+        t_receiver.start()
+        t_query.start()
+        
+        print("[OK] CAN Bus 資料執行緒已啟動")
+        
+        # 返回清理函數
+        def cleanup():
+            datagrab.stop_threads = True
+            can_bus.shutdown()
+            print("[OK] CAN Bus 已關閉")
+        
+        return cleanup
+    
+    run_dashboard(
+        hardware_init_callback=init_hardware,
+        setup_data_source=setup_data_source
+    )
 
 if __name__ == "__main__":
     main()
