@@ -916,8 +916,8 @@ class OdometerCardWide(QWidget):
         
         # 同步時間
         self.sync_time_label = QLabel("未同步")
-        self.sync_time_label.setStyleSheet("""
-            color: #666;
+        self.sync_time_label.setStyleSheet(f"""
+            color: {T('TEXT_DISABLED')};
             font-size: 16px;
             background: transparent;
         """)
@@ -940,21 +940,21 @@ class OdometerCardWide(QWidget):
         sync_btn = QPushButton("同步\n里程")
         sync_btn.setFixedSize(90, 90)
         sync_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        sync_btn.setStyleSheet("""
-            QPushButton {
+        sync_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: rgba(100, 150, 255, 0.2);
-                color: #6af;
-                border: 3px solid #6af;
+                color: {T('PRIMARY')};
+                border: 3px solid {T('PRIMARY')};
                 border-radius: 45px;
                 font-size: 18px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: rgba(100, 150, 255, 0.4);
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: rgba(100, 150, 255, 0.6);
-            }
+            }}
         """)
         sync_btn.clicked.connect(self._show_keypad)
         
