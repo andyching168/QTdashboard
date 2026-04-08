@@ -54,7 +54,7 @@ class NavigationCard(QWidget):
         # 網路斷線覆蓋層
         self.offline_overlay = QWidget(self)
         self.offline_overlay.setGeometry(0, 0, 800, 380)
-        self.offline_overlay.setStyleSheet("""
+        self.offline_overlay.setStyleSheet(f"""
             background: rgba(10, 10, 15, 0.9);
             border-radius: 20px;
         """)
@@ -136,7 +136,7 @@ class NavigationCard(QWidget):
         
         self.direction_icon = QLabel()
         self.direction_icon.setFixedSize(280, 280)
-        self.direction_icon.setStyleSheet("""
+        self.direction_icon.setStyleSheet(f"""
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                 stop:0 #2a3a4a, stop:0.5 #1d2d3d, stop:1 #101a2a);
             border-radius: 20px;
@@ -146,8 +146,8 @@ class NavigationCard(QWidget):
         
         # 預設圖標
         self.default_icon = QLabel("↑", self.direction_icon)
-        self.default_icon.setStyleSheet("""
-            color: {T('PRIMARY')};
+        self.default_icon.setStyleSheet(f"""
+            color: {{T('PRIMARY')}};
             font-size: 120px;
             background: transparent;
         """)
@@ -165,8 +165,8 @@ class NavigationCard(QWidget):
         
         # Navigation 標題
         title_label = QLabel("Navigation")
-        title_label.setStyleSheet("""
-            color: {T('PRIMARY')};
+        title_label.setStyleSheet(f"""
+            color: {{T('PRIMARY')}};
             font-size: 16px;
             font-weight: bold;
             background: transparent;
@@ -175,7 +175,7 @@ class NavigationCard(QWidget):
         
         # 方向說明（大字）- 支援自動縮小與換行
         self.direction_label = QLabel("--")
-        self.direction_label.setStyleSheet("""
+        self.direction_label.setStyleSheet(f"""
             color: white;
             font-size: 36px;
             font-weight: bold;

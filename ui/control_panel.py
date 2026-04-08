@@ -190,11 +190,11 @@ class ControlPanel(QWidget):
         # WiFi 狀態卡片
         wifi_card = QWidget()
         wifi_card.setFixedSize(280, 80)
-        wifi_card.setStyleSheet("""
-            QWidget {
+        wifi_card.setStyleSheet(f"""
+            QWidget {{
                 background: rgba(255, 255, 255, 0.08);
                 border-radius: 12px;
-            }
+            }}
         """)
         wifi_card_layout = QHBoxLayout(wifi_card)
         wifi_card_layout.setContentsMargins(15, 10, 15, 10)
@@ -247,11 +247,11 @@ class ControlPanel(QWidget):
         # 日期時間卡片
         datetime_card = QWidget()
         datetime_card.setFixedSize(220, 80)
-        datetime_card.setStyleSheet("""
-            QWidget {
+        datetime_card.setStyleSheet(f"""
+            QWidget {{
                 background: rgba(255, 255, 255, 0.08);
                 border-radius: 12px;
-            }
+            }}
         """)
         datetime_card_layout = QHBoxLayout(datetime_card)
         datetime_card_layout.setContentsMargins(15, 10, 15, 10)

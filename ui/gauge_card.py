@@ -237,12 +237,12 @@ class QuadGaugeCard(QWidget):
         
         cell = QWidget()
         cell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        cell.setStyleSheet("""
-            QWidget {
+        cell.setStyleSheet(f"""
+            QWidget {{
                 background: rgba(30, 30, 40, 0.5);
                 border-radius: 12px;
                 border: 2px solid #2a2a35;
-            }
+            }}
         """)
         
         layout = QVBoxLayout(cell)
@@ -654,17 +654,17 @@ class QuadGaugeDetailView(QWidget):
         self.progress_bar.setMinimum(0)
         self.progress_bar.setMaximum(100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
                 background: #2a2a35;
                 border-radius: 8px;
                 border: 1px solid #3a3a45;
-            }
-            QProgressBar::chunk {
+            }}
+            QProgressBar::chunk {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                     stop:0 #4a9eff, stop:1 #6af);
                 border-radius: 7px;
-            }
+            }}
         """)
         main_layout.addWidget(self.progress_bar)
         
