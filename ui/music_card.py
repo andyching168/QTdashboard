@@ -793,6 +793,13 @@ class MusicCardWide(QWidget):
         except Exception as e:
             import logging
             logging.error(f"設置專輯封面失敗: {e}")
+    
+    def refresh_theme(self):
+        """重新整理 UI 主題顏色（更換強調色後呼叫）"""
+        if hasattr(self, 'bind_page'):
+            self.setup_bind_ui()
+        if hasattr(self, 'player_page'):
+            self.setup_player_ui()
 
 
 

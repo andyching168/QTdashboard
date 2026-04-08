@@ -153,6 +153,40 @@ class DigitalGaugeCard(QWidget):
         """)
         self.progress_bar.setStyleSheet(bar_style)
     
+    def refresh_theme(self):
+        """重新整理 UI 主題顏色（更換強調色後呼叫）"""
+        self.title_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
+            font-size: 18px;
+            font-weight: bold;
+            background: transparent;
+            letter-spacing: 2px;
+        """)
+        self.value_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
+            font-size: 72px;
+            font-weight: bold;
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            background: transparent;
+        """)
+        self.unit_label.setStyleSheet(f"""
+            color: {T('TEXT_DISABLED')};
+            font-size: 16px;
+            background: transparent;
+        """)
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background: {T('BG_CARD_ALT')};
+                border-radius: 6px;
+                border: 1px solid {T('BORDER_HOVER')};
+            }}
+            QProgressBar::chunk {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #4a9eff, stop:1 {T('PRIMARY')});
+                border-radius: 5px;
+            }}
+        """)
+    
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -551,6 +585,29 @@ class QuadGaugeCard(QWidget):
             if cell.rect().contains(cell_pos):
                 return i
         return -1
+    
+    def refresh_theme(self):
+        """重新整理 UI 主題顏色（更換強調色後呼叫）"""
+        for i, value_label in enumerate(self.value_labels):
+            value_label.setStyleSheet(f"""
+                color: {T('PRIMARY')};
+                font-size: 54px;
+                font-weight: bold;
+                background: transparent;
+            """)
+            if hasattr(self.gauge_cells[i], 'progress_bar'):
+                self.gauge_cells[i].progress_bar.setStyleSheet(f"""
+                    QProgressBar {{
+                        background: #2a2a35;
+                        border-radius: 3px;
+                        border: none;
+                    }}
+                    QProgressBar::chunk {{
+                        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                            stop:0 #4a9eff, stop:1 {T('PRIMARY')});
+                        border-radius: 3px;
+                    }}
+                """)
 
 
 class QuadGaugeDetailView(QWidget):

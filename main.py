@@ -171,6 +171,10 @@ class Dashboard(QWidget):
         # 連接雷達 Signal
         self.signal_update_radar.connect(self._slot_update_radar)
         
+        # 連接主題強調色變更 Signal
+        from ui.theme import get_theme_manager
+        get_theme_manager().accent_color_changed.connect(self._on_accent_color_changed)
+        
         # 注意：油耗由 trip_info_card 直接從 RPM/Speed/Turbo 信號計算，
         # 不需要從 datagrab.py 接收油號 signal
         
@@ -3933,7 +3937,26 @@ class Dashboard(QWidget):
                     
         except Exception as e:
             print(f"[Dashboard] 雷達自動切換錯誤: {e}")
-
+    
+    def _on_accent_color_changed(self, color_hex: str):
+        """當強調色改變時，重新整理所有卡片的 UI"""
+        print(f"[Dashboard] 強調色已更改為 {color_hex}，正在刷新卡片...")
+        
+        if hasattr(self, 'trip_card'):
+            self.trip_card.refresh_theme()
+        if hasattr(self, 'odo_card'):
+            self.odo_card.refresh_theme()
+        if hasattr(self, 'trip_info_card'):
+            self.trip_info_card.refresh_theme()
+        if hasattr(self, 'music_card'):
+            self.music_card.refresh_theme()
+        if hasattr(self, 'nav_card'):
+            self.nav_card.refresh_theme()
+        if hasattr(self, 'door_card'):
+            self.door_card.refresh_theme()
+        
+        print("[Dashboard] 卡片 UI 已刷新")
+    
     def set_parking_brake(self, is_engaged: bool):
         """設定手煞車狀態 - 供外部呼叫"""
         print(f"[Dashboard] 設定手煞車: {is_engaged}")

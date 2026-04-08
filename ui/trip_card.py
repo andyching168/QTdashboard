@@ -1809,6 +1809,44 @@ class TripCardWide(QWidget):
                 border-radius: 15px;
                 border: 2px solid #2a2a35;
             """)
+    
+    def refresh_theme(self):
+        """重新整理 UI 主題顏色（更換強調色後呼叫）"""
+        saved_trip1_dist = self.trip1_distance
+        saved_trip1_time = self.trip1_reset_time
+        saved_trip2_dist = self.trip2_distance
+        saved_trip2_time = self.trip2_reset_time
+        saved_focus = self.focus_index
+        
+        layout = self.layout()
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        self.trip1_panel = self._create_trip_panel("Trip 1", is_trip1=True)
+        self.trip2_panel = self._create_trip_panel("Trip 2", is_trip1=False)
+        
+        separator = QWidget()
+        separator.setFixedWidth(2)
+        separator.setStyleSheet("background: #333;")
+        
+        layout.addWidget(self.trip1_panel, 1)
+        layout.addWidget(separator)
+        layout.addWidget(self.trip2_panel, 1)
+        
+        self.trip1_distance = saved_trip1_dist
+        self.trip1_reset_time = saved_trip1_time
+        self.trip2_distance = saved_trip2_dist
+        self.trip2_reset_time = saved_trip2_time
+        
+        self.trip1_distance_label.setText(f"{self.trip1_distance:.1f}")
+        self.trip2_distance_label.setText(f"{self.trip2_distance:.1f}")
+        self._update_reset_time_display(True)
+        self._update_reset_time_display(False)
+        
+        self.focus_index = saved_focus
+        self._update_focus_style()
 
 
 

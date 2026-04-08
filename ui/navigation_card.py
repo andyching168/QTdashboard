@@ -437,6 +437,13 @@ class NavigationCard(QWidget):
         self.icon_base64 = ""
         self._reset_icon()
         self.show_no_nav_ui()
+    
+    def refresh_theme(self):
+        """重新整理 UI 主題顏色（更換強調色後呼叫）"""
+        if hasattr(self, 'no_nav_page'):
+            self.setup_no_nav_ui()
+        if hasattr(self, 'nav_page'):
+            self.setup_nav_ui()
 
 
 
