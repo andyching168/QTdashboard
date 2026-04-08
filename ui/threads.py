@@ -34,6 +34,7 @@ class GPSMonitorThread(QThread):
         self._using_external_gps = False
         self._external_gps_timestamp = None
         self._has_device = None  # None=unknown, True=device found, False=no device
+        self._last_mqtt_gps_time = 0  # 記錄上次收到 MQTT GPS 的本地時間（秒）
         self._search_without_device_count = 0  # 連續搜尋無結果次數
         
     def run(self):
@@ -183,37 +184,35 @@ class GPSMonitorThread(QThread):
         """注入外部 GPS 資料（來自 MQTT 導航 payload）
         
         當內部 GPS 未定位時使用。
+        使用本地時間判斷新鮮度，避免發送端時鐘漂移導致圖標閃爍。
+        
         Args:
             lat: 緯度
             lon: 經度
             speed: 速度 (km/h)
             bearing: 方向角度
-            timestamp: ISO 格式時間戳
+            timestamp: ISO 格式時間戳（不再用於新鮮度判斷，僅保留用於日誌）
         """
-        from datetime import datetime, timezone
-        
         FRESH_THRESHOLD = 30      # 30 秒內：即時位置
         STALE_THRESHOLD = 300     # 5 分鐘內：最後位置
         # 超過 5 分鐘：忽略
         
-        try:
-            msg_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-            current_time = datetime.now(timezone.utc)
-            time_diff = abs((current_time - msg_time).total_seconds())
-            
-            # 超過 5 分鐘不使用
-            if time_diff > STALE_THRESHOLD:
-                print(f"[GPS] External GPS data too old ({time_diff:.1f}s), ignoring")
-                return
-            
-            # 判斷是否為即時位置
-            is_fresh = time_diff <= FRESH_THRESHOLD
-            freshness_label = "fresh" if is_fresh else "stale"
-            print(f"[GPS] Injecting external GPS: lat={lat}, lon={lon}, age={time_diff:.1f}s ({freshness_label})")
-            
-        except Exception as e:
-            print(f"[GPS] Failed to parse external GPS timestamp: {e}")
+        # 使用本地時間判斷新鮮度，避免發送端時鐘誤差
+        current_time = time.time()
+        time_since_last = current_time - self._last_mqtt_gps_time if self._last_mqtt_gps_time > 0 else 0
+        
+        # 超過 5 分鐘不使用
+        if time_since_last > STALE_THRESHOLD and self._last_mqtt_gps_time > 0:
+            print(f"[GPS] External GPS data too old ({time_since_last:.1f}s since last msg), ignoring")
             return
+        
+        # 判斷是否為即時位置
+        is_fresh = time_since_last <= FRESH_THRESHOLD
+        freshness_label = "fresh" if is_fresh else "stale"
+        print(f"[GPS] Injecting external GPS: lat={lat}, lon={lon}, since_last={time_since_last:.1f}s ({freshness_label})")
+        
+        # 更新最後收到訊息的本地時間
+        self._last_mqtt_gps_time = current_time
         
         # 標記使用外部 GPS
         if not self._using_external_gps:
