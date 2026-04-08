@@ -986,8 +986,8 @@ class OdometerCardWide(QWidget):
         
         # 標題
         title_label = QLabel("同步里程")
-        title_label.setStyleSheet("""
-            color: #6af;
+        title_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 28px;
             font-weight: bold;
             background: transparent;
@@ -1012,8 +1012,8 @@ class OdometerCardWide(QWidget):
         current_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.current_odo_label = QLabel("0 km")
-        self.current_odo_label.setStyleSheet("""
-            color: #666;
+        self.current_odo_label.setStyleSheet(f"""
+            color: {T('TEXT_DISABLED')};
             font-size: 36px;
             font-weight: bold;
             background: transparent;
@@ -1025,12 +1025,12 @@ class OdometerCardWide(QWidget):
         
         # 新里程輸入預覽
         new_container = QWidget()
-        new_container.setStyleSheet("""
-            QWidget {
+        new_container.setStyleSheet(f"""
+            QWidget {{
                 background: rgba(100, 150, 255, 0.1);
                 border-radius: 15px;
-                border: 2px solid #6af;
-            }
+                border: 2px solid {T('PRIMARY')};
+            }}
         """)
         new_layout = QVBoxLayout(new_container)
         new_layout.setContentsMargins(20, 20, 20, 20)
@@ -1041,8 +1041,8 @@ class OdometerCardWide(QWidget):
         new_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.input_display = QLabel("_ _ _ _ _ _")
-        self.input_display.setStyleSheet("""
-            color: white;
+        self.input_display.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
             font-size: 42px;
             font-weight: bold;
             background: transparent;
