@@ -5,6 +5,8 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QLinearGradient
 from PyQt6.QtCore import QRectF
 
+from ui.theme import T
+
 
 class DigitalGaugeCard(QWidget):
     """數位儀表卡片 - 用於顯示轉速、水溫等數值"""
@@ -32,8 +34,8 @@ class DigitalGaugeCard(QWidget):
         
         self.title_label = QLabel(self.title)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.title_label.setStyleSheet("""
-            color: #888;
+        self.title_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 18px;
             font-weight: bold;
             background: transparent;
@@ -42,8 +44,8 @@ class DigitalGaugeCard(QWidget):
         
         self.value_label = QLabel("0")
         self.value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.value_label.setStyleSheet("""
-            color: #6af;
+        self.value_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 72px;
             font-weight: bold;
             font-family: 'Arial', 'Helvetica', sans-serif;
@@ -52,8 +54,8 @@ class DigitalGaugeCard(QWidget):
         
         self.unit_label = QLabel(self.unit)
         self.unit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.unit_label.setStyleSheet("""
-            color: #666;
+        self.unit_label.setStyleSheet(f"""
+            color: {T('TEXT_DISABLED')};
             font-size: 16px;
             background: transparent;
         """)
@@ -64,17 +66,17 @@ class DigitalGaugeCard(QWidget):
         self.progress_bar.setMinimum(0)
         self.progress_bar.setMaximum(100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                background: #2a2a35;
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background: {T('BG_CARD_ALT')};
                 border-radius: 6px;
-                border: 1px solid #3a3a45;
-            }
-            QProgressBar::chunk {
+                border: 1px solid {T('BORDER_HOVER')};
+            }}
+            QProgressBar::chunk {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #4a9eff, stop:1 #6af);
+                    stop:0 #4a9eff, stop:1 {T('PRIMARY')});
                 border-radius: 5px;
-            }
+            }}
         """)
         
         layout.addStretch()
@@ -248,8 +250,8 @@ class QuadGaugeCard(QWidget):
         layout.setSpacing(5)
         
         title = QLabel(f"{data['title']} ({data['unit']})")
-        title.setStyleSheet("""
-            color: #888;
+        title.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 12px;
             font-weight: bold;
             background: transparent;
@@ -263,8 +265,8 @@ class QuadGaugeCard(QWidget):
         title.setFixedHeight(title.sizeHint().height())
         
         value_label = QLabel(self._format_value(data["value"], data["decimals"]))
-        value_label.setStyleSheet("""
-            color: #6af;
+        value_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 54px;
             font-weight: bold;
             background: transparent;
@@ -591,21 +593,21 @@ class QuadGaugeDetailView(QWidget):
         self.back_btn = QPushButton("◀ 返回")
         self.back_btn.setFixedSize(80, 35)
         self.back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.back_btn.setStyleSheet("""
-            QPushButton {
+        self.back_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: rgba(100, 150, 255, 0.2);
-                color: #6af;
-                border: 2px solid #6af;
+                color: {T('PRIMARY')};
+                border: 2px solid {T('PRIMARY')};
                 border-radius: 8px;
                 font-size: 14px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: rgba(100, 150, 255, 0.4);
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: rgba(100, 150, 255, 0.6);
-            }
+            }}
         """)
         self.back_btn.clicked.connect(self.back_requested.emit)
         
@@ -615,8 +617,8 @@ class QuadGaugeDetailView(QWidget):
         main_layout.addWidget(top_bar)
         
         self.title_label = QLabel("ENGINE")
-        self.title_label.setStyleSheet("""
-            color: #888;
+        self.title_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 22px;
             font-weight: bold;
             background: transparent;
@@ -626,8 +628,8 @@ class QuadGaugeDetailView(QWidget):
         main_layout.addWidget(self.title_label)
         
         self.value_label = QLabel("0")
-        self.value_label.setStyleSheet("""
-            color: #6af;
+        self.value_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 96px;
             font-weight: bold;
             background: transparent;
@@ -636,8 +638,8 @@ class QuadGaugeDetailView(QWidget):
         main_layout.addWidget(self.value_label)
         
         self.unit_label = QLabel("RPM")
-        self.unit_label.setStyleSheet("""
-            color: #666;
+        self.unit_label.setStyleSheet(f"""
+            color: {T('TEXT_DISABLED')};
             font-size: 20px;
             background: transparent;
         """)
@@ -668,9 +670,9 @@ class QuadGaugeDetailView(QWidget):
         
         range_layout = QHBoxLayout()
         self.min_label = QLabel("0")
-        self.min_label.setStyleSheet("color: #555; font-size: 12px; background: transparent;")
+        self.min_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 12px; background: transparent;")
         self.max_label = QLabel("8000")
-        self.max_label.setStyleSheet("color: #555; font-size: 12px; background: transparent;")
+        self.max_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 12px; background: transparent;")
         range_layout.addWidget(self.min_label)
         range_layout.addStretch()
         range_layout.addWidget(self.max_label)
@@ -679,8 +681,8 @@ class QuadGaugeDetailView(QWidget):
         main_layout.addStretch()
         
         hint_label = QLabel("點擊左上角返回")
-        hint_label.setStyleSheet("""
-            color: #555;
+        hint_label.setStyleSheet(f"""
+            color: {T('TEXT_DISABLED')};
             font-size: 12px;
             background: transparent;
         """)

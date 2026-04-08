@@ -213,16 +213,16 @@ class ControlPanel(QWidget):
         wifi_info_layout.setContentsMargins(0, 0, 0, 0)
         
         self.wifi_status_label = QLabel("檢查中...")
-        self.wifi_status_label.setStyleSheet("""
-            color: white;
+        self.wifi_status_label.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
             font-size: 16px;
             font-weight: bold;
             background: transparent;
         """)
         
         self.wifi_detail_label = QLabel("取得連線資訊")
-        self.wifi_detail_label.setStyleSheet("""
-            color: #aaa;
+        self.wifi_detail_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 12px;
             background: transparent;
         """)
@@ -234,8 +234,8 @@ class ControlPanel(QWidget):
         
         # WiFi 信號強度指示
         self.wifi_signal_label = QLabel("")
-        self.wifi_signal_label.setStyleSheet("""
-            color: #6f6;
+        self.wifi_signal_label.setStyleSheet(f"""
+            color: {T('SUCCESS')};
             font-size: 18px;
             font-weight: bold;
             background: transparent;
@@ -270,16 +270,16 @@ class ControlPanel(QWidget):
         datetime_info_layout.setContentsMargins(0, 0, 0, 0)
         
         self.date_label = QLabel("")
-        self.date_label.setStyleSheet("""
-            color: white;
+        self.date_label.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
             font-size: 16px;
             font-weight: bold;
             background: transparent;
         """)
         
         self.weekday_label = QLabel("")
-        self.weekday_label.setStyleSheet("""
-            color: #aaa;
+        self.weekday_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 12px;
             background: transparent;
         """)
@@ -299,8 +299,8 @@ class ControlPanel(QWidget):
         # 隱藏指示
         hint_label = QLabel("向上滑動以關閉")
         hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint_label.setStyleSheet("""
-            color: #888;
+        hint_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 14px;
             background: transparent;
         """)
@@ -461,8 +461,8 @@ class ControlPanel(QWidget):
                 self.wifi_status_label.setText("未連線")
                 self.wifi_detail_label.setText("點擊 WiFi 按鈕進行連線")
                 self.wifi_signal_label.setText("")
-                self.wifi_detail_label.setStyleSheet("""
-                    color: #f66;
+                self.wifi_detail_label.setStyleSheet(f"""
+                    color: {T('DANGER')};
                     font-size: 14px;
                     background: transparent;
                 """)
@@ -1251,16 +1251,16 @@ class ControlPanel(QWidget):
         dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
         dialog.setStyleSheet(f"""
             QDialog {{
-                background-color: #1a1a25;
+                background-color: {T('BG_CARD')};
             }}
             QLabel {{
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 font-size: 18px;
                 background: transparent;
             }}
             QPushButton {{
-                background-color: #2a2a3a;
-                color: white;
+                background-color: {T('BG_CARD_ALT')};
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: {btn_radius}px;
                 font-size: {int(24 * scale)}px;
@@ -1268,10 +1268,10 @@ class ControlPanel(QWidget):
                 padding: {int(20 * scale)}px;
             }}
             QPushButton:hover {{
-                background-color: #3a3a4a;
+                background-color: {T('BORDER_HOVER')};
             }}
             QPushButton:pressed {{
-                background-color: #4a4a5a;
+                background-color: {T('BORDER_ACTIVE')};
             }}
         """)
         
@@ -1297,7 +1297,7 @@ class ControlPanel(QWidget):
         btn_app_restart.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_app_restart.setStyleSheet(f"""
             QPushButton {{
-                background-color: #00BCD4;
+                background-color: {T('BTN_UPDATE')};
                 font-size: {btn_font_size}px;
                 border-radius: {btn_radius}px;
             }}
