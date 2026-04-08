@@ -172,7 +172,6 @@ class Dashboard(QWidget):
         self.signal_update_radar.connect(self._slot_update_radar)
         
         # 連接主題強調色變更 Signal
-        from ui.theme import get_theme_manager
         get_theme_manager().accent_color_changed.connect(self._on_accent_color_changed)
         
         # 注意：油耗由 trip_info_card 直接從 RPM/Speed/Turbo 信號計算，
