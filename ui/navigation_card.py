@@ -147,7 +147,7 @@ class NavigationCard(QWidget):
         # 預設圖標
         self.default_icon = QLabel("↑", self.direction_icon)
         self.default_icon.setStyleSheet(f"""
-            color: {{T('PRIMARY')}};
+            color: {T('PRIMARY')};
             font-size: 120px;
             background: transparent;
         """)

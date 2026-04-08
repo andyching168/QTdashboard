@@ -23,7 +23,7 @@ class NumericKeypad(QDialog):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #2a2a35, stop:1 #1a1a25);
                 border-radius: 20px;
-                border: 3px solid #6af;
+                border: 3px solid {T('PRIMARY')};
             }}
         """)
         

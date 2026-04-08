@@ -3966,7 +3966,7 @@ class Dashboard(QWidget):
         
         app = QApplication.instance()
         if app:
-            for widget in app.allWidgets():
+            for widget in app.topLevelWidgets():
                 refresh_widget_tree(widget)
         
         self.update()

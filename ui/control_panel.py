@@ -1188,30 +1188,13 @@ class ControlPanel(QWidget):
             err_box.exec()
     
     def on_accent_color_changed(self, color_hex: str):
-        """當強調色改變時，重新整理整個 UI"""
-        print(f"[ControlPanel] 強調色已更改為 {color_hex}，正在刷新 UI...")
-        
-        def refresh_widget_tree(widget):
-            try:
-                if widget.styleSheet():
-                    ss = widget.styleSheet()
-                    widget.setStyleSheet("")
-                    widget.setStyleSheet(ss)
-                widget.update()
-                widget.style().unpolish(widget)
-                widget.style().polish(widget)
-                for child in widget.children():
-                    if isinstance(child, QWidget):
-                        refresh_widget_tree(child)
-            except:
-                pass
-        
-        app = QApplication.instance()
-        if app:
-            for widget in app.topLevelWidgets():
-                refresh_widget_tree(widget)
-            app.processEvents()
-            print("[ControlPanel] UI 已刷新")
+        """當強調色改變時通知 ControlPanel；實際 UI 刷新由集中主題邏輯處理。"""
+        # 保留此 slot 以維持既有 signal/slot 相容性。
+        # 不在這裡遞迴重設所有 widget 的 stylesheet，避免：
+        # 1. 重新設回相同字串卻未重新計算主題色；
+        # 2. 與上層 Dashboard/主題管理器的刷新邏輯重複；
+        # 3. 造成不必要的重繪與 processEvents() 開銷。
+        print(f"[ControlPanel] 強調色已更改為 {color_hex}，由主題管理流程統一刷新 UI")
     
     def show_settings_menu(self):
         """顯示設定選單"""

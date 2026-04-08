@@ -598,7 +598,7 @@ class QuadGaugeCard(QWidget):
             if hasattr(self.gauge_cells[i], 'progress_bar'):
                 self.gauge_cells[i].progress_bar.setStyleSheet(f"""
                     QProgressBar {{
-                        background: #2a2a35;
+                        background: {T('BG_CARD_ALT')};
                         border-radius: 3px;
                         border: none;
                     }}

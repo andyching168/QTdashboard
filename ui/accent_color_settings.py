@@ -22,45 +22,37 @@ class AccentColorSettingsDialog(QDialog):
     
     signals = AccentColorSignals()
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, on_changed=None):
         super().__init__(parent)
         self._parent_ref = parent
         self._live_preview_enabled = True
-        self.init_ui()
+        self._on_changed = on_changed
+        self._delegated = False
+        # 保留 class 名稱作為相容包裝器，但不再初始化另一套重複 UI。
+
+    def _notify_changed(self, color_hex: str):
+        """轉發強調色變更事件，維持既有 signal/callback 相容性。"""
+        self.signals.accent_color_changed.emit(color_hex)
+        if callable(self._on_changed):
+            self._on_changed(color_hex)
+
+    def exec(self):
+        """委派給唯一維護中的 `show_accent_color_popup()` 實作。"""
+        self._delegated = True
+        result = show_accent_color_popup(parent=self.parent(), on_changed=self._notify_changed)
+        return result if result is not None else int(QDialog.DialogCode.Accepted)
+
+    def open(self):
+        self.exec()
+
+    def show(self):
+        self.open()
 
     def showEvent(self, event):
         super().showEvent(event)
-        app = QApplication.instance()
-        parent_widget = self.parentWidget()
-
-        anchor = None
-        if parent_widget is not None:
-            anchor = parent_widget.window() if parent_widget.window() else parent_widget
-        elif app and app.activeWindow() is not self:
-            anchor = app.activeWindow()
-
-        anchor_geo = anchor.frameGeometry() if anchor else None
-        screen = QApplication.screenAt(anchor_geo.center()) if anchor_geo else QApplication.primaryScreen()
-        if screen is None:
-            screen = QApplication.primaryScreen()
-
-        if screen:
-            available = screen.availableGeometry()
-            if anchor_geo:
-                x = anchor_geo.x() + (anchor_geo.width() - self.width()) // 2
-                y = anchor_geo.y() + (anchor_geo.height() - self.height()) // 2
-            else:
-                x = available.x() + (available.width() - self.width()) // 2
-                y = available.y() + (available.height() - self.height()) // 2
-
-            max_x = available.x() + available.width() - self.width()
-            max_y = available.y() + available.height() - self.height()
-            x = max(available.x(), min(x, max_x))
-            y = max(available.y(), min(y, max_y))
-            self.move(x, y)
-
-        self.raise_()
-        self.activateWindow()
+        if not self._delegated:
+            self.open()
+        self.hide()
     
     def _get_window_scale(self):
         """取得視窗縮放比例"""
