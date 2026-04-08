@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
+from ui.theme import get_theme_manager, T
+
 class TurnSignalBar(QWidget):
     """方向燈漸層條 - 使用 QPainter 繪製，避免 CSS 效能問題
     
@@ -158,12 +160,12 @@ class ControlPanel(QWidget):
         self.speed_sync_mode_index = 0
         self.speed_sync_mode = self.speed_sync_modes[self.speed_sync_mode_index]
         button_configs = [
-            ("WiFi", "📶", "#1DB954"),
-            ("時間", "🕐", "#4285F4"),
-            ("亮度", "☀", "#FF9800"),
-            ("更新", "🔄", "#00BCD4"),
-            ("電源", "🔌", "#E91E63"),
-            ("設定", "⚙", "#9C27B0")
+            ("WiFi", "📶", T('BTN_WIFI')),
+            ("時間", "🕐", T('BTN_TIME')),
+            ("亮度", "☀", T('BTN_BRIGHTNESS')),
+            ("更新", "🔄", T('BTN_UPDATE')),
+            ("電源", "🔌", T('BTN_POWER')),
+            ("設定", "⚙", T('BTN_SETTINGS'))
         ]
         
         for title, icon, color in button_configs:
@@ -188,11 +190,11 @@ class ControlPanel(QWidget):
         # WiFi 狀態卡片
         wifi_card = QWidget()
         wifi_card.setFixedSize(280, 80)
-        wifi_card.setStyleSheet("""
-            QWidget {
+        wifi_card.setStyleSheet(f"""
+            QWidget {{
                 background: rgba(255, 255, 255, 0.08);
                 border-radius: 12px;
-            }
+            }}
         """)
         wifi_card_layout = QHBoxLayout(wifi_card)
         wifi_card_layout.setContentsMargins(15, 10, 15, 10)
@@ -211,16 +213,16 @@ class ControlPanel(QWidget):
         wifi_info_layout.setContentsMargins(0, 0, 0, 0)
         
         self.wifi_status_label = QLabel("檢查中...")
-        self.wifi_status_label.setStyleSheet("""
-            color: white;
+        self.wifi_status_label.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
             font-size: 16px;
             font-weight: bold;
             background: transparent;
         """)
         
         self.wifi_detail_label = QLabel("取得連線資訊")
-        self.wifi_detail_label.setStyleSheet("""
-            color: #aaa;
+        self.wifi_detail_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 12px;
             background: transparent;
         """)
@@ -232,8 +234,8 @@ class ControlPanel(QWidget):
         
         # WiFi 信號強度指示
         self.wifi_signal_label = QLabel("")
-        self.wifi_signal_label.setStyleSheet("""
-            color: #6f6;
+        self.wifi_signal_label.setStyleSheet(f"""
+            color: {T('SUCCESS')};
             font-size: 18px;
             font-weight: bold;
             background: transparent;
@@ -245,11 +247,11 @@ class ControlPanel(QWidget):
         # 日期時間卡片
         datetime_card = QWidget()
         datetime_card.setFixedSize(220, 80)
-        datetime_card.setStyleSheet("""
-            QWidget {
+        datetime_card.setStyleSheet(f"""
+            QWidget {{
                 background: rgba(255, 255, 255, 0.08);
                 border-radius: 12px;
-            }
+            }}
         """)
         datetime_card_layout = QHBoxLayout(datetime_card)
         datetime_card_layout.setContentsMargins(15, 10, 15, 10)
@@ -268,16 +270,16 @@ class ControlPanel(QWidget):
         datetime_info_layout.setContentsMargins(0, 0, 0, 0)
         
         self.date_label = QLabel("")
-        self.date_label.setStyleSheet("""
-            color: white;
+        self.date_label.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
             font-size: 16px;
             font-weight: bold;
             background: transparent;
         """)
         
         self.weekday_label = QLabel("")
-        self.weekday_label.setStyleSheet("""
-            color: #aaa;
+        self.weekday_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 12px;
             background: transparent;
         """)
@@ -297,8 +299,8 @@ class ControlPanel(QWidget):
         # 隱藏指示
         hint_label = QLabel("向上滑動以關閉")
         hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint_label.setStyleSheet("""
-            color: #888;
+        hint_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 14px;
             background: transparent;
         """)
@@ -459,8 +461,8 @@ class ControlPanel(QWidget):
                 self.wifi_status_label.setText("未連線")
                 self.wifi_detail_label.setText("點擊 WiFi 按鈕進行連線")
                 self.wifi_signal_label.setText("")
-                self.wifi_detail_label.setStyleSheet("""
-                    color: #f66;
+                self.wifi_detail_label.setStyleSheet(f"""
+                    color: {T('DANGER')};
                     font-size: 14px;
                     background: transparent;
                 """)
@@ -742,10 +744,8 @@ class ControlPanel(QWidget):
         elif title == "電源":
             self.show_power_menu()
         elif title == "設定":
-            # 開啟 MQTT 設定對話框
-            parent = self.parent()
-            if parent and hasattr(parent, 'show_mqtt_settings'):
-                parent.show_mqtt_settings()  # type: ignore
+            self.hide_panel()
+            self.show_settings_menu()
         elif title == "速度同步":
             # 檢查是否為長按（長按已處理，不要觸發普通點擊）
             btn = self._get_button_by_title("速度同步")
@@ -1187,6 +1187,185 @@ class ControlPanel(QWidget):
             err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             err_box.exec()
     
+    def on_accent_color_changed(self, color_hex: str):
+        """當強調色改變時通知 ControlPanel；實際 UI 刷新由集中主題邏輯處理。"""
+        # 保留此 slot 以維持既有 signal/slot 相容性。
+        # 不在這裡遞迴重設所有 widget 的 stylesheet，避免：
+        # 1. 重新設回相同字串卻未重新計算主題色；
+        # 2. 與上層 Dashboard/主題管理器的刷新邏輯重複；
+        # 3. 造成不必要的重繪與 processEvents() 開銷。
+        print(f"[ControlPanel] 強調色已更改為 {color_hex}，由主題管理流程統一刷新 UI")
+    
+    def show_settings_menu(self):
+        """顯示設定選單"""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QApplication, QMainWindow
+        
+        # 取得實際顯示的視窗大小
+        parent_width = 1920
+        parent_height = 480
+        
+        widget = self
+        while widget:
+            parent = widget.parent()
+            if parent is None:
+                break
+            if isinstance(parent, QMainWindow):
+                parent_width = parent.width()
+                parent_height = parent.height()
+                break
+            widget = parent
+        
+        scale = min(parent_width / 1920, parent_height / 480)
+        
+        dialog_width = int(1200 * scale)
+        dialog_height = int(260 * scale)
+        btn_width = int(320 * scale)
+        btn_height = int(80 * scale)
+        title_font_size = max(12, int(28 * scale))
+        btn_font_size = max(10, int(18 * scale))
+        btn_radius = max(5, int(15 * scale))
+        margin = max(10, int(40 * scale))
+        spacing = max(10, int(20 * scale))
+        
+        app = QApplication.instance()
+        dialog_parent = app.activeWindow() if app and app.activeWindow() else (self.window() if self.window() else self)
+        dialog = QDialog(dialog_parent)
+        dialog.setWindowTitle("設定")
+        dialog.setFixedSize(dialog_width, dialog_height)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        dialog.setModal(True)
+        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
+        dialog.setStyleSheet(f"""
+            QDialog {{
+                background-color: {T('BG_CARD')};
+            }}
+            QLabel {{
+                color: {T('TEXT_PRIMARY')};
+                font-size: 18px;
+                background: transparent;
+            }}
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(margin, int(30 * scale), margin, int(30 * scale))
+        layout.setSpacing(spacing)
+        
+        # 標題
+        title = QLabel("⚙ 設定選項")
+        title.setStyleSheet(f"font-size: {title_font_size}px; font-weight: bold; color: {T('TEXT_PRIMARY')};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+        
+        layout.addSpacing(int(10 * scale))
+        
+        # 設定選項按鈕
+        def create_settings_btn(text, icon, description, callback):
+            btn = QPushButton(f"{icon} {text}")
+            btn.setFixedSize(btn_width, btn_height)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {T('BG_CARD_ALT')};
+                    color: {T('TEXT_PRIMARY')};
+                    border: none;
+                    border-radius: {btn_radius}px;
+                    font-size: {btn_font_size}px;
+                    font-weight: bold;
+                    padding: {int(10 * scale)}px;
+                }}
+                QPushButton:hover {{
+                    background-color: {T('BORDER_HOVER')};
+                }}
+            """)
+            btn.clicked.connect(callback)
+            return btn
+        
+        # MQTT 設定
+        def open_mqtt():
+            dialog.accept()
+            parent = self.parent()
+            if parent and hasattr(parent, 'show_mqtt_settings'):
+                parent.show_mqtt_settings()
+        
+        # Spotify 設定
+        def open_spotify():
+            dialog.accept()
+            parent = self.parent()
+            if parent and hasattr(parent, 'show_spotify_settings'):
+                parent.show_spotify_settings()
+        
+        # 主題設定
+        def open_theme():
+            from ui.accent_color_settings import show_accent_color_popup
+            # 使用穩定父視窗（show_settings_menu 一開始解析出的頂層視窗）
+            # 並延後到設定選單關閉後再開啟，避免 parent 被銷毀導致彈窗消失
+            theme_parent = dialog_parent
+
+            def _show_theme_dialog():
+                show_accent_color_popup(parent=theme_parent, on_changed=self.on_accent_color_changed)
+
+            dialog.accept()
+            QTimer.singleShot(0, _show_theme_dialog)
+        
+        options_layout = QHBoxLayout()
+        options_layout.setSpacing(int(20 * scale))
+        options_layout.addStretch()
+        options_layout.addWidget(create_settings_btn("MQTT 設定", "📡", "設定 MQTT 伺服器連線", open_mqtt))
+        options_layout.addWidget(create_settings_btn("Spotify 設定", "🎵", "設定 Spotify 音樂播放", open_spotify))
+        options_layout.addWidget(create_settings_btn("主題強調色設定", "🎨", "自訂 UI 強調色", open_theme))
+        options_layout.addStretch()
+        layout.addLayout(options_layout)
+
+        layout.addStretch()
+        
+        # 取消按鈕
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setFixedSize(int(180 * scale), int(44 * scale))
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {T('TEXT_SECONDARY')};
+                border: 2px solid {T('BORDER_DEFAULT')};
+                border-radius: {btn_radius}px;
+                font-size: {int(btn_font_size * 0.8)}px;
+            }}
+            QPushButton:hover {{
+                border-color: {T('TEXT_SECONDARY')};
+            }}
+        """)
+        cancel_btn.clicked.connect(dialog.reject)
+        cancel_wrap = QHBoxLayout()
+        cancel_wrap.addStretch()
+        cancel_wrap.addWidget(cancel_btn)
+        cancel_wrap.addStretch()
+        layout.addLayout(cancel_wrap)
+        
+        # 顯示並置中（以可見頂層視窗為準，並限制在螢幕可見範圍）
+        anchor_geo = dialog_parent.frameGeometry() if dialog_parent else None
+        screen = QApplication.screenAt(anchor_geo.center()) if anchor_geo else QApplication.primaryScreen()
+        if screen is None:
+            screen = QApplication.primaryScreen()
+
+        if screen:
+            available = screen.availableGeometry()
+            if anchor_geo:
+                x = anchor_geo.x() + (anchor_geo.width() - dialog.width()) // 2
+                y = anchor_geo.y() + (anchor_geo.height() - dialog.height()) // 2
+            else:
+                x = available.x() + (available.width() - dialog.width()) // 2
+                y = available.y() + (available.height() - dialog.height()) // 2
+
+            max_x = available.x() + available.width() - dialog.width()
+            max_y = available.y() + available.height() - dialog.height()
+            x = max(available.x(), min(x, max_x))
+            y = max(available.y(), min(y, max_y))
+            dialog.move(x, y)
+        dialog.raise_()
+        dialog.activateWindow()
+        dialog.exec()
+    
     def show_power_menu(self):
         """顯示電源選單"""
         from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QApplication, QMainWindow
@@ -1249,16 +1428,16 @@ class ControlPanel(QWidget):
         dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
         dialog.setStyleSheet(f"""
             QDialog {{
-                background-color: #1a1a25;
+                background-color: {T('BG_CARD')};
             }}
             QLabel {{
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 font-size: 18px;
                 background: transparent;
             }}
             QPushButton {{
-                background-color: #2a2a3a;
-                color: white;
+                background-color: {T('BG_CARD_ALT')};
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: {btn_radius}px;
                 font-size: {int(24 * scale)}px;
@@ -1266,10 +1445,10 @@ class ControlPanel(QWidget):
                 padding: {int(20 * scale)}px;
             }}
             QPushButton:hover {{
-                background-color: #3a3a4a;
+                background-color: {T('BORDER_HOVER')};
             }}
             QPushButton:pressed {{
-                background-color: #4a4a5a;
+                background-color: {T('BORDER_ACTIVE')};
             }}
         """)
         
@@ -1295,7 +1474,7 @@ class ControlPanel(QWidget):
         btn_app_restart.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_app_restart.setStyleSheet(f"""
             QPushButton {{
-                background-color: #00BCD4;
+                background-color: {T('BTN_UPDATE')};
                 font-size: {btn_font_size}px;
                 border-radius: {btn_radius}px;
             }}

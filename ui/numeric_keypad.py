@@ -1,6 +1,8 @@
 from PyQt6.QtWidgets import QDialog, QWidget, QLabel, QGridLayout, QHBoxLayout, QVBoxLayout, QPushButton
 from PyQt6.QtCore import Qt
 
+from ui.theme import T
+
 
 class NumericKeypad(QDialog):
     """虛擬數字鍵盤對話框"""
@@ -16,13 +18,13 @@ class NumericKeypad(QDialog):
         
         container = QWidget(self)
         container.setGeometry(0, 0, 400, 500)
-        container.setStyleSheet("""
-            QWidget {
+        container.setStyleSheet(f"""
+            QWidget {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #2a2a35, stop:1 #1a1a25);
                 border-radius: 20px;
-                border: 3px solid #6af;
-            }
+                border: 3px solid {T('PRIMARY')};
+            }}
         """)
         
         layout = QVBoxLayout(container)
@@ -30,8 +32,8 @@ class NumericKeypad(QDialog):
         layout.setSpacing(15)
         
         title = QLabel("輸入總里程")
-        title.setStyleSheet("""
-            color: #6af;
+        title.setStyleSheet(f"""
+            color: {{T('PRIMARY')}};
             font-size: 20px;
             font-weight: bold;
             background: transparent;
@@ -82,34 +84,34 @@ class NumericKeypad(QDialog):
         btn_cancel = QPushButton("取消")
         btn_cancel.setFixedHeight(50)
         btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_cancel.setStyleSheet("""
-            QPushButton {
+        btn_cancel.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #555;
                 color: white;
                 border: none;
                 border-radius: 10px;
                 font-size: 16px;
                 font-weight: bold;
-            }
-            QPushButton:hover { background-color: #666; }
-            QPushButton:pressed { background-color: #444; }
+            }}
+            QPushButton:hover {{ background-color: #666; }}
+            QPushButton:pressed {{ background-color: #444; }}
         """)
         btn_cancel.clicked.connect(self.cancel)
         
         btn_ok = QPushButton("確定")
         btn_ok.setFixedHeight(50)
         btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_ok.setStyleSheet("""
-            QPushButton {
-                background-color: #6af;
+        btn_ok.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {{T('PRIMARY')}};
                 color: white;
                 border: none;
                 border-radius: 10px;
                 font-size: 16px;
                 font-weight: bold;
-            }
-            QPushButton:hover { background-color: #5ad; }
-            QPushButton:pressed { background-color: #49c; }
+            }}
+            QPushButton:hover {{ background-color: #5ad; }}
+            QPushButton:pressed {{ background-color: #49c; }}
         """)
         btn_ok.clicked.connect(self.confirm)
         

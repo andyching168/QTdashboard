@@ -3,6 +3,8 @@ import platform
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 
+from ui.theme import T
+
 # Try to import multimedia, but make it optional
 HAS_MULTIMEDIA = False
 if platform.system() != 'Darwin':
@@ -70,7 +72,7 @@ class SplashScreen(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         
         label = QLabel("Loading...")
-        label.setStyleSheet("color: #6af; font-size: 24px; background-color: black;")
+        label.setStyleSheet(f"color: {T('PRIMARY')}; font-size: 24px; background-color: black;")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
         

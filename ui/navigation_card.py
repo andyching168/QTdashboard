@@ -4,6 +4,8 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
+from ui.theme import T
+
 class NavigationCard(QWidget):
     """導航資訊卡片 - 顯示導航方向、距離、時間等資訊"""
     
@@ -12,12 +14,12 @@ class NavigationCard(QWidget):
         self.setFixedSize(800, 380)
         
         # 設置背景樣式
-        self.setStyleSheet("""
-            QWidget {
+        self.setStyleSheet(f"""
+            QWidget {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #1a1a25, stop:1 #0f0f18);
+                    stop:0 {T('BG_CARD')}, stop:1 #0f0f18);
                 border-radius: 20px;
-            }
+            }}
         """)
         
         # 導航資料
@@ -52,7 +54,7 @@ class NavigationCard(QWidget):
         # 網路斷線覆蓋層
         self.offline_overlay = QWidget(self)
         self.offline_overlay.setGeometry(0, 0, 800, 380)
-        self.offline_overlay.setStyleSheet("""
+        self.offline_overlay.setStyleSheet(f"""
             background: rgba(10, 10, 15, 0.9);
             border-radius: 20px;
         """)
@@ -70,7 +72,7 @@ class NavigationCard(QWidget):
         offline_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         offline_desc = QLabel("請檢查網路連線")
-        offline_desc.setStyleSheet("color: #888; font-size: 16px; background: transparent;")
+        offline_desc.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 16px; background: transparent;")
         offline_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         offline_layout.addWidget(offline_icon)
@@ -134,7 +136,7 @@ class NavigationCard(QWidget):
         
         self.direction_icon = QLabel()
         self.direction_icon.setFixedSize(280, 280)
-        self.direction_icon.setStyleSheet("""
+        self.direction_icon.setStyleSheet(f"""
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                 stop:0 #2a3a4a, stop:0.5 #1d2d3d, stop:1 #101a2a);
             border-radius: 20px;
@@ -144,8 +146,8 @@ class NavigationCard(QWidget):
         
         # 預設圖標
         self.default_icon = QLabel("↑", self.direction_icon)
-        self.default_icon.setStyleSheet("""
-            color: #6af;
+        self.default_icon.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 120px;
             background: transparent;
         """)
@@ -163,8 +165,8 @@ class NavigationCard(QWidget):
         
         # Navigation 標題
         title_label = QLabel("Navigation")
-        title_label.setStyleSheet("""
-            color: #6af;
+        title_label.setStyleSheet(f"""
+            color: {{T('PRIMARY')}};
             font-size: 16px;
             font-weight: bold;
             background: transparent;
@@ -173,7 +175,7 @@ class NavigationCard(QWidget):
         
         # 方向說明（大字）- 支援自動縮小與換行
         self.direction_label = QLabel("--")
-        self.direction_label.setStyleSheet("""
+        self.direction_label.setStyleSheet(f"""
             color: white;
             font-size: 36px;
             font-weight: bold;
@@ -192,27 +194,27 @@ class NavigationCard(QWidget):
         
         # 下個轉彎距離（突出顯示）
         turn_distance_title = QLabel("下個轉彎")
-        turn_distance_title.setStyleSheet("color: #888; font-size: 14px; background: transparent;")
+        turn_distance_title.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
         self.turn_distance_value = QLabel("--")
         self.turn_distance_value.setStyleSheet("color: #6f6; font-size: 28px; font-weight: bold; background: transparent;")
         
         # 總距離
         distance_title = QLabel("總距離")
-        distance_title.setStyleSheet("color: #888; font-size: 14px; background: transparent;")
+        distance_title.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
         self.distance_value = QLabel("--")
         self.distance_value.setStyleSheet("color: #ccc; font-size: 20px; font-weight: bold; background: transparent;")
         
         # 預計時間
         duration_title = QLabel("預計時間")
-        duration_title.setStyleSheet("color: #888; font-size: 14px; background: transparent;")
+        duration_title.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
         self.duration_value = QLabel("--")
         self.duration_value.setStyleSheet("color: #ccc; font-size: 20px; font-weight: bold; background: transparent;")
         
         # 抵達時間
         eta_title = QLabel("抵達時間")
-        eta_title.setStyleSheet("color: #888; font-size: 14px; background: transparent;")
+        eta_title.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
         self.eta_value = QLabel("--")
-        self.eta_value.setStyleSheet("color: #6af; font-size: 24px; font-weight: bold; background: transparent;")
+        self.eta_value.setStyleSheet(f"color: {T('PRIMARY')}; font-size: 24px; font-weight: bold; background: transparent;")
         
         # 佈局：
         # Row 0: 下個轉彎(標題)  | 總距離(標題)
@@ -435,6 +437,14 @@ class NavigationCard(QWidget):
         self.icon_base64 = ""
         self._reset_icon()
         self.show_no_nav_ui()
+    
+    def refresh_theme(self):
+        """重新整理 UI 主題顏色（更換強調色後呼叫）"""
+        for widget in self.findChildren(QLabel):
+            ss = widget.styleSheet()
+            if 'T(' in ss and 'PRIMARY' in ss:
+                widget.setStyleSheet("")
+                widget.setStyleSheet(ss)
 
 
 

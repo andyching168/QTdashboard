@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap
 from ui.common import RadarOverlay
+from ui.theme import T
 
 
 class DoorStatusCard(QWidget):
@@ -12,12 +13,12 @@ class DoorStatusCard(QWidget):
         super().__init__(parent)
         self.setFixedSize(380, 380)
         
-        self.setStyleSheet("""
-            QWidget {
+        self.setStyleSheet(f"""
+            QWidget {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #1a1a25, stop:1 #0f0f18);
+                    stop:0 {T('BG_CARD')}, stop:1 #0f0f18);
                 border-radius: 20px;
-            }
+            }}
         """)
         
         self.door_fl_closed = True
@@ -260,3 +261,7 @@ class DoorStatusCard(QWidget):
                 font-weight: bold;
                 background: transparent;
             """)
+    
+    def refresh_theme(self):
+        """重新整理 UI 主題顏色（更換強調色後呼叫）"""
+        pass
