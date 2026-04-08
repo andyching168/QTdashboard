@@ -744,6 +744,7 @@ class ControlPanel(QWidget):
         elif title == "電源":
             self.show_power_menu()
         elif title == "設定":
+            self.hide_panel()
             self.show_settings_menu()
         elif title == "速度同步":
             # 檢查是否為長按（長按已處理，不要觸發普通點擊）
