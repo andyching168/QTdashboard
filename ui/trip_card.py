@@ -69,8 +69,8 @@ class OdometerCard(QWidget):
         
         # 標題
         title_label = QLabel("Odometer")
-        title_label.setStyleSheet("""
-            color: #6af;
+        title_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 20px;
             font-weight: bold;
             background: transparent;
@@ -123,8 +123,8 @@ class OdometerCard(QWidget):
         
         # 同步時間顯示
         self.sync_time_label = QLabel("未同步")
-        self.sync_time_label.setStyleSheet("""
-            color: #666;
+        self.sync_time_label.setStyleSheet(f"""
+            color: {T('TEXT_DISABLED')};
             font-size: 12px;
             background: transparent;
         """)
@@ -137,21 +137,21 @@ class OdometerCard(QWidget):
         sync_btn = QPushButton("同步里程")
         sync_btn.setFixedSize(200, 45)
         sync_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        sync_btn.setStyleSheet("""
-            QPushButton {
+        sync_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: rgba(100, 150, 255, 0.3);
-                color: #6af;
-                border: 2px solid #6af;
+                color: {T('PRIMARY')};
+                border: 2px solid {T('PRIMARY')};
                 border-radius: 10px;
                 font-size: 16px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: rgba(100, 150, 255, 0.5);
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: rgba(100, 150, 255, 0.7);
-            }
+            }}
         """)
         sync_btn.clicked.connect(self.show_keypad)
         
