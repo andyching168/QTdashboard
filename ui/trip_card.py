@@ -175,8 +175,8 @@ class OdometerCard(QWidget):
         
         # 標題
         title = QLabel("輸入總里程")
-        title.setStyleSheet("""
-            color: #6af;
+        title.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 18px;
             font-weight: bold;
             background: transparent;
@@ -186,23 +186,23 @@ class OdometerCard(QWidget):
         # 顯示器
         self.input_display = QLabel("0")
         self.input_display.setFixedHeight(50)
-        self.input_display.setStyleSheet("""
-            QLabel {
+        self.input_display.setStyleSheet(f"""
+            QLabel {{
                 background: #1a1a25;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 font-size: 32px;
                 font-weight: bold;
                 border: 2px solid #4a4a55;
                 border-radius: 8px;
                 padding: 5px 10px;
-            }
+            }}
         """)
         self.input_display.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         
         # 單位標籤
         unit_label = QLabel("km")
-        unit_label.setStyleSheet("""
-            color: #888;
+        unit_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 12px;
             background: transparent;
         """)
