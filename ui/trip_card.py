@@ -195,7 +195,7 @@ class OdometerCard(QWidget):
                 border: 2px solid #4a4a55;
                 border-radius: 8px;
                 padding: 5px 10px;
-            }
+            }}
         """)
         self.input_display.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         
