@@ -1008,7 +1008,7 @@ class OdometerCardWide(QWidget):
         current_layout.setSpacing(10)
         
         current_title = QLabel("目前里程")
-        current_title.setStyleSheet("color: {T('TEXT_SECONDARY')}; font-size: 16px; background: transparent;")
+        current_title.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 16px; background: transparent;")
         current_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.current_odo_label = QLabel("0 km")
@@ -1037,7 +1037,7 @@ class OdometerCardWide(QWidget):
         new_layout.setSpacing(10)
         
         new_title = QLabel("新里程")
-        new_title.setStyleSheet("color: {T('PRIMARY')}; font-size: 16px; background: transparent;")
+        new_title.setStyleSheet(f"color: {T('PRIMARY')}; font-size: 16px; background: transparent;")
         new_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.input_display = QLabel("_ _ _ _ _ _")
