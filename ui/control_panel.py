@@ -1309,6 +1309,7 @@ class ControlPanel(QWidget):
         # 主題設定
         def open_theme():
             dialog.close()
+            self.hide_panel()
             from ui.accent_color_settings import AccentColorSettingsDialog
             theme_dialog = AccentColorSettingsDialog(parent=self)
             theme_dialog.signals.accent_color_changed.connect(self.on_accent_color_changed)
