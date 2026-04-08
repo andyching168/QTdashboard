@@ -1606,6 +1606,17 @@ class Dashboard(QWidget):
             x = (screen_geometry.width() - dialog_geometry.width()) // 2
             y = (screen_geometry.height() - dialog_geometry.height()) // 2
             self.mqtt_dialog.move(x, y)
+
+    def show_spotify_settings(self):
+        """顯示 Spotify 設定（授權）對話框"""
+        print("開啟 Spotify 設定對話框...")
+
+        # 先隱藏控制面板
+        if self.panel_visible:
+            self.hide_control_panel()
+
+        # 復用既有 Spotify 授權/綁定流程
+        self.start_spotify_auth()
     
     def on_mqtt_settings_saved(self, success):
         """MQTT 設定儲存完成回調"""
