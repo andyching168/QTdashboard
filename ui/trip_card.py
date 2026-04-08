@@ -101,7 +101,7 @@ class OdometerCard(QWidget):
         
         self.odo_distance_label = QLabel("0")
         self.odo_distance_label.setStyleSheet("""
-            color: white;
+            color: {T('TEXT_PRIMARY')};
             font-size: 56px;
             font-weight: bold;
             background: transparent;
@@ -189,7 +189,7 @@ class OdometerCard(QWidget):
         self.input_display.setStyleSheet("""
             QLabel {
                 background: #1a1a25;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 font-size: 32px;
                 font-weight: bold;
                 border: 2px solid #4a4a55;
@@ -236,7 +236,7 @@ class OdometerCard(QWidget):
         btn_cancel.setStyleSheet("""
             QPushButton {
                 background-color: #555;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: 8px;
                 font-size: 14px;
@@ -257,7 +257,7 @@ class OdometerCard(QWidget):
         btn_ok.setStyleSheet("""
             QPushButton {
                 background-color: {T('PRIMARY')};
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: 8px;
                 font-size: 14px;
@@ -293,7 +293,7 @@ class OdometerCard(QWidget):
         btn.setStyleSheet("""
             QPushButton {
                 background-color: #3a3a45;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: 8px;
                 font-size: 20px;
@@ -317,7 +317,7 @@ class OdometerCard(QWidget):
         btn.setStyleSheet("""
             QPushButton {
                 background-color: #6a5acd;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: 8px;
                 font-size: 18px;
@@ -554,7 +554,7 @@ class TripInfoCardWide(QWidget):
         
         value_lbl = QLabel(value)
         value_lbl.setStyleSheet("""
-            color: white;
+            color: {T('TEXT_PRIMARY')};
             font-size: 42px;
             font-weight: bold;
             background: transparent;
@@ -894,7 +894,7 @@ class OdometerCardWide(QWidget):
         
         self.odo_distance_label = QLabel("0")
         self.odo_distance_label.setStyleSheet("""
-            color: white;
+            color: {T('TEXT_PRIMARY')};
             font-size: 56px;
             font-weight: bold;
             background: transparent;
@@ -1042,7 +1042,7 @@ class OdometerCardWide(QWidget):
         
         self.input_display = QLabel("_ _ _ _ _ _")
         self.input_display.setStyleSheet("""
-            color: white;
+            color: {T('TEXT_PRIMARY')};
             font-size: 42px;
             font-weight: bold;
             background: transparent;
@@ -1099,7 +1099,7 @@ class OdometerCardWide(QWidget):
         btn_cancel.setStyleSheet("""
             QPushButton {
                 background-color: #555;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: 10px;
                 font-size: 18px;
@@ -1116,7 +1116,7 @@ class OdometerCardWide(QWidget):
         btn_ok.setStyleSheet("""
             QPushButton {
                 background-color: #55aa55;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: 10px;
                 font-size: 18px;
@@ -1147,7 +1147,7 @@ class OdometerCardWide(QWidget):
         btn.setStyleSheet("""
             QPushButton {
                 background-color: #3a3a45;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: 10px;
                 font-size: 26px;
@@ -1167,7 +1167,7 @@ class OdometerCardWide(QWidget):
         btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {color};
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: 10px;
                 font-size: 22px;
@@ -1409,7 +1409,7 @@ class TripCard(QWidget):
             distance_label = self.trip2_distance_label
             
         distance_label.setStyleSheet("""
-            color: white;
+            color: {T('TEXT_PRIMARY')};
             font-size: 48px;
             font-weight: bold;
             background: transparent;
@@ -1627,7 +1627,7 @@ class TripCardWide(QWidget):
             distance_label = self.trip2_distance_label
         
         distance_label.setStyleSheet("""
-            color: white;
+            color: {T('TEXT_PRIMARY')};
             font-size: 72px;
             font-weight: bold;
             background: transparent;

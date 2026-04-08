@@ -59,11 +59,11 @@ class MusicCard(QWidget):
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         text_label = QLabel("Spotify 未連結")
-        text_label.setStyleSheet("color: white; font-size: 24px; font-weight: bold; background: transparent;")
+        text_label.setStyleSheet("color: {T('TEXT_PRIMARY')}; font-size: 24px; font-weight: bold; background: transparent;")
         text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         desc_label = QLabel("請點擊下方按鈕進行綁定\n以顯示播放資訊")
-        desc_label.setStyleSheet("color: #aaa; font-size: 16px; background: transparent;")
+        desc_label.setStyleSheet("color: {T('TEXT_SECONDARY')}; font-size: 16px; background: transparent;")
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_label.setWordWrap(True)
         
@@ -73,7 +73,7 @@ class MusicCard(QWidget):
         self.bind_btn.setStyleSheet("""
             QPushButton {
                 background-color: #1DB954;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border-radius: 25px;
                 font-size: 18px;
                 font-weight: bold;
@@ -142,7 +142,7 @@ class MusicCard(QWidget):
         # 歌曲名稱
         self.song_title = MarqueeLabel("Waiting for music...")
         self.song_title.setStyleSheet("""
-            color: white;
+            color: {T('TEXT_PRIMARY')};
             font-size: 18px;
             font-weight: bold;
             background: transparent;
@@ -153,7 +153,7 @@ class MusicCard(QWidget):
         # 演出者
         self.artist_name = MarqueeLabel("-")
         self.artist_name.setStyleSheet("""
-            color: #aaa;
+            color: {T('TEXT_SECONDARY')};
             font-size: 14px;
             background: transparent;
         """)
@@ -459,7 +459,7 @@ class MusicCardWide(QWidget):
         offline_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         offline_text = QLabel("網路已斷線")
-        offline_text.setStyleSheet("color: #f66; font-size: 28px; font-weight: bold; background: transparent;")
+        offline_text.setStyleSheet("color: {T('DANGER')}; font-size: 28px; font-weight: bold; background: transparent;")
         offline_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         offline_desc = QLabel("請檢查網路連線")
@@ -496,10 +496,10 @@ class MusicCardWide(QWidget):
         right_layout.setSpacing(15)
         
         text_label = QLabel("Spotify 未連結")
-        text_label.setStyleSheet("color: white; font-size: 32px; font-weight: bold; background: transparent;")
+        text_label.setStyleSheet("color: {T('TEXT_PRIMARY')}; font-size: 32px; font-weight: bold; background: transparent;")
         
         desc_label = QLabel("請點擊下方按鈕進行綁定，以顯示您的 Spotify 播放資訊")
-        desc_label.setStyleSheet("color: #aaa; font-size: 18px; background: transparent;")
+        desc_label.setStyleSheet("color: {T('TEXT_SECONDARY')}; font-size: 18px; background: transparent;")
         desc_label.setWordWrap(True)
         
         self.bind_btn = QPushButton("綁定 Spotify")
@@ -508,7 +508,7 @@ class MusicCardWide(QWidget):
         self.bind_btn.setStyleSheet("""
             QPushButton {
                 background-color: #1DB954;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border-radius: 30px;
                 font-size: 22px;
                 font-weight: bold;
@@ -587,7 +587,7 @@ class MusicCardWide(QWidget):
         # 歌曲名稱（大字）
         self.song_title = MarqueeLabel("Waiting for music...")
         self.song_title.setStyleSheet("""
-            color: white;
+            color: {T('TEXT_PRIMARY')};
             font-size: 32px;
             font-weight: bold;
             background: transparent;
@@ -598,7 +598,7 @@ class MusicCardWide(QWidget):
         # 演出者
         self.artist_name = MarqueeLabel("-")
         self.artist_name.setStyleSheet("""
-            color: #ccc;
+            color: {T('TEXT_PRIMARY')};
             font-size: 22px;
             background: transparent;
         """)
@@ -647,14 +647,14 @@ class MusicCardWide(QWidget):
         
         self.current_time = QLabel("0:00")
         self.current_time.setStyleSheet("""
-            color: #aaa;
+            color: {T('TEXT_SECONDARY')};
             font-size: 16px;
             background: transparent;
         """)
         
         self.total_time = QLabel("0:00")
         self.total_time.setStyleSheet("""
-            color: #aaa;
+            color: {T('TEXT_SECONDARY')};
             font-size: 16px;
             background: transparent;
         """)
