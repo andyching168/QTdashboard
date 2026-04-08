@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QLabel, QApplication, QMainWindow
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QObject
 from PyQt6.QtGui import QColor, QPainter, QPixmap
 
 from ui.theme import T, ACCENT_COLOR_PRESETS, get_theme_manager
