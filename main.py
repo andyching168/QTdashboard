@@ -3955,8 +3955,10 @@ class Dashboard(QWidget):
             except:
                 pass
         
-        for widget in self.topLevelWidgets():
-            refresh_widget_tree(widget)
+        app = QApplication.instance()
+        if app:
+            for widget in app.allWidgets():
+                refresh_widget_tree(widget)
         
         self.update()
         print("[Dashboard] 卡片 UI 已刷新")
