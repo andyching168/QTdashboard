@@ -60,6 +60,7 @@ from ui.navigation_card import NavigationCard
 from ui.threads import GPSMonitorThread, RadarMonitorThread
 from ui.scalable_window import ScalableWindow
 from ui.numeric_keypad import NumericKeypad
+from ui.theme import get_theme_manager, T
 
 from spotify.spotify_auth import SpotifyAuthManager
 from spotify.spotify_qr_auth import SpotifyQRAuthDialog
@@ -177,11 +178,11 @@ class Dashboard(QWidget):
         self.setFixedSize(1920, 480)
         
         # Carbon fiber like background
-        self.setStyleSheet("""
-            QWidget {
+        self.setStyleSheet(f"""
+            QWidget {{
                 background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #0a0a0f, stop:0.5 #15151a, stop:1 #0a0a0f);
-            }
+                    stop:0 {T('BG_DARK')}, stop:0.5 #15151a, stop:1 {T('BG_DARK')});
+            }}
         """)
         
         # 下拉面板相關
@@ -282,37 +283,37 @@ class Dashboard(QWidget):
         # 優先判斷：無裝置
         if self.gps_device_found == False:
             self.gps_icon_label.setText("GPS!")
-            self.gps_icon_label.setStyleSheet("color: #ef4444; font-size: 18px; font-weight: bold; background: transparent;")
+            self.gps_icon_label.setStyleSheet(f"color: {T('GPS_NOT_FOUND')}; font-size: 18px; font-weight: bold; background: transparent;")
             self.gps_icon_label.setToolTip("GPS: 未偵測到裝置")
             self.gps_speed_label.setText("--")
-            self.gps_speed_label.setStyleSheet("color: #ef4444; font-size: 16px; font-weight: bold; background: transparent;")
+            self.gps_speed_label.setStyleSheet(f"color: {T('GPS_NOT_FOUND')}; font-size: 16px; font-weight: bold; background: transparent;")
         elif self.is_gps_fixed:
             if self.is_using_external_gps:
                 if self.is_external_gps_fresh:
                     # 黃色 (External GPS - 即時)
                     self.gps_icon_label.setText("GPS*")
-                    self.gps_icon_label.setStyleSheet("color: #facc15; font-size: 18px; font-weight: bold; background: transparent;")
+                    self.gps_icon_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_FRESH')}; font-size: 18px; font-weight: bold; background: transparent;")
                     self.gps_icon_label.setToolTip("GPS: External (MQTT) - 即時")
-                    self.gps_speed_label.setStyleSheet("color: #facc15; font-size: 16px; font-weight: bold; background: transparent;")
+                    self.gps_speed_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_FRESH')}; font-size: 16px; font-weight: bold; background: transparent;")
                 else:
                     # 灰色 (External GPS - 過時但可用)
                     self.gps_icon_label.setText("GPS*")
-                    self.gps_icon_label.setStyleSheet("color: #888; font-size: 18px; font-weight: bold; background: transparent;")
+                    self.gps_icon_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_STALE')}; font-size: 18px; font-weight: bold; background: transparent;")
                     self.gps_icon_label.setToolTip("GPS: External (MQTT) - 最後位置")
-                    self.gps_speed_label.setStyleSheet("color: #888; font-size: 16px; font-weight: bold; background: transparent;")
+                    self.gps_speed_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_STALE')}; font-size: 16px; font-weight: bold; background: transparent;")
             else:
                 # 綠色 (Internal Fix)
                 self.gps_icon_label.setText("GPS")
-                self.gps_icon_label.setStyleSheet("color: #4ade80; font-size: 18px; font-weight: bold; background: transparent;")
+                self.gps_icon_label.setStyleSheet(f"color: {T('GPS_INTERNAL')}; font-size: 18px; font-weight: bold; background: transparent;")
                 self.gps_icon_label.setToolTip("GPS: Fixed (3D)")
-                self.gps_speed_label.setStyleSheet("color: #4ade80; font-size: 16px; font-weight: bold; background: transparent;")
+                self.gps_speed_label.setStyleSheet(f"color: {T('GPS_INTERNAL')}; font-size: 16px; font-weight: bold; background: transparent;")
         else:
             # 灰色 (No Fix - 搜尋中)
             self.gps_icon_label.setText("GPS")
-            self.gps_icon_label.setStyleSheet("color: #444; font-size: 18px; font-weight: bold; background: transparent;")
+            self.gps_icon_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 18px; font-weight: bold; background: transparent;")
             self.gps_icon_label.setToolTip("GPS: Searching...")
             self.gps_speed_label.setText("--")
-            self.gps_speed_label.setStyleSheet("color: #444; font-size: 16px; font-weight: bold; background: transparent;")
+            self.gps_speed_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 16px; font-weight: bold; background: transparent;")
         
         # Force Style Update
         self.gps_icon_label.style().unpolish(self.gps_icon_label)
@@ -391,13 +392,13 @@ class Dashboard(QWidget):
             n_speed = dual_limits.get('N', '-')
             s_speed = dual_limits.get('S', '-')
             self.speed_limit_label.setText(f"N:{n_speed} S:{s_speed}")
-            self.speed_limit_label.setStyleSheet("""
-                color: #000;
+            self.speed_limit_label.setStyleSheet(f"""
+                color: {T('SPEED_LIMIT_TEXT')};
                 font-size: 32px;
                 font-weight: bold;
                 font-family: Arial;
-                background: #fff;
-                border: 4px solid #ef4444;
+                background: {T('SPEED_LIMIT_BG')};
+                border: 4px solid {T('SPEED_LIMIT_BORDER')};
                 border-radius: 8px;
                 padding: 8px 16px;
             """)
@@ -442,12 +443,12 @@ class Dashboard(QWidget):
         """創建頂部狀態欄，包含方向燈指示"""
         status_bar = QWidget()
         status_bar.setFixedHeight(50)
-        status_bar.setStyleSheet("""
-            QWidget {
+        status_bar.setStyleSheet(f"""
+            QWidget {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #1a1a1f, stop:1 #0f0f14);
-                border-bottom: 2px solid #2a2a35;
-            }
+                    stop:0 {T('BG_STATUS_BAR')}, stop:1 {T('BG_DARK')});
+                border-bottom: 2px solid {T('BORDER_DEFAULT')};
+            }}
         """)
         
         layout = QHBoxLayout(status_bar)
@@ -467,15 +468,15 @@ class Dashboard(QWidget):
         self.left_turn_indicator = QLabel("⬅", left_container)
         self.left_turn_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.left_turn_indicator.setGeometry(10, 5, 60, 40)
-        self.left_turn_indicator.setStyleSheet("""
-            QLabel {
-                color: #2a2a2a;
+        self.left_turn_indicator.setStyleSheet(f"""
+            QLabel {{
+                color: {T('TURN_SIGNAL_DIM')};
                 font-size: 28px;
                 font-weight: bold;
                 background: transparent;
                 border: 2px solid #000000;
                 border-radius: 8px;
-            }
+            }}
         """)
         # 確保圖標在上層
         self.left_turn_indicator.raise_()
@@ -492,27 +493,27 @@ class Dashboard(QWidget):
         self.gps_speed_label = QLabel("--")
         self.gps_speed_label.setFixedWidth(50)
         self.gps_speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.gps_speed_label.setStyleSheet("color: #444; font-size: 16px; font-weight: bold; background: transparent;")
+        self.gps_speed_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 16px; font-weight: bold; background: transparent;")
         self.gps_speed_label.setToolTip("GPS 速度")
         
         # 2. 時間顯示 (中央)
         self.time_label = QLabel("--:--")
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.time_label.setStyleSheet("""
-            QLabel {
-                color: #6af;
+        self.time_label.setStyleSheet(f"""
+            QLabel {{
+                color: {T('PRIMARY')};
                 font-size: 24px;
                 font-weight: bold;
                 background: transparent;
                 letter-spacing: 2px;
-            }
+            }}
         """)
         
         # 3. GPS 狀態 (右側)
         self.gps_icon_label = QLabel("GPS") 
         self.gps_icon_label.setFixedWidth(40)
         self.gps_icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.gps_icon_label.setStyleSheet("color: #444; font-size: 18px; font-weight: bold; background: transparent;")
+        self.gps_icon_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 18px; font-weight: bold; background: transparent;")
         self.gps_icon_label.setToolTip("GPS: Searching...")
         
         # 使用 Stretch 確保整體置中
@@ -542,15 +543,15 @@ class Dashboard(QWidget):
         self.right_turn_indicator = QLabel("➡", right_container)
         self.right_turn_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.right_turn_indicator.setGeometry(410, 5, 60, 40)
-        self.right_turn_indicator.setStyleSheet("""
-            QLabel {
-                color: #2a2a2a;
+        self.right_turn_indicator.setStyleSheet(f"""
+            QLabel {{
+                color: {T('TURN_SIGNAL_DIM')};
                 font-size: 28px;
                 font-weight: bold;
                 background: transparent;
                 border: 2px solid #000000;
                 border-radius: 8px;
-            }
+            }}
         """)
         # 確保圖標在上層
         self.right_turn_indicator.raise_()
@@ -835,8 +836,8 @@ class Dashboard(QWidget):
         
         self.parking_brake_label = QLabel("")
         self.parking_brake_label.setFixedSize(50, 50)
-        self.parking_brake_label.setStyleSheet("""
-            color: #f66;
+        self.parking_brake_label.setStyleSheet(f"""
+            color: {T('PARKING_BRAKE')};
             font-size: 28px;
             font-weight: bold;
             font-family: Arial;
@@ -847,8 +848,8 @@ class Dashboard(QWidget):
         
         # CRUISE 指示器（右側）
         self.cruise_label = QLabel("")
-        self.cruise_label.setStyleSheet("""
-            color: #4ade80;
+        self.cruise_label.setStyleSheet(f"""
+            color: {T('SUCCESS')};
             font-size: 40px;
             font-weight: bold;
             font-family: Arial;
@@ -870,8 +871,8 @@ class Dashboard(QWidget):
         
         # 檔位顯示（左側）- 可點擊切換顯示模式
         self.gear_label = ClickableLabel("P")
-        self.gear_label.setStyleSheet("""
-            color: #4ade80;
+        self.gear_label.setStyleSheet(f"""
+            color: {T('SUCCESS')};
             font-size: 120px;
             font-weight: bold;
             font-family: Arial;
@@ -892,8 +893,8 @@ class Dashboard(QWidget):
         
         # 速度數字
         self.speed_label = QLabel("0")
-        self.speed_label.setStyleSheet("""
-            color: white;
+        self.speed_label.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
             font-size: 140px;
             font-weight: bold;
             font-family: 'Arial', 'Helvetica', sans-serif;
@@ -904,8 +905,8 @@ class Dashboard(QWidget):
         
         # 單位標籤
         self.unit_label = QLabel("Km/h")
-        self.unit_label.setStyleSheet("""
-            color: #888;
+        self.unit_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 28px;
             font-family: Arial;
             background: transparent;
@@ -916,8 +917,8 @@ class Dashboard(QWidget):
         # 速限標籤
         self.speed_limit_label = QLabel("--")
         self.speed_limit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.speed_limit_label.setStyleSheet("""
-            color: #888;
+        self.speed_limit_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 36px;
             font-weight: bold;
             font-family: Arial;
@@ -928,9 +929,9 @@ class Dashboard(QWidget):
         # 速限圓形容器
         self.speed_limit_container = QWidget()
         self.speed_limit_container.setFixedSize(80, 80)
-        self.speed_limit_container.setStyleSheet("""
-            background: #fff;
-            border: 4px solid #ef4444;
+        self.speed_limit_container.setStyleSheet(f"""
+            background: {T('SPEED_LIMIT_BG')};
+            border: 4px solid {T('SPEED_LIMIT_BORDER')};
             border-radius: 40px;
         """)
         self.speed_limit_container.setToolTip("速限")
@@ -939,8 +940,8 @@ class Dashboard(QWidget):
         speed_limit_circle_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.speed_limit_circle_label = QLabel("--")
         self.speed_limit_circle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.speed_limit_circle_label.setStyleSheet("""
-            color: #000;
+        self.speed_limit_circle_label.setStyleSheet(f"""
+            color: {T('SPEED_LIMIT_TEXT')};
             font-size: 36px;
             font-weight: bold;
             font-family: Arial;

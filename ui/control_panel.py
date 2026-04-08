@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
+from ui.theme import get_theme_manager, T
+
 class TurnSignalBar(QWidget):
     """方向燈漸層條 - 使用 QPainter 繪製，避免 CSS 效能問題
     
@@ -158,12 +160,12 @@ class ControlPanel(QWidget):
         self.speed_sync_mode_index = 0
         self.speed_sync_mode = self.speed_sync_modes[self.speed_sync_mode_index]
         button_configs = [
-            ("WiFi", "📶", "#1DB954"),
-            ("時間", "🕐", "#4285F4"),
-            ("亮度", "☀", "#FF9800"),
-            ("更新", "🔄", "#00BCD4"),
-            ("電源", "🔌", "#E91E63"),
-            ("設定", "⚙", "#9C27B0")
+            ("WiFi", "📶", T('BTN_WIFI')),
+            ("時間", "🕐", T('BTN_TIME')),
+            ("亮度", "☀", T('BTN_BRIGHTNESS')),
+            ("更新", "🔄", T('BTN_UPDATE')),
+            ("電源", "🔌", T('BTN_POWER')),
+            ("設定", "⚙", T('BTN_SETTINGS'))
         ]
         
         for title, icon, color in button_configs:
