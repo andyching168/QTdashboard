@@ -3941,19 +3941,24 @@ class Dashboard(QWidget):
         """當強調色改變時，重新整理所有卡片的 UI"""
         print(f"[Dashboard] 強調色已更改為 {color_hex}，正在刷新卡片...")
         
-        if hasattr(self, 'trip_card'):
-            self.trip_card.refresh_theme()
-        if hasattr(self, 'odo_card'):
-            self.odo_card.refresh_theme()
-        if hasattr(self, 'trip_info_card'):
-            self.trip_info_card.refresh_theme()
-        if hasattr(self, 'music_card'):
-            self.music_card.refresh_theme()
-        if hasattr(self, 'nav_card'):
-            self.nav_card.refresh_theme()
-        if hasattr(self, 'door_card'):
-            self.door_card.refresh_theme()
+        def refresh_widget_tree(widget):
+            try:
+                ss = widget.styleSheet()
+                if ss:
+                    widget.setStyleSheet("")
+                    widget.style().unpolish(widget)
+                    widget.setStyleSheet(ss)
+                    widget.style().polish(widget)
+                for child in widget.children():
+                    if isinstance(child, QWidget):
+                        refresh_widget_tree(child)
+            except:
+                pass
         
+        for widget in self.topLevelWidgets():
+            refresh_widget_tree(widget)
+        
+        self.update()
         print("[Dashboard] 卡片 UI 已刷新")
     
     def set_parking_brake(self, is_engaged: bool):
