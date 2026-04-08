@@ -60,7 +60,7 @@ from ui.navigation_card import NavigationCard
 from ui.threads import GPSMonitorThread, RadarMonitorThread
 from ui.scalable_window import ScalableWindow
 from ui.numeric_keypad import NumericKeypad
-from ui.theme import get_theme_manager, T
+from ui.theme import get_theme_manager, T, reapply_t_function
 
 from spotify.spotify_auth import SpotifyAuthManager
 from spotify.spotify_qr_auth import SpotifyQRAuthDialog
@@ -173,6 +173,7 @@ class Dashboard(QWidget):
         
         # 連接主題強調色變更 Signal
         get_theme_manager().accent_color_changed.connect(self._on_accent_color_changed)
+        self._last_accent_color = get_theme_manager().accent_color
         
         # 注意：油耗由 trip_info_card 直接從 RPM/Speed/Turbo 信號計算，
         # 不需要從 datagrab.py 接收油號 signal
@@ -3940,19 +3941,27 @@ class Dashboard(QWidget):
     def _on_accent_color_changed(self, color_hex: str):
         """當強調色改變時，重新整理所有卡片的 UI"""
         print(f"[Dashboard] 強調色已更改為 {color_hex}，正在刷新卡片...")
+        import re
+
+        previous_accent = getattr(self, '_last_accent_color', color_hex)
+        self._last_accent_color = color_hex
         
         def refresh_widget_tree(widget):
             try:
                 ss = widget.styleSheet()
                 if ss:
+                    refreshed_ss = reapply_t_function(ss)
+                    if previous_accent and previous_accent != color_hex:
+                        refreshed_ss = re.sub(re.escape(previous_accent), color_hex, refreshed_ss, flags=re.IGNORECASE)
+
                     widget.setStyleSheet("")
                     widget.style().unpolish(widget)
-                    widget.setStyleSheet(ss)
+                    widget.setStyleSheet(refreshed_ss)
                     widget.style().polish(widget)
                 for child in widget.children():
                     if isinstance(child, QWidget):
                         refresh_widget_tree(child)
-            except:
+            except Exception:
                 pass
         
         app = QApplication.instance()

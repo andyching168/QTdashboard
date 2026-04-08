@@ -252,5 +252,4 @@ class AccentColorSettingsDialog(QDialog):
         if color_hex:
             manager = get_theme_manager()
             manager.set_accent_color(color_hex)
-            self.signals.accent_color_changed.emit(color_hex)
         self.close()

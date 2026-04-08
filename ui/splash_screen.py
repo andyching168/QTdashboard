@@ -72,7 +72,7 @@ class SplashScreen(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         
         label = QLabel("Loading...")
-        label.setStyleSheet("color: {T('PRIMARY')}; font-size: 24px; background-color: black;")
+        label.setStyleSheet(f"color: {T('PRIMARY')}; font-size: 24px; background-color: black;")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
         

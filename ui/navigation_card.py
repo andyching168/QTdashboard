@@ -72,7 +72,7 @@ class NavigationCard(QWidget):
         offline_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         offline_desc = QLabel("請檢查網路連線")
-        offline_desc.setStyleSheet("color: {T('TEXT_SECONDARY')}; font-size: 16px; background: transparent;")
+        offline_desc.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 16px; background: transparent;")
         offline_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         offline_layout.addWidget(offline_icon)
@@ -194,27 +194,27 @@ class NavigationCard(QWidget):
         
         # 下個轉彎距離（突出顯示）
         turn_distance_title = QLabel("下個轉彎")
-        turn_distance_title.setStyleSheet("color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
+        turn_distance_title.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
         self.turn_distance_value = QLabel("--")
         self.turn_distance_value.setStyleSheet("color: #6f6; font-size: 28px; font-weight: bold; background: transparent;")
         
         # 總距離
         distance_title = QLabel("總距離")
-        distance_title.setStyleSheet("color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
+        distance_title.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
         self.distance_value = QLabel("--")
         self.distance_value.setStyleSheet("color: #ccc; font-size: 20px; font-weight: bold; background: transparent;")
         
         # 預計時間
         duration_title = QLabel("預計時間")
-        duration_title.setStyleSheet("color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
+        duration_title.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
         self.duration_value = QLabel("--")
         self.duration_value.setStyleSheet("color: #ccc; font-size: 20px; font-weight: bold; background: transparent;")
         
         # 抵達時間
         eta_title = QLabel("抵達時間")
-        eta_title.setStyleSheet("color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
+        eta_title.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 14px; background: transparent;")
         self.eta_value = QLabel("--")
-        self.eta_value.setStyleSheet("color: {T('PRIMARY')}; font-size: 24px; font-weight: bold; background: transparent;")
+        self.eta_value.setStyleSheet(f"color: {T('PRIMARY')}; font-size: 24px; font-weight: bold; background: transparent;")
         
         # 佈局：
         # Row 0: 下個轉彎(標題)  | 總距離(標題)

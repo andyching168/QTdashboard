@@ -220,3 +220,19 @@ def T(key: str) -> str:
     if key in manager._accent_color_overrides:
         return manager._accent_color_overrides[key]
     return getattr(ThemeColors, key, "#ff00ff")
+
+
+def reapply_t_function(stylesheet: str) -> str:
+    """重新評估 stylesheet 字串中的 T() 調用
+    
+    將 {T('COLOR_NAME')} 模式替換為實際的 T() 返回值
+    """
+    import re
+    
+    pattern = r"\{T\('([^']+)'\)\}"
+    
+    def replace_t(match):
+        color_key = match.group(1)
+        return T(color_key)
+    
+    return re.sub(pattern, replace_t, stylesheet)
