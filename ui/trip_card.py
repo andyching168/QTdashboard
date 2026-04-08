@@ -1408,8 +1408,8 @@ class TripCard(QWidget):
             self.trip2_distance_label = QLabel("0.0")
             distance_label = self.trip2_distance_label
             
-        distance_label.setStyleSheet("""
-            color: white;
+        distance_label.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
             font-size: 48px;
             font-weight: bold;
             background: transparent;
@@ -1417,8 +1417,8 @@ class TripCard(QWidget):
         distance_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         
         unit_label = QLabel("km")
-        unit_label.setStyleSheet("""
-            color: #888;
+        unit_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 20px;
             background: transparent;
         """)
@@ -1437,8 +1437,8 @@ class TripCard(QWidget):
             self.trip2_reset_label = QLabel("Never reset")
             reset_time_label = self.trip2_reset_label
             
-        reset_time_label.setStyleSheet("""
-            color: #666;
+        reset_time_label.setStyleSheet(f"""
+            color: {T('TEXT_DISABLED')};
             font-size: 24px;
             background: transparent;
         """)
