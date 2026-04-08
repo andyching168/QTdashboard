@@ -873,8 +873,8 @@ class OdometerCardWide(QWidget):
         
         # 標題
         title_label = QLabel("Odometer")
-        title_label.setStyleSheet("""
-            color: #6af;
+        title_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 28px;
             font-weight: bold;
             background: transparent;
@@ -893,8 +893,8 @@ class OdometerCardWide(QWidget):
         distance_layout.setSpacing(8)
         
         self.odo_distance_label = QLabel("0")
-        self.odo_distance_label.setStyleSheet("""
-            color: white;
+        self.odo_distance_label.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
             font-size: 56px;
             font-weight: bold;
             background: transparent;
@@ -902,8 +902,8 @@ class OdometerCardWide(QWidget):
         self.odo_distance_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         
         unit_label = QLabel("km")
-        unit_label.setStyleSheet("""
-            color: #888;
+        unit_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 24px;
             background: transparent;
         """)
