@@ -233,42 +233,42 @@ class OdometerCard(QWidget):
         btn_cancel = QPushButton("取消")
         btn_cancel.setFixedHeight(40)
         btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_cancel.setStyleSheet("""
-            QPushButton {
+        btn_cancel.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #555;
-                color: white;
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: 8px;
                 font-size: 14px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #666;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #444;
-            }
+            }}
         """)
         btn_cancel.clicked.connect(self.cancel_input)
         
         btn_ok = QPushButton("確定")
         btn_ok.setFixedHeight(40)
         btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_ok.setStyleSheet("""
-            QPushButton {
-                background-color: #6af;
-                color: white;
+        btn_ok.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {T('PRIMARY')};
+                color: {T('TEXT_PRIMARY')};
                 border: none;
                 border-radius: 8px;
                 font-size: 14px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #5ad;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #49c;
-            }
+            }}
         """)
         btn_ok.clicked.connect(self.confirm_input)
         
