@@ -1037,7 +1037,7 @@ class OdometerCardWide(QWidget):
         new_layout.setSpacing(10)
         
         new_title = QLabel("新里程")
-        new_title.setStyleSheet("color: #6af; font-size: 16px; background: transparent;")
+        new_title.setStyleSheet(f"color: {T('PRIMARY')}; font-size: 16px; background: transparent;")
         new_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.input_display = QLabel("_ _ _ _ _ _")
