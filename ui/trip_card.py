@@ -100,7 +100,7 @@ class OdometerCard(QWidget):
         distance_layout.setSpacing(10)
         
         self.odo_distance_label = QLabel("0")
-        self.odo_distance_label.setStyleSheet("""
+        self.odo_distance_label.setStyleSheet(f"""
             color: {T('TEXT_PRIMARY')};
             font-size: 56px;
             font-weight: bold;
@@ -109,7 +109,7 @@ class OdometerCard(QWidget):
         self.odo_distance_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         
         unit_label = QLabel("km")
-        unit_label.setStyleSheet("""
+        unit_label.setStyleSheet(f"""
             color: {T('TEXT_SECONDARY')};
             font-size: 24px;
             background: transparent;
@@ -123,7 +123,7 @@ class OdometerCard(QWidget):
         
         # 同步時間顯示
         self.sync_time_label = QLabel("未同步")
-        self.sync_time_label.setStyleSheet("""
+        self.sync_time_label.setStyleSheet(f"""
             color: {T('TEXT_DISABLED')};
             font-size: 12px;
             background: transparent;
@@ -137,21 +137,21 @@ class OdometerCard(QWidget):
         sync_btn = QPushButton("同步里程")
         sync_btn.setFixedSize(200, 45)
         sync_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        sync_btn.setStyleSheet("""
-            QPushButton {
+        sync_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: rgba(100, 150, 255, 0.3);
                 color: {T('PRIMARY')};
                 border: 2px solid #6af;
                 border-radius: 10px;
                 font-size: 16px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: rgba(100, 150, 255, 0.5);
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: rgba(100, 150, 255, 0.7);
-            }
+            }}
         """)
         sync_btn.clicked.connect(self.show_keypad)
         
@@ -175,7 +175,7 @@ class OdometerCard(QWidget):
         
         # 標題
         title = QLabel("輸入總里程")
-        title.setStyleSheet("""
+        title.setStyleSheet(f"""
             color: {T('PRIMARY')};
             font-size: 18px;
             font-weight: bold;
@@ -186,8 +186,8 @@ class OdometerCard(QWidget):
         # 顯示器
         self.input_display = QLabel("0")
         self.input_display.setFixedHeight(50)
-        self.input_display.setStyleSheet("""
-            QLabel {
+        self.input_display.setStyleSheet(f"""
+            QLabel {{
                 background: #1a1a25;
                 color: {T('TEXT_PRIMARY')};
                 font-size: 32px;
