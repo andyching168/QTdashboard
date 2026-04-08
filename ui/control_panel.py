@@ -1190,15 +1190,25 @@ class ControlPanel(QWidget):
         """當強調色改變時，重新整理整個 UI"""
         print(f"[ControlPanel] 強調色已更改為 {color_hex}，正在刷新 UI...")
         
+        def refresh_widget_tree(widget):
+            try:
+                if widget.styleSheet():
+                    ss = widget.styleSheet()
+                    widget.setStyleSheet("")
+                    widget.setStyleSheet(ss)
+                widget.update()
+                widget.style().unpolish(widget)
+                widget.style().polish(widget)
+                for child in widget.children():
+                    if isinstance(child, QWidget):
+                        refresh_widget_tree(child)
+            except:
+                pass
+        
         app = QApplication.instance()
         if app:
-            for widget in app.allWidgets():
-                try:
-                    ss = widget.styleSheet()
-                    if 'T(\'PRIMARY\')' in ss or 'T("PRIMARY")' in ss:
-                        widget.setStyleSheet(ss)
-                except:
-                    pass
+            for widget in app.topLevelWidgets():
+                refresh_widget_tree(widget)
             app.processEvents()
             print("[ControlPanel] UI 已刷新")
     
