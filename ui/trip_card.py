@@ -453,8 +453,8 @@ class TripInfoCardWide(QWidget):
         
         # 標題
         title_label = QLabel("本次行程")
-        title_label.setStyleSheet("""
-            color: #6af;
+        title_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 28px;
             font-weight: bold;
             background: transparent;
@@ -553,8 +553,8 @@ class TripInfoCardWide(QWidget):
         value_layout.setSpacing(8)
         
         value_lbl = QLabel(value)
-        value_lbl.setStyleSheet("""
-            color: white;
+        value_lbl.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
             font-size: 42px;
             font-weight: bold;
             background: transparent;
@@ -562,8 +562,8 @@ class TripInfoCardWide(QWidget):
         value_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         
         unit_lbl = QLabel(unit)
-        unit_lbl.setStyleSheet("""
-            color: #888;
+        unit_lbl.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 16px;
             background: transparent;
         """)
