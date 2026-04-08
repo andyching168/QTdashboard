@@ -27,6 +27,40 @@ class AccentColorSettingsDialog(QDialog):
         self._parent_ref = parent
         self._live_preview_enabled = True
         self.init_ui()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        app = QApplication.instance()
+        parent_widget = self.parentWidget()
+
+        anchor = None
+        if parent_widget is not None:
+            anchor = parent_widget.window() if parent_widget.window() else parent_widget
+        elif app and app.activeWindow() is not self:
+            anchor = app.activeWindow()
+
+        anchor_geo = anchor.frameGeometry() if anchor else None
+        screen = QApplication.screenAt(anchor_geo.center()) if anchor_geo else QApplication.primaryScreen()
+        if screen is None:
+            screen = QApplication.primaryScreen()
+
+        if screen:
+            available = screen.availableGeometry()
+            if anchor_geo:
+                x = anchor_geo.x() + (anchor_geo.width() - self.width()) // 2
+                y = anchor_geo.y() + (anchor_geo.height() - self.height()) // 2
+            else:
+                x = available.x() + (available.width() - self.width()) // 2
+                y = available.y() + (available.height() - self.height()) // 2
+
+            max_x = available.x() + available.width() - self.width()
+            max_y = available.y() + available.height() - self.height()
+            x = max(available.x(), min(x, max_x))
+            y = max(available.y(), min(y, max_y))
+            self.move(x, y)
+
+        self.raise_()
+        self.activateWindow()
     
     def _get_window_scale(self):
         """取得視窗縮放比例"""
@@ -61,11 +95,12 @@ class AccentColorSettingsDialog(QDialog):
     def init_ui(self):
         scale, parent_width, parent_height = self._get_window_scale()
         
-        dialog_width = int(350 * scale)
-        dialog_height = int(280 * scale)
+        dialog_width = int(360 * scale)
+        dialog_height = int(220 * scale)
         title_font_size = max(12, int(20 * scale))
         label_font_size = max(10, int(14 * scale))
         combo_height = int(40 * scale)
+        swatch_height = int(56 * scale)
         btn_radius = max(5, int(8 * scale))
         margin = max(15, int(25 * scale))
         spacing = max(8, int(12 * scale))
@@ -122,36 +157,18 @@ class AccentColorSettingsDialog(QDialog):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
         
-        preview_label = QLabel("預覽:")
-        preview_label.setStyleSheet(f"font-size: {label_font_size}px;")
-        layout.addWidget(preview_label)
-        
-        self.preview_widget = QWidget()
-        self.preview_widget.setFixedHeight(int(50 * scale))
-        preview_layout = QHBoxLayout(self.preview_widget)
-        preview_layout.setContentsMargins(0, 0, 0, 0)
-        preview_layout.setSpacing(int(10 * scale))
-        
-        self.preview_btn = QPushButton("套用")
-        self.preview_btn.setFixedHeight(combo_height)
-        self.preview_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.preview_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {T('PRIMARY')};
-                color: {T('TEXT_PRIMARY')};
-                border: none;
-                border-radius: {btn_radius}px;
-                font-size: {int(14 * scale)}px;
-                font-weight: bold;
-                padding: 0 20px;
-            }}
-            QPushButton:hover {{
-                opacity: 0.85;
-            }}
+        swatch_label = QLabel("顏色預覽:")
+        swatch_label.setStyleSheet(f"font-size: {label_font_size}px;")
+        layout.addWidget(swatch_label)
+
+        self.color_swatch = QWidget()
+        self.color_swatch.setFixedHeight(swatch_height)
+        self.color_swatch.setStyleSheet(f"""
+            background-color: {T('PRIMARY')};
+            border-radius: {btn_radius}px;
+            border: 1px solid {T('BORDER_DEFAULT')};
         """)
-        preview_layout.addWidget(self.preview_btn)
-        preview_layout.addStretch()
-        layout.addWidget(self.preview_widget)
+        layout.addWidget(self.color_swatch)
         
         select_label = QLabel("選擇顏色:")
         select_label.setStyleSheet(f"font-size: {label_font_size}px; margin-top: {int(10 * scale)}px;")
@@ -159,7 +176,6 @@ class AccentColorSettingsDialog(QDialog):
         
         self.color_combo = QComboBox()
         self.color_combo.setFixedHeight(combo_height)
-        self.color_combo.currentIndexChanged.connect(self.on_color_changed)
         
         manager = get_theme_manager()
         current_accent = manager.accent_color
@@ -168,17 +184,17 @@ class AccentColorSettingsDialog(QDialog):
             self.color_combo.addItem(name, color_hex)
             if color_hex == current_accent:
                 self.color_combo.setCurrentIndex(self.color_combo.count() - 1)
+
+        # 初始化完成後才連接事件，避免開啟視窗時觸發即時套色
+        self.color_combo.currentIndexChanged.connect(self.on_color_changed)
         
         layout.addWidget(self.color_combo)
         layout.addStretch()
-        
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(int(15 * scale))
-        
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setFixedHeight(int(40 * scale))
-        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel_btn.setStyleSheet(f"""
+
+        close_btn = QPushButton("關閉")
+        close_btn.setFixedHeight(int(40 * scale))
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {T('BG_CARD_ALT')};
                 color: {T('TEXT_PRIMARY')};
@@ -191,30 +207,8 @@ class AccentColorSettingsDialog(QDialog):
                 background-color: {T('BORDER_HOVER')};
             }}
         """)
-        cancel_btn.clicked.connect(self.close)
-        
-        apply_btn = QPushButton("確定")
-        apply_btn.setFixedHeight(int(40 * scale))
-        apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        apply_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {T('PRIMARY')};
-                color: {T('TEXT_PRIMARY')};
-                border: none;
-                border-radius: {btn_radius}px;
-                font-size: {int(13 * scale)}px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                opacity: 0.85;
-            }}
-        """)
-        apply_btn.clicked.connect(self.apply_color)
-        
-        btn_layout.addWidget(cancel_btn)
-        btn_layout.addWidget(apply_btn)
-        
-        layout.addLayout(btn_layout)
+        close_btn.clicked.connect(self.close)
+        layout.addWidget(close_btn)
     
     def on_color_changed(self, index: int):
         """當選擇的顏色改變時，即時預覽"""
@@ -227,29 +221,207 @@ class AccentColorSettingsDialog(QDialog):
         
         manager = get_theme_manager()
         manager.set_accent_color(color_hex)
-        
+
         scale, _, _ = self._get_window_scale()
-        btn_radius = max(5, int(8 * scale))
-        
-        self.preview_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {color_hex};
-                color: {T('TEXT_PRIMARY')};
-                border: none;
-                border-radius: {btn_radius}px;
-                font-size: {int(14 * scale)}px;
-                font-weight: bold;
-                padding: 0 20px;
-            }}
-            QPushButton:hover {{
-                opacity: 0.85;
-            }}
+
+        self.color_swatch.setStyleSheet(f"""
+            background-color: {color_hex};
+            border-radius: {max(5, int(8 * scale))}px;
+            border: 1px solid {T('BORDER_DEFAULT')};
         """)
-    
-    def apply_color(self):
-        """套用顏色並關閉"""
-        color_hex = self.color_combo.currentData()
-        if color_hex:
-            manager = get_theme_manager()
-            manager.set_accent_color(color_hex)
-        self.close()
+
+
+def show_accent_color_popup(parent=None, on_changed=None):
+    """顯示強調色設定彈窗（採用與電源選單相同的即時建立/exec 模式）"""
+    app = QApplication.instance()
+    dialog_parent = parent if parent else (app.activeWindow() if app else None)
+
+    parent_width = 1920
+    parent_height = 480
+    if dialog_parent:
+        parent_width = max(1, dialog_parent.width())
+        parent_height = max(1, dialog_parent.height())
+    else:
+        screen = QApplication.primaryScreen()
+        if screen:
+            geo = screen.availableGeometry()
+            parent_width = geo.width()
+            parent_height = min(geo.height(), int(geo.width() / 4))
+
+    scale = min(parent_width / 1920, parent_height / 480)
+
+    dialog_width = max(320, int(360 * scale))
+    title_font_size = max(12, int(20 * scale))
+    label_font_size = max(10, int(14 * scale))
+    combo_height = max(34, int(40 * scale))
+    swatch_height = max(52, int(56 * scale))
+    close_btn_height = max(36, int(40 * scale))
+    btn_radius = max(5, int(8 * scale))
+    margin = max(15, int(25 * scale))
+    spacing = max(8, int(12 * scale))
+
+    title_min_height = max(30, int(34 * scale))
+    label_min_height = max(18, int(20 * scale))
+    content_height = (
+        (margin * 2)
+        + title_min_height
+        + spacing
+        + label_min_height
+        + spacing
+        + swatch_height
+        + spacing
+        + label_min_height
+        + spacing
+        + combo_height
+        + spacing
+        + close_btn_height
+    )
+    dialog_height = min(max(180, parent_height - 16), max(int(220 * scale), content_height))
+
+    dialog = QDialog(dialog_parent)
+    dialog.setWindowTitle("強調色設定")
+    dialog.setFixedSize(dialog_width, dialog_height)
+    dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
+    dialog.setStyleSheet(f"""
+        QDialog {{
+            background-color: {T('BG_CARD')};
+        }}
+        QLabel {{
+            color: {T('TEXT_PRIMARY')};
+            background: transparent;
+        }}
+        QComboBox {{
+            background-color: {T('BG_INPUT')};
+            color: {T('TEXT_PRIMARY')};
+            border: 1px solid {T('BORDER_DEFAULT')};
+            border-radius: {btn_radius}px;
+            padding: 5px 10px;
+            font-size: {label_font_size}px;
+        }}
+        QComboBox:hover {{
+            border-color: {T('BORDER_HOVER')};
+        }}
+        QComboBox::dropDown {{
+            border: none;
+            background-color: {T('BG_CARD_ALT')};
+        }}
+        QComboBox::downArrow {{
+            image: none;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid {T('TEXT_SECONDARY')};
+            margin-right: 10px;
+        }}
+        QComboBox QAbstractItemView {{
+            background-color: {T('BG_INPUT')};
+            color: {T('TEXT_PRIMARY')};
+            border: 1px solid {T('BORDER_DEFAULT')};
+            selection-background-color: {T('BORDER_ACTIVE')};
+        }}
+    """)
+
+    layout = QVBoxLayout(dialog)
+    layout.setContentsMargins(margin, margin, margin, margin)
+    layout.setSpacing(spacing)
+
+    title = QLabel("🎨 強調色設定")
+    title.setStyleSheet(f"font-size: {title_font_size}px; font-weight: bold;")
+    title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    title.setMinimumHeight(title_min_height)
+    layout.addWidget(title)
+
+    swatch_label = QLabel("顏色預覽:")
+    swatch_label.setStyleSheet(f"font-size: {label_font_size}px;")
+    swatch_label.setMinimumHeight(label_min_height)
+    layout.addWidget(swatch_label)
+
+    color_swatch = QWidget()
+    color_swatch.setFixedSize(swatch_height, swatch_height)
+    color_swatch.setStyleSheet(f"""
+        background-color: {T('PRIMARY')};
+        border-radius: {btn_radius}px;
+        border: 1px solid {T('BORDER_DEFAULT')};
+    """)
+
+    swatch_layout = QHBoxLayout()
+    swatch_layout.addStretch()
+    swatch_layout.addWidget(color_swatch)
+    swatch_layout.addStretch()
+    swatch_layout.setContentsMargins(0, 0, 0, 0)
+    layout.addLayout(swatch_layout)
+
+    layout.addSpacing(max(4, int(6 * scale)))
+    select_label = QLabel("選擇顏色:")
+    select_label.setStyleSheet(f"font-size: {label_font_size}px;")
+    select_label.setMinimumHeight(label_min_height)
+    layout.addWidget(select_label)
+
+    color_combo = QComboBox()
+    color_combo.setFixedHeight(combo_height)
+
+    manager = get_theme_manager()
+    current_accent = manager.accent_color
+    for name, color_hex in ACCENT_COLOR_PRESETS.items():
+        color_combo.addItem(name, color_hex)
+        if color_hex == current_accent:
+            color_combo.setCurrentIndex(color_combo.count() - 1)
+
+    def _on_color_changed(index: int):
+        color_hex = color_combo.currentData()
+        if not color_hex:
+            return
+
+        manager.set_accent_color(color_hex)
+        color_swatch.setStyleSheet(f"""
+            background-color: {color_hex};
+            border-radius: {btn_radius}px;
+            border: 1px solid {T('BORDER_DEFAULT')};
+        """)
+        if callable(on_changed):
+            on_changed(color_hex)
+
+    color_combo.currentIndexChanged.connect(_on_color_changed)
+    layout.addWidget(color_combo)
+
+    close_btn = QPushButton("關閉")
+    close_btn.setFixedHeight(close_btn_height)
+    close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    close_btn.setStyleSheet(f"""
+        QPushButton {{
+            background-color: {T('BG_CARD_ALT')};
+            color: {T('TEXT_PRIMARY')};
+            border: none;
+            border-radius: {btn_radius}px;
+            font-size: {int(13 * scale)}px;
+            font-weight: bold;
+        }}
+        QPushButton:hover {{
+            background-color: {T('BORDER_HOVER')};
+        }}
+    """)
+    close_btn.clicked.connect(dialog.accept)
+    layout.addWidget(close_btn)
+
+    anchor_geo = dialog_parent.frameGeometry() if dialog_parent else None
+    screen = QApplication.screenAt(anchor_geo.center()) if anchor_geo else QApplication.primaryScreen()
+    if screen is None:
+        screen = QApplication.primaryScreen()
+
+    if screen:
+        available = screen.availableGeometry()
+        if anchor_geo:
+            x = anchor_geo.x() + (anchor_geo.width() - dialog.width()) // 2
+            y = anchor_geo.y() + (anchor_geo.height() - dialog.height()) // 2
+        else:
+            x = available.x() + (available.width() - dialog.width()) // 2
+            y = available.y() + (available.height() - dialog.height()) // 2
+
+        max_x = available.x() + available.width() - dialog.width()
+        max_y = available.y() + available.height() - dialog.height()
+        x = max(available.x(), min(x, max_x))
+        y = max(available.y(), min(y, max_y))
+        dialog.move(x, y)
+
+    dialog.raise_()
+    dialog.activateWindow()
+    dialog.exec()

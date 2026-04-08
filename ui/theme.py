@@ -14,7 +14,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 ACCENT_COLOR_PRESETS: Dict[str, str] = {
     "藍色（預設）": "#6af",
-    "紫色": "#9b6af",
+    "紫色": "#9b6aff",
     "粉色": "#f6a",
     "紅色": "#f55",
     "橙色": "#fa5",

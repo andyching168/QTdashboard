@@ -1234,19 +1234,24 @@ class ControlPanel(QWidget):
         
         scale = min(parent_width / 1920, parent_height / 480)
         
-        dialog_width = int(400 * scale)
-        dialog_height = int(350 * scale)
+        dialog_width = int(1200 * scale)
+        dialog_height = int(260 * scale)
         btn_width = int(320 * scale)
         btn_height = int(80 * scale)
         title_font_size = max(12, int(28 * scale))
-        btn_font_size = max(10, int(20 * scale))
+        btn_font_size = max(10, int(18 * scale))
         btn_radius = max(5, int(15 * scale))
         margin = max(10, int(40 * scale))
         spacing = max(10, int(20 * scale))
         
-        dialog = QDialog()
+        app = QApplication.instance()
+        dialog_parent = app.activeWindow() if app and app.activeWindow() else (self.window() if self.window() else self)
+        dialog = QDialog(dialog_parent)
         dialog.setWindowTitle("設定")
         dialog.setFixedSize(dialog_width, dialog_height)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        dialog.setModal(True)
+        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
         dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
         dialog.setStyleSheet(f"""
             QDialog {{
@@ -1295,34 +1300,45 @@ class ControlPanel(QWidget):
         
         # MQTT 設定
         def open_mqtt():
-            dialog.close()
+            dialog.accept()
             parent = self.parent()
             if parent and hasattr(parent, 'show_mqtt_settings'):
                 parent.show_mqtt_settings()
         
         # Spotify 設定
         def open_spotify():
-            dialog.close()
+            dialog.accept()
             parent = self.parent()
             if parent and hasattr(parent, 'show_spotify_settings'):
                 parent.show_spotify_settings()
         
         # 主題設定
         def open_theme():
-            from ui.accent_color_settings import AccentColorSettingsDialog
-            theme_dialog = AccentColorSettingsDialog(parent=self)
-            theme_dialog.signals.accent_color_changed.connect(self.on_accent_color_changed)
-            theme_dialog.exec()
+            from ui.accent_color_settings import show_accent_color_popup
+            # 使用穩定父視窗（show_settings_menu 一開始解析出的頂層視窗）
+            # 並延後到設定選單關閉後再開啟，避免 parent 被銷毀導致彈窗消失
+            theme_parent = dialog_parent
+
+            def _show_theme_dialog():
+                show_accent_color_popup(parent=theme_parent, on_changed=self.on_accent_color_changed)
+
+            dialog.accept()
+            QTimer.singleShot(0, _show_theme_dialog)
         
-        layout.addWidget(create_settings_btn("MQTT 設定", "📡", "設定 MQTT 伺服器連線", open_mqtt))
-        layout.addWidget(create_settings_btn("Spotify 設定", "🎵", "設定 Spotify 音樂播放", open_spotify))
-        layout.addWidget(create_settings_btn("主題強調色設定", "🎨", "自訂 UI 強調色", open_theme))
-        
+        options_layout = QHBoxLayout()
+        options_layout.setSpacing(int(20 * scale))
+        options_layout.addStretch()
+        options_layout.addWidget(create_settings_btn("MQTT 設定", "📡", "設定 MQTT 伺服器連線", open_mqtt))
+        options_layout.addWidget(create_settings_btn("Spotify 設定", "🎵", "設定 Spotify 音樂播放", open_spotify))
+        options_layout.addWidget(create_settings_btn("主題強調色設定", "🎨", "自訂 UI 強調色", open_theme))
+        options_layout.addStretch()
+        layout.addLayout(options_layout)
+
         layout.addStretch()
         
         # 取消按鈕
         cancel_btn = QPushButton("取消")
-        cancel_btn.setFixedSize(btn_width, int(50 * scale))
+        cancel_btn.setFixedSize(int(180 * scale), int(44 * scale))
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         cancel_btn.setStyleSheet(f"""
             QPushButton {{
@@ -1336,12 +1352,36 @@ class ControlPanel(QWidget):
                 border-color: {T('TEXT_SECONDARY')};
             }}
         """)
-        cancel_btn.clicked.connect(dialog.close)
-        layout.addWidget(cancel_btn)
+        cancel_btn.clicked.connect(dialog.reject)
+        cancel_wrap = QHBoxLayout()
+        cancel_wrap.addStretch()
+        cancel_wrap.addWidget(cancel_btn)
+        cancel_wrap.addStretch()
+        layout.addLayout(cancel_wrap)
         
-        # 顯示並置中
-        dialog.show()
-        dialog.move(QApplication.instance().primaryScreen().geometry().center() - dialog.rect().center())
+        # 顯示並置中（以可見頂層視窗為準，並限制在螢幕可見範圍）
+        anchor_geo = dialog_parent.frameGeometry() if dialog_parent else None
+        screen = QApplication.screenAt(anchor_geo.center()) if anchor_geo else QApplication.primaryScreen()
+        if screen is None:
+            screen = QApplication.primaryScreen()
+
+        if screen:
+            available = screen.availableGeometry()
+            if anchor_geo:
+                x = anchor_geo.x() + (anchor_geo.width() - dialog.width()) // 2
+                y = anchor_geo.y() + (anchor_geo.height() - dialog.height()) // 2
+            else:
+                x = available.x() + (available.width() - dialog.width()) // 2
+                y = available.y() + (available.height() - dialog.height()) // 2
+
+            max_x = available.x() + available.width() - dialog.width()
+            max_y = available.y() + available.height() - dialog.height()
+            x = max(available.x(), min(x, max_x))
+            y = max(available.y(), min(y, max_y))
+            dialog.move(x, y)
+        dialog.raise_()
+        dialog.activateWindow()
+        dialog.exec()
     
     def show_power_menu(self):
         """顯示電源選單"""
