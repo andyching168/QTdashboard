@@ -440,10 +440,11 @@ class NavigationCard(QWidget):
     
     def refresh_theme(self):
         """重新整理 UI 主題顏色（更換強調色後呼叫）"""
-        if hasattr(self, 'no_nav_page'):
-            self.setup_no_nav_ui()
-        if hasattr(self, 'nav_page'):
-            self.setup_nav_ui()
+        for widget in self.findChildren(QLabel):
+            ss = widget.styleSheet()
+            if 'T(' in ss and 'PRIMARY' in ss:
+                widget.setStyleSheet("")
+                widget.setStyleSheet(ss)
 
 
 

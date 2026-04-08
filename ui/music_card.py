@@ -796,10 +796,16 @@ class MusicCardWide(QWidget):
     
     def refresh_theme(self):
         """重新整理 UI 主題顏色（更換強調色後呼叫）"""
-        if hasattr(self, 'bind_page'):
-            self.setup_bind_ui()
-        if hasattr(self, 'player_page'):
-            self.setup_player_ui()
+        for widget in self.findChildren(QLabel):
+            ss = widget.styleSheet()
+            if 'T(' in ss and 'PRIMARY' in ss:
+                widget.setStyleSheet("")
+                widget.setStyleSheet(ss)
+        for widget in self.findChildren(QPushButton):
+            ss = widget.styleSheet()
+            if 'T(' in ss and 'PRIMARY' in ss:
+                widget.setStyleSheet("")
+                widget.setStyleSheet(ss)
 
 
 

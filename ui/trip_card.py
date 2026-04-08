@@ -793,81 +793,11 @@ class TripInfoCardWide(QWidget):
     
     def refresh_theme(self):
         """重新整理 UI 主題顏色（更換強調色後呼叫）"""
-        saved_trip_distance = self.trip_distance
-        saved_instant_fuel = self.instant_fuel
-        saved_avg_fuel = self.avg_fuel
-        saved_start_time = self.start_time
-        saved_has_valid_data = self.has_valid_data
-        saved_total_fuel_used = self.total_fuel_used
-        saved_total_distance = self.total_distance
-        
-        layout = self.layout()
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(30, 25, 30, 25)
-        main_layout.setSpacing(15)
-        
-        title_label = QLabel("本次行程")
-        title_label.setStyleSheet(f"""
-            color: {T('PRIMARY')};
-            font-size: 28px;
-            font-weight: bold;
-            background: transparent;
-        """)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(title_label)
-        
-        content_widget = QWidget()
-        content_widget.setStyleSheet("background: transparent;")
-        content_layout = QGridLayout(content_widget)
-        content_layout.setContentsMargins(10, 10, 10, 10)
-        content_layout.setSpacing(20)
-        
-        self.elapsed_time_panel, self.elapsed_time_label = self._create_value_panel(
-            "運行時間",
-            "00:00",
-            "",
-            "#4ecdc4"
-        )
-        content_layout.addWidget(self.elapsed_time_panel, 0, 0)
-        
-        self.distance_panel, self.distance_label = self._create_value_panel(
-            "行駛距離",
-            "0.0",
-            "km",
-            "#f39c12"
-        )
-        content_layout.addWidget(self.distance_panel, 0, 1)
-        
-        self.instant_fuel_panel, self.instant_fuel_label = self._create_value_panel(
-            "瞬時油耗",
-            "--",
-            "L/100km",
-            "#e74c3c"
-        )
-        content_layout.addWidget(self.instant_fuel_panel, 1, 0)
-        
-        self.avg_fuel_panel, self.avg_fuel_label = self._create_value_panel(
-            "平均油耗",
-            "--",
-            "L/100km",
-            "#2ecc71"
-        )
-        content_layout.addWidget(self.avg_fuel_panel, 1, 1)
-        
-        main_layout.addWidget(content_widget, 1)
-        
-        self.start_time = saved_start_time
-        self.trip_distance = saved_trip_distance
-        self.instant_fuel = saved_instant_fuel
-        self.avg_fuel = saved_avg_fuel
-        self.has_valid_data = saved_has_valid_data
-        self.total_fuel_used = saved_total_fuel_used
-        self.total_distance = saved_total_distance
+        for widget in self.findChildren(QLabel):
+            ss = widget.styleSheet()
+            if 'T(' in ss and 'PRIMARY' in ss:
+                widget.setStyleSheet("")
+                widget.setStyleSheet(ss)
 
 
 
@@ -1358,38 +1288,16 @@ class OdometerCardWide(QWidget):
     
     def refresh_theme(self):
         """重新整理 UI 主題顏色（更換強調色後呼叫）"""
-        saved_distance = self.total_distance
-        saved_input = self.current_input
-        saved_editing = self.is_editing
-        saved_sync_time = self.last_sync_time
-        
-        main_layout = self.layout()
-        while main_layout.count():
-            item = main_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        
-        self.stack = QStackedWidget()
-        main_layout.addWidget(self.stack)
-        
-        self.display_page = self._create_display_page()
-        self.stack.addWidget(self.display_page)
-        
-        self.input_page = self._create_input_page()
-        self.stack.addWidget(self.input_page)
-        
-        self.total_distance = saved_distance
-        self.current_input = saved_input
-        self.is_editing = saved_editing
-        self.last_sync_time = saved_sync_time
-        
-        self.odo_distance_label.setText(f"{int(self.total_distance)}")
-        self._update_sync_time_display()
-        
-        if self.is_editing:
-            self.stack.setCurrentWidget(self.input_page)
-        else:
-            self.stack.setCurrentWidget(self.display_page)
+        for widget in self.findChildren(QLabel):
+            ss = widget.styleSheet()
+            if 'T(' in ss and 'PRIMARY' in ss:
+                widget.setStyleSheet("")
+                widget.setStyleSheet(ss)
+        for widget in self.findChildren(QPushButton):
+            ss = widget.styleSheet()
+            if 'T(' in ss and 'PRIMARY' in ss:
+                widget.setStyleSheet("")
+                widget.setStyleSheet(ss)
 
 
 
@@ -1925,41 +1833,16 @@ class TripCardWide(QWidget):
     
     def refresh_theme(self):
         """重新整理 UI 主題顏色（更換強調色後呼叫）"""
-        saved_trip1_dist = self.trip1_distance
-        saved_trip1_time = self.trip1_reset_time
-        saved_trip2_dist = self.trip2_distance
-        saved_trip2_time = self.trip2_reset_time
-        saved_focus = self.focus_index
-        
-        layout = self.layout()
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        
-        self.trip1_panel = self._create_trip_panel("Trip 1", is_trip1=True)
-        self.trip2_panel = self._create_trip_panel("Trip 2", is_trip1=False)
-        
-        separator = QWidget()
-        separator.setFixedWidth(2)
-        separator.setStyleSheet("background: #333;")
-        
-        layout.addWidget(self.trip1_panel, 1)
-        layout.addWidget(separator)
-        layout.addWidget(self.trip2_panel, 1)
-        
-        self.trip1_distance = saved_trip1_dist
-        self.trip1_reset_time = saved_trip1_time
-        self.trip2_distance = saved_trip2_dist
-        self.trip2_reset_time = saved_trip2_time
-        
-        self.trip1_distance_label.setText(f"{self.trip1_distance:.1f}")
-        self.trip2_distance_label.setText(f"{self.trip2_distance:.1f}")
-        self._update_reset_time_display(True)
-        self._update_reset_time_display(False)
-        
-        self.focus_index = saved_focus
-        self._update_focus_style()
+        for widget in self.findChildren(QLabel):
+            ss = widget.styleSheet()
+            if 'T(' in ss and 'PRIMARY' in ss:
+                widget.setStyleSheet("")
+                widget.setStyleSheet(ss)
+        for widget in self.findChildren(QPushButton):
+            ss = widget.styleSheet()
+            if 'T(' in ss and 'PRIMARY' in ss:
+                widget.setStyleSheet("")
+                widget.setStyleSheet(ss)
 
 
 

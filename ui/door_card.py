@@ -261,3 +261,7 @@ class DoorStatusCard(QWidget):
                 font-weight: bold;
                 background: transparent;
             """)
+    
+    def refresh_theme(self):
+        """重新整理 UI 主題顏色（更換強調色後呼叫）"""
+        pass
