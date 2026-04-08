@@ -35,7 +35,8 @@ class GPSMonitorThread(QThread):
         self._external_gps_timestamp = None
         self._has_device = None  # None=unknown, True=device found, False=no device
         self._last_mqtt_gps_time = 0  # 記錄上次收到 MQTT GPS 的本地時間（秒）
-        self._external_fresh_threshold = 30
+        # 與導航訊息新鮮度標準一致（15 秒）
+        self._external_fresh_threshold = 15
         self._external_stale_threshold = 300
         self._search_without_device_count = 0  # 連續搜尋無結果次數
         
@@ -195,7 +196,7 @@ class GPSMonitorThread(QThread):
             bearing: 方向角度
             timestamp: ISO 格式時間戳（不再用於新鮮度判斷，僅保留用於日誌）
         """
-        FRESH_THRESHOLD = self._external_fresh_threshold      # 30 秒內：即時位置
+        FRESH_THRESHOLD = self._external_fresh_threshold      # 15 秒內：即時位置
         STALE_THRESHOLD = self._external_stale_threshold      # 5 分鐘內：最後位置
         # 超過 5 分鐘：忽略
         
