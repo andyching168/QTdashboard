@@ -6,6 +6,7 @@ from PyQt6.QtGui import *
 
 from core.utils import perf_track
 from ui.common import MarqueeLabel
+from ui.theme import T
 
 
 class MusicCard(QWidget):
@@ -19,12 +20,12 @@ class MusicCard(QWidget):
         self.setFixedSize(380, 380)
         
         # 設置背景樣式
-        self.setStyleSheet("""
-            QWidget {
+        self.setStyleSheet(f"""
+            QWidget {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #1a1a25, stop:1 #0f0f18);
+                    stop:0 {T('BG_CARD')}, stop:1 #0f0f18);
                 border-radius: 20px;
-            }
+            }}
         """)
         
         # Main layout with StackedWidget
@@ -102,7 +103,7 @@ class MusicCard(QWidget):
         # 標題
         title_label = QLabel("Now Playing")
         title_label.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 14px;
             font-weight: bold;
             background: transparent;
@@ -123,7 +124,7 @@ class MusicCard(QWidget):
         # 創建專輯圖標 (音符符號)
         album_icon = QLabel("♪")
         album_icon.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 80px;
             background: transparent;
         """)
@@ -162,7 +163,7 @@ class MusicCard(QWidget):
         # 專輯名稱
         self.album_name = MarqueeLabel("-")
         self.album_name.setStyleSheet("""
-            color: #888;
+            color: {T('TEXT_SECONDARY')};
             font-size: 12px;
             background: transparent;
         """)
@@ -205,14 +206,14 @@ class MusicCard(QWidget):
         
         self.current_time = QLabel("0:00")
         self.current_time.setStyleSheet("""
-            color: #888;
+            color: {T('TEXT_SECONDARY')};
             font-size: 11px;
             background: transparent;
         """)
         
         self.total_time = QLabel("0:00")
         self.total_time.setStyleSheet("""
-            color: #888;
+            color: {T('TEXT_SECONDARY')};
             font-size: 11px;
             background: transparent;
         """)
@@ -462,7 +463,7 @@ class MusicCardWide(QWidget):
         offline_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         offline_desc = QLabel("請檢查網路連線")
-        offline_desc.setStyleSheet("color: #888; font-size: 16px; background: transparent;")
+        offline_desc.setStyleSheet("color: {T('TEXT_SECONDARY')}; font-size: 16px; background: transparent;")
         offline_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         offline_layout.addWidget(offline_icon)
@@ -557,7 +558,7 @@ class MusicCardWide(QWidget):
         # 預設音符圖標
         self.album_icon = QLabel("♪", self.album_art)
         self.album_icon.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 120px;
             background: transparent;
         """)
@@ -576,7 +577,7 @@ class MusicCardWide(QWidget):
         # Now Playing 標題
         title_label = QLabel("Now Playing")
         title_label.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 16px;
             font-weight: bold;
             background: transparent;
@@ -607,7 +608,7 @@ class MusicCardWide(QWidget):
         # 專輯名稱
         self.album_name = MarqueeLabel("-")
         self.album_name.setStyleSheet("""
-            color: #888;
+            color: {T('TEXT_SECONDARY')};
             font-size: 16px;
             background: transparent;
         """)

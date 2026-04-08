@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
+from ui.theme import T
+
 class MQTTSettingsSignals(QObject):
     """MQTT 設定對話框的訊號"""
     settings_saved = pyqtSignal(bool)

@@ -1,6 +1,8 @@
 from PyQt6.QtWidgets import QDialog, QWidget, QLabel, QGridLayout, QHBoxLayout, QVBoxLayout, QPushButton
 from PyQt6.QtCore import Qt
 
+from ui.theme import T
+
 
 class NumericKeypad(QDialog):
     """虛擬數字鍵盤對話框"""
@@ -31,7 +33,7 @@ class NumericKeypad(QDialog):
         
         title = QLabel("輸入總里程")
         title.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 20px;
             font-weight: bold;
             background: transparent;
@@ -101,7 +103,7 @@ class NumericKeypad(QDialog):
         btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_ok.setStyleSheet("""
             QPushButton {
-                background-color: #6af;
+                background-color: {T('PRIMARY')};
                 color: white;
                 border: none;
                 border-radius: 10px;

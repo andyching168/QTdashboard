@@ -6,6 +6,7 @@ from PyQt6.QtGui import *
 
 from core.utils import OdometerStorage
 from core.shutdown_monitor import get_shutdown_monitor
+from ui.theme import T
 
 # Late import to avoid circular dependency
 def get_dashboard_class():
@@ -20,12 +21,12 @@ class OdometerCard(QWidget):
         self.setFixedSize(380, 380)
         
         # 設置背景樣式
-        self.setStyleSheet("""
-            QWidget {
+        self.setStyleSheet(f"""
+            QWidget {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #1a1a25, stop:1 #0f0f18);
+                    stop:0 {T('BG_CARD')}, stop:1 #0f0f18);
                 border-radius: 20px;
-            }
+            }}
         """)
         
         # 總里程數據
@@ -68,8 +69,8 @@ class OdometerCard(QWidget):
         
         # 標題
         title_label = QLabel("Odometer")
-        title_label.setStyleSheet("""
-            color: #6af;
+        title_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 20px;
             font-weight: bold;
             background: transparent;
@@ -109,7 +110,7 @@ class OdometerCard(QWidget):
         
         unit_label = QLabel("km")
         unit_label.setStyleSheet("""
-            color: #888;
+            color: {T('TEXT_SECONDARY')};
             font-size: 24px;
             background: transparent;
         """)
@@ -123,7 +124,7 @@ class OdometerCard(QWidget):
         # 同步時間顯示
         self.sync_time_label = QLabel("未同步")
         self.sync_time_label.setStyleSheet("""
-            color: #666;
+            color: {T('TEXT_DISABLED')};
             font-size: 12px;
             background: transparent;
         """)
@@ -139,7 +140,7 @@ class OdometerCard(QWidget):
         sync_btn.setStyleSheet("""
             QPushButton {
                 background-color: rgba(100, 150, 255, 0.3);
-                color: #6af;
+                color: {T('PRIMARY')};
                 border: 2px solid #6af;
                 border-radius: 10px;
                 font-size: 16px;
@@ -175,7 +176,7 @@ class OdometerCard(QWidget):
         # 標題
         title = QLabel("輸入總里程")
         title.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 18px;
             font-weight: bold;
             background: transparent;
@@ -201,7 +202,7 @@ class OdometerCard(QWidget):
         # 單位標籤
         unit_label = QLabel("km")
         unit_label.setStyleSheet("""
-            color: #888;
+            color: {T('TEXT_SECONDARY')};
             font-size: 12px;
             background: transparent;
         """)
@@ -242,7 +243,7 @@ class OdometerCard(QWidget):
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #666;
+                background-color: {T('TEXT_DISABLED')};
             }
             QPushButton:pressed {
                 background-color: #444;
@@ -255,7 +256,7 @@ class OdometerCard(QWidget):
         btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_ok.setStyleSheet("""
             QPushButton {
-                background-color: #6af;
+                background-color: {T('PRIMARY')};
                 color: white;
                 border: none;
                 border-radius: 8px;
@@ -453,7 +454,7 @@ class TripInfoCardWide(QWidget):
         # 標題
         title_label = QLabel("本次行程")
         title_label.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 28px;
             font-weight: bold;
             background: transparent;
@@ -562,7 +563,7 @@ class TripInfoCardWide(QWidget):
         
         unit_lbl = QLabel(unit)
         unit_lbl.setStyleSheet("""
-            color: #888;
+            color: {T('TEXT_SECONDARY')};
             font-size: 16px;
             background: transparent;
         """)
@@ -873,7 +874,7 @@ class OdometerCardWide(QWidget):
         # 標題
         title_label = QLabel("Odometer")
         title_label.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 28px;
             font-weight: bold;
             background: transparent;
@@ -902,7 +903,7 @@ class OdometerCardWide(QWidget):
         
         unit_label = QLabel("km")
         unit_label.setStyleSheet("""
-            color: #888;
+            color: {T('TEXT_SECONDARY')};
             font-size: 24px;
             background: transparent;
         """)
@@ -916,7 +917,7 @@ class OdometerCardWide(QWidget):
         # 同步時間
         self.sync_time_label = QLabel("未同步")
         self.sync_time_label.setStyleSheet("""
-            color: #666;
+            color: {T('TEXT_DISABLED')};
             font-size: 16px;
             background: transparent;
         """)
@@ -942,7 +943,7 @@ class OdometerCardWide(QWidget):
         sync_btn.setStyleSheet("""
             QPushButton {
                 background-color: rgba(100, 150, 255, 0.2);
-                color: #6af;
+                color: {T('PRIMARY')};
                 border: 3px solid #6af;
                 border-radius: 45px;
                 font-size: 18px;
@@ -986,7 +987,7 @@ class OdometerCardWide(QWidget):
         # 標題
         title_label = QLabel("同步里程")
         title_label.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 28px;
             font-weight: bold;
             background: transparent;
@@ -1007,12 +1008,12 @@ class OdometerCardWide(QWidget):
         current_layout.setSpacing(10)
         
         current_title = QLabel("目前里程")
-        current_title.setStyleSheet("color: #888; font-size: 16px; background: transparent;")
+        current_title.setStyleSheet("color: {T('TEXT_SECONDARY')}; font-size: 16px; background: transparent;")
         current_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.current_odo_label = QLabel("0 km")
         self.current_odo_label.setStyleSheet("""
-            color: #666;
+            color: {T('TEXT_DISABLED')};
             font-size: 36px;
             font-weight: bold;
             background: transparent;
@@ -1036,7 +1037,7 @@ class OdometerCardWide(QWidget):
         new_layout.setSpacing(10)
         
         new_title = QLabel("新里程")
-        new_title.setStyleSheet("color: #6af; font-size: 16px; background: transparent;")
+        new_title.setStyleSheet("color: {T('PRIMARY')}; font-size: 16px; background: transparent;")
         new_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.input_display = QLabel("_ _ _ _ _ _")
@@ -1104,7 +1105,7 @@ class OdometerCardWide(QWidget):
                 font-size: 18px;
                 font-weight: bold;
             }
-            QPushButton:hover { background-color: #666; }
+            QPushButton:hover { background-color: {T('TEXT_DISABLED')}; }
             QPushButton:pressed { background-color: #444; }
         """)
         btn_cancel.clicked.connect(self._cancel_input)
@@ -1312,7 +1313,7 @@ class TripCard(QWidget):
         # 標題
         title_label = QLabel("Trip Computer")
         title_label.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 18px;
             font-weight: bold;
             background: transparent;
@@ -1361,7 +1362,7 @@ class TripCard(QWidget):
         
         trip_title = QLabel(title)
         trip_title.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 16px;
             font-weight: bold;
             background: transparent;
@@ -1373,7 +1374,7 @@ class TripCard(QWidget):
         reset_btn.setStyleSheet("""
             QPushButton {
                 background-color: rgba(100, 150, 255, 0.3);
-                color: #6af;
+                color: {T('PRIMARY')};
                 border: 1px solid #6af;
                 border-radius: 6px;
                 font-size: 12px;
@@ -1417,7 +1418,7 @@ class TripCard(QWidget):
         
         unit_label = QLabel("km")
         unit_label.setStyleSheet("""
-            color: #888;
+            color: {T('TEXT_SECONDARY')};
             font-size: 20px;
             background: transparent;
         """)
@@ -1437,7 +1438,7 @@ class TripCard(QWidget):
             reset_time_label = self.trip2_reset_label
             
         reset_time_label.setStyleSheet("""
-            color: #666;
+            color: {T('TEXT_DISABLED')};
             font-size: 24px;
             background: transparent;
         """)
@@ -1564,7 +1565,7 @@ class TripCardWide(QWidget):
         
         title_label = QLabel(title)
         title_label.setStyleSheet("""
-            color: #6af;
+            color: {T('PRIMARY')};
             font-size: 28px;
             font-weight: bold;
             background: transparent;
@@ -1576,7 +1577,7 @@ class TripCardWide(QWidget):
         reset_btn.setStyleSheet("""
             QPushButton {
                 background-color: rgba(100, 150, 255, 0.3);
-                color: #6af;
+                color: {T('PRIMARY')};
                 border: 1px solid #6af;
                 border-radius: 8px;
                 font-size: 14px;
@@ -1635,7 +1636,7 @@ class TripCardWide(QWidget):
         
         unit_label = QLabel("km")
         unit_label.setStyleSheet("""
-            color: #888;
+            color: {T('TEXT_SECONDARY')};
             font-size: 28px;
             background: transparent;
         """)
@@ -1655,7 +1656,7 @@ class TripCardWide(QWidget):
             reset_time_label = self.trip2_reset_label
         
         reset_time_label.setStyleSheet("""
-            color: #666;
+            color: {T('TEXT_DISABLED')};
             font-size: 24px;
             background: transparent;
         """)
