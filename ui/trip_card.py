@@ -1312,8 +1312,8 @@ class TripCard(QWidget):
         
         # 標題
         title_label = QLabel("Trip Computer")
-        title_label.setStyleSheet("""
-            color: #6af;
+        title_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 18px;
             font-weight: bold;
             background: transparent;
@@ -1361,8 +1361,8 @@ class TripCard(QWidget):
         header_layout.setSpacing(10)
         
         trip_title = QLabel(title)
-        trip_title.setStyleSheet("""
-            color: #6af;
+        trip_title.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 16px;
             font-weight: bold;
             background: transparent;
@@ -1371,21 +1371,21 @@ class TripCard(QWidget):
         reset_btn = QPushButton("Reset")
         reset_btn.setFixedSize(70, 28)
         reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        reset_btn.setStyleSheet("""
-            QPushButton {
+        reset_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: rgba(100, 150, 255, 0.3);
-                color: #6af;
-                border: 1px solid #6af;
+                color: {T('PRIMARY')};
+                border: 1px solid {T('PRIMARY')};
                 border-radius: 6px;
                 font-size: 12px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: rgba(100, 150, 255, 0.5);
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: rgba(100, 150, 255, 0.7);
-            }
+            }}
         """)
         
         if is_trip1:
