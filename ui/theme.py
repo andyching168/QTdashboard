@@ -4,93 +4,138 @@ QTdashboard 主題系統
 提供中央化的顏色定義和主題管理機制。
 """
 
-from typing import Optional
+import os
+import json
+from typing import Optional, Dict
 from dataclasses import dataclass
 from PyQt6.QtGui import QColor
 from PyQt6.QtCore import QObject, pyqtSignal
 
 
+ACCENT_COLOR_PRESETS: Dict[str, str] = {
+    "藍色（預設）": "#6af",
+    "紫色": "#9b6af",
+    "粉色": "#f6a",
+    "紅色": "#f55",
+    "橙色": "#fa5",
+    "金色": "#fa0",
+    "綠色": "#5f8",
+    "青色": "#0fc",
+    "天藍色": "#0af",
+}
+
+
 @dataclass
 class ThemeColors:
     """所有 UI 顏色定義"""
-    # 主要顏色
-    PRIMARY = "#6af"           # 藍色（主要強調色）
-    SUCCESS = "#4ade80"        # 綠色（安全/正常/巡航）
-    DANGER = "#ef4444"        # 紅色（危險/錯誤/超速）
-    WARNING = "#facc15"       # 黃色（警告/外部GPS）
-    ORANGE = "#fa0"           # 橙色（警告）
+    PRIMARY: str = "#6af"
+    SUCCESS: str = "#4ade80"
+    DANGER: str = "#ef4444"
+    WARNING: str = "#facc15"
+    ORANGE: str = "#fa0"
     
-    # 狀態指示燈
-    LAMP_ON = "#4ade80"       # 指示燈亮
-    LAMP_OFF = "#333333"      # 指示燈滅
+    LAMP_ON: str = "#4ade80"
+    LAMP_OFF: str = "#333333"
     
-    # 按鈕顏色
-    BTN_WIFI = "#1DB954"
-    BTN_TIME = "#4285F4"
-    BTN_BRIGHTNESS = "#FF9800"
-    BTN_UPDATE = "#00BCD4"
-    BTN_POWER = "#E91E63"
-    BTN_SETTINGS = "#9C27B0"
+    BTN_WIFI: str = "#1DB954"
+    BTN_TIME: str = "#4285F4"
+    BTN_BRIGHTNESS: str = "#FF9800"
+    BTN_UPDATE: str = "#00BCD4"
+    BTN_POWER: str = "#E91E63"
+    BTN_SETTINGS: str = "#9C27B0"
     
-    # 速度同步模式
-    SPEED_CALIBRATED = "#4CAF50"
-    SPEED_FIXED = "#FF9800"
-    SPEED_GPS = "#2196F3"
+    SPEED_CALIBRATED: str = "#4CAF50"
+    SPEED_FIXED: str = "#FF9800"
+    SPEED_GPS: str = "#2196F3"
     
-    # 文字顏色
-    TEXT_PRIMARY = "#ffffff"   # 主要文字（白色）
-    TEXT_SECONDARY = "#888888" # 次要文字（灰色）
-    TEXT_DISABLED = "#444444"  # 禁用文字
+    TEXT_PRIMARY: str = "#ffffff"
+    TEXT_SECONDARY: str = "#888888"
+    TEXT_DISABLED: str = "#444444"
     
-    # 背景顏色
-    BG_DARK = "#0a0a0f"       # 主背景（深黑）
-    BG_CARD = "#1a1a25"       # 卡片背景（深灰紫）
-    BG_CARD_ALT = "#2a2a35"   # 卡片背景交替色
-    BG_INPUT = "#15151a"      # 輸入框背景
-    BG_STATUS_BAR = "#1a1a1f" # 狀態列背景
+    BG_DARK: str = "#0a0a0f"
+    BG_CARD: str = "#1a1a25"
+    BG_CARD_ALT: str = "#2a2a35"
+    BG_INPUT: str = "#15151a"
+    BG_STATUS_BAR: str = "#1a1a1f"
     
-    # 邊框
-    BORDER_DEFAULT = "#2a2a35"
-    BORDER_HOVER = "#3a3a45"
-    BORDER_ACTIVE = "#4a4a55"
+    BORDER_DEFAULT: str = "#2a2a35"
+    BORDER_HOVER: str = "#3a3a45"
+    BORDER_ACTIVE: str = "#4a4a55"
     
-    # 特殊元件
-    GAUGE_BG = "#101015"      # 儀表背景
-    NEEDLE = "#ff6b6b"        # 指針顏色
-    TICK = "#4a5568"          # 刻度線
-    TICK_MAJOR = "#6a7588"    # 主刻度
+    GAUGE_BG: str = "#101015"
+    NEEDLE: str = "#ff6b6b"
+    TICK: str = "#4a5568"
+    TICK_MAJOR: str = "#6a7588"
     
-    # 手煞車/引擎
-    PARKING_BRAKE = "#f66"
-    ENGINE_RUNNING = "#4ade80"
-    ENGINE_OFF = "#666666"
+    PARKING_BRAKE: str = "#f66"
+    ENGINE_RUNNING: str = "#4ade80"
+    ENGINE_OFF: str = "#666666"
     
-    # GPS 狀態
-    GPS_INTERNAL = "#4ade80"  # 內部GPS（綠色）
-    GPS_EXTERNAL_FRESH = "#facc15"  # 外部GPS即時（黃色）
-    GPS_EXTERNAL_STALE = "#888888"  # 外部GPS過時（灰色）
-    GPS_NOT_FOUND = "#ef4444" # GPS未找到（紅色）
+    GPS_INTERNAL: str = "#4ade80"
+    GPS_EXTERNAL_FRESH: str = "#facc15"
+    GPS_EXTERNAL_STALE: str = "#888888"
+    GPS_NOT_FOUND: str = "#ef4444"
     
-    # 方向燈
-    TURN_SIGNAL_BRIGHT = "#b1ff00"  # 方向燈亮（黃綠）
-    TURN_SIGNAL_DIM = "#0a0a0a"     # 方向燈暗
+    TURN_SIGNAL_BRIGHT: str = "#b1ff00"
+    TURN_SIGNAL_DIM: str = "#0a0a0a"
     
-    # 速限
-    SPEED_LIMIT_BORDER = "#ef4444"  # 速限邊框
-    SPEED_LIMIT_BG = "#ffffff"      # 速限背景
-    SPEED_LIMIT_TEXT = "#000000"    # 速限文字
+    SPEED_LIMIT_BORDER: str = "#ef4444"
+    SPEED_LIMIT_BG: str = "#ffffff"
+    SPEED_LIMIT_TEXT: str = "#000000"
+
+
+def _get_config_dir() -> str:
+    """取得設定檔目錄"""
+    config_dir = os.path.join(os.path.expanduser("~"), ".config", "qtdashboard")
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir, exist_ok=True)
+    return config_dir
+
+
+def _get_accent_color_config_path() -> str:
+    """取得強調色設定檔路徑"""
+    return os.path.join(_get_config_dir(), "accent_color.json")
 
 
 class ThemeManager(QObject):
     """主題管理器"""
     
     theme_changed = pyqtSignal(str)
+    accent_color_changed = pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
         self._current_theme = "dark"
         self._colors = ThemeColors()
+        self._accent_color_overrides: Dict[str, str] = {}
+        self._load_accent_color()
         
+    def _load_accent_color(self):
+        """從設定檔載入強調色"""
+        config_path = _get_accent_color_config_path()
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    accent = data.get('primary', '#6af')
+                    self._accent_color_overrides['PRIMARY'] = accent
+                    print(f"[Theme] 已載入強調色: {accent}")
+            except Exception as e:
+                print(f"[Theme] 載入強調色失敗: {e}")
+                self._accent_color_overrides['PRIMARY'] = '#6af'
+        else:
+            self._accent_color_overrides['PRIMARY'] = '#6af'
+    
+    def _save_accent_color(self, color_hex: str):
+        """儲存強調色到設定檔"""
+        config_path = _get_accent_color_config_path()
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump({'primary': color_hex}, f, indent=2)
+            print(f"[Theme] 已儲存強調色: {color_hex}")
+        except Exception as e:
+            print(f"[Theme] 儲存強調色失敗: {e}")
+    
     @property
     def colors(self) -> ThemeColors:
         return self._colors
@@ -98,6 +143,18 @@ class ThemeManager(QObject):
     @property
     def current_theme(self) -> str:
         return self._current_theme
+    
+    @property
+    def accent_color(self) -> str:
+        """取得目前強調色"""
+        return self._accent_color_overrides.get('PRIMARY', '#6af')
+    
+    def set_accent_color(self, color_hex: str):
+        """設定強調色"""
+        self._accent_color_overrides['PRIMARY'] = color_hex
+        self._save_accent_color(color_hex)
+        self.accent_color_changed.emit(color_hex)
+        print(f"[Theme] 強調色已更改為: {color_hex}")
     
     def set_theme(self, theme_name: str):
         """設定主題（目前只支援 dark）"""
@@ -140,7 +197,6 @@ class ThemeManager(QObject):
         return self.adjust_color(hex_color, amount)
 
 
-# 全域主題管理器實例
 _theme_manager: Optional[ThemeManager] = None
 
 def get_theme_manager() -> ThemeManager:
@@ -149,6 +205,7 @@ def get_theme_manager() -> ThemeManager:
     if _theme_manager is None:
         _theme_manager = ThemeManager()
     return _theme_manager
+
 
 def T(key: str) -> str:
     """快速取得主題顏色
@@ -159,4 +216,7 @@ def T(key: str) -> str:
     Returns:
         顏色 hex 字串
     """
+    manager = get_theme_manager()
+    if key in manager._accent_color_overrides:
+        return manager._accent_color_overrides[key]
     return getattr(ThemeColors, key, "#ff00ff")

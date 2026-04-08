@@ -1186,6 +1186,13 @@ class ControlPanel(QWidget):
             err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             err_box.exec()
     
+    def on_accent_color_changed(self, color_hex: str):
+        """當強調色改變時，重新整理整個 UI"""
+        print(f"[ControlPanel] 強調色已更改為 {color_hex}，正在刷新 UI...")
+        from ui.theme import get_theme_manager
+        manager = get_theme_manager()
+        print(f"[ControlPanel] 新 PRIMARY 顏色: {manager.accent_color}")
+    
     def show_settings_menu(self):
         """顯示設定選單"""
         from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QApplication, QMainWindow
@@ -1280,20 +1287,17 @@ class ControlPanel(QWidget):
             if parent and hasattr(parent, 'show_spotify_settings'):
                 parent.show_spotify_settings()
         
-        # 主題設定（尚未實作）
+        # 主題設定
         def open_theme():
             dialog.close()
-            from PyQt6.QtWidgets import QMessageBox
-            msg = QMessageBox()
-            msg.setWindowTitle("主題設定")
-            msg.setText("主題設定功能即將推出...")
-            msg.setIcon(QMessageBox.Icon.Information)
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            msg.exec()
+            from ui.accent_color_settings import AccentColorSettingsDialog
+            theme_dialog = AccentColorSettingsDialog(parent=self)
+            theme_dialog.signals.accent_color_changed.connect(self.on_accent_color_changed)
+            theme_dialog.show()
         
         layout.addWidget(create_settings_btn("MQTT 設定", "📡", "設定 MQTT 伺服器連線", open_mqtt))
         layout.addWidget(create_settings_btn("Spotify 設定", "🎵", "設定 Spotify 音樂播放", open_spotify))
-        layout.addWidget(create_settings_btn("主題強調色設定", "🎨", "自訂 UI 強調色（尚未實作）", open_theme))
+        layout.addWidget(create_settings_btn("主題強調色設定", "🎨", "自訂 UI 強調色", open_theme))
         
         layout.addStretch()
         

@@ -120,6 +120,9 @@ class Dashboard(QWidget):
     def __init__(self, skip_gps=False):
         super().__init__()
         
+        # === 初始化主題系統（載入強調色設定）===
+        _ = get_theme_manager()
+        
         # === 禁用 Python 自動 GC ===
         # 在桌面環境下，自動 GC 可能會與桌面合成器競爭資源導致凍結
         # 改由 _incremental_gc() 每 5 分鐘在背景手動執行
