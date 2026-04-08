@@ -1994,6 +1994,28 @@ class Dashboard(QWidget):
         """處理導航訊息（Slot - 在主執行緒執行）"""
         print(f"[Navigation] _slot_update_navigation 被呼叫")
         print(f"[Navigation] 資料: direction={data.get('direction')}, distance={data.get('totalDistance')}")
+
+        # 先取出 GPS 相關欄位（即使導航訊息過時也可用於外部 GPS 備援）
+        lat = data.get('latitude')
+        lon = data.get('longitude')
+        speed = data.get('speed')
+        bearing = data.get('bearing', 0)
+
+        # 更新 bearing (用於速限查詢)
+        self.current_bearing = bearing
+
+        # 外部 GPS 備援：
+        # 1) 內部 GPS 未定位時啟用
+        # 2) 一旦進入外部模式，後續持續注入以維持 freshness，避免圖示閃回 searching
+        if lat is not None and lon is not None and self.gps_monitor_thread is not None:
+            keep_external = (not self.is_gps_fixed) or self.gps_monitor_thread.is_using_external_gps()
+            if keep_external:
+                print(f"[Navigation] 使用 MQTT GPS 備援: lat={lat}, lon={lon}, speed={speed}")
+                self.gps_monitor_thread.inject_external_gps(lat, lon, speed or 0, bearing, data.get('timestamp', ''))
+
+            # 更新 GPS 位置（速限由計時器每 5 秒查詢一次）
+            self.gps_lat = lat
+            self.gps_lon = lon
         
         # 檢查 timestamp 新鮮度 (15秒內)
         timestamp_str = data.get('timestamp')
@@ -2008,29 +2030,11 @@ class Dashboard(QWidget):
                 print(f"[Navigation] 訊息時間: {timestamp_str}, 時間差: {time_diff:.1f}秒")
                 
                 if time_diff > 15:
-                    print(f"[Navigation] ⚠️ 訊息過時 (相差 {time_diff:.1f}秒)，顯示無導航畫面")
+                    print(f"[Navigation] ⚠️ 訊息過時 (相差 {time_diff:.1f}秒)，僅更新 GPS 備援並顯示無導航畫面")
                     # 訊息過時，顯示無導航資訊畫面
                     if hasattr(self, 'nav_card'):
                         self.nav_card.show_no_nav_ui()
                     return
-                
-                # 如果內部 GPS 未定位，嘗試使用 MQTT GPS 作為備援
-                lat = data.get('latitude')
-                lon = data.get('longitude')
-                speed = data.get('speed')
-                bearing = data.get('bearing', 0)
-                
-                # 更新 bearing (用於速限查詢)
-                self.current_bearing = bearing
-                
-                if lat is not None and lon is not None:
-                    if not self.is_gps_fixed:
-                        print(f"[Navigation] 內部 GPS 未定位，使用 MQTT GPS: lat={lat}, lon={lon}, speed={speed}")
-                        if self.gps_monitor_thread is not None:
-                            self.gps_monitor_thread.inject_external_gps(lat, lon, speed or 0, bearing, timestamp_str)
-                    # 更新 GPS 位置（速限由計時器每 5 秒查詢一次）
-                    self.gps_lat = lat
-                    self.gps_lon = lon
                     
             except Exception as e:
                 print(f"[Navigation] ⚠️ 解析 timestamp 失敗: {e}，仍繼續處理")

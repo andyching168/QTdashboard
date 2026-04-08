@@ -35,6 +35,8 @@ class GPSMonitorThread(QThread):
         self._external_gps_timestamp = None
         self._has_device = None  # None=unknown, True=device found, False=no device
         self._last_mqtt_gps_time = 0  # 記錄上次收到 MQTT GPS 的本地時間（秒）
+        self._external_fresh_threshold = 30
+        self._external_stale_threshold = 300
         self._search_without_device_count = 0  # 連續搜尋無結果次數
         
     def run(self):
@@ -193,8 +195,8 @@ class GPSMonitorThread(QThread):
             bearing: 方向角度
             timestamp: ISO 格式時間戳（不再用於新鮮度判斷，僅保留用於日誌）
         """
-        FRESH_THRESHOLD = 30      # 30 秒內：即時位置
-        STALE_THRESHOLD = 300     # 5 分鐘內：最後位置
+        FRESH_THRESHOLD = self._external_fresh_threshold      # 30 秒內：即時位置
+        STALE_THRESHOLD = self._external_stale_threshold      # 5 分鐘內：最後位置
         # 超過 5 分鐘：忽略
         
         # 使用本地時間判斷新鮮度，避免發送端時鐘誤差
@@ -218,8 +220,8 @@ class GPSMonitorThread(QThread):
         if not self._using_external_gps:
             self._using_external_gps = True
             self._external_gps_timestamp = timestamp
-            # 發射來源變更信號 (is_internal=False, is_fresh)
-            self.gps_source_changed.emit(False, is_fresh)
+        # 每次注入都更新來源 fresh/stale，避免圖標停在舊狀態
+        self.gps_source_changed.emit(False, is_fresh)
         
         # 只有數據新鮮時才視為 fixed，過時的數據不視為有效定位
         if is_fresh:
@@ -243,6 +245,12 @@ class GPSMonitorThread(QThread):
             self.gps_position_changed.emit(lat, lon)
 
     def _update_status(self, is_fixed):
+        # 若正在使用外部 MQTT GPS，且仍在 fresh 窗口內，忽略內部 GPS 的 no-fix 抖動
+        if self._using_external_gps and not is_fixed:
+            now = time.time()
+            if self._last_mqtt_gps_time > 0 and (now - self._last_mqtt_gps_time) <= self._external_fresh_threshold:
+                return
+
         if is_fixed != self._last_fix_status:
             self._last_fix_status = is_fixed
             self.gps_fixed_changed.emit(is_fixed)
