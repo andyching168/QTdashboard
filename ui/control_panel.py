@@ -1189,9 +1189,18 @@ class ControlPanel(QWidget):
     def on_accent_color_changed(self, color_hex: str):
         """當強調色改變時，重新整理整個 UI"""
         print(f"[ControlPanel] 強調色已更改為 {color_hex}，正在刷新 UI...")
-        from ui.theme import get_theme_manager
-        manager = get_theme_manager()
-        print(f"[ControlPanel] 新 PRIMARY 顏色: {manager.accent_color}")
+        
+        app = QApplication.instance()
+        if app:
+            for widget in app.allWidgets():
+                try:
+                    ss = widget.styleSheet()
+                    if 'T(\'PRIMARY\')' in ss or 'T("PRIMARY")' in ss:
+                        widget.setStyleSheet(ss)
+                except:
+                    pass
+            app.processEvents()
+            print("[ControlPanel] UI 已刷新")
     
     def show_settings_menu(self):
         """顯示設定選單"""
