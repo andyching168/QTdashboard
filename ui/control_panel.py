@@ -744,10 +744,7 @@ class ControlPanel(QWidget):
         elif title == "電源":
             self.show_power_menu()
         elif title == "設定":
-            # 開啟 MQTT 設定對話框
-            parent = self.parent()
-            if parent and hasattr(parent, 'show_mqtt_settings'):
-                parent.show_mqtt_settings()  # type: ignore
+            self.show_settings_menu()
         elif title == "速度同步":
             # 檢查是否為長按（長按已處理，不要觸發普通點擊）
             btn = self._get_button_by_title("速度同步")
@@ -1188,6 +1185,140 @@ class ControlPanel(QWidget):
             err_box.setIcon(QMessageBox.Icon.Critical)
             err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             err_box.exec()
+    
+    def show_settings_menu(self):
+        """顯示設定選單"""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QApplication, QMainWindow
+        
+        # 取得實際顯示的視窗大小
+        parent_width = 1920
+        parent_height = 480
+        
+        widget = self
+        while widget:
+            parent = widget.parent()
+            if parent is None:
+                break
+            if isinstance(parent, QMainWindow):
+                parent_width = parent.width()
+                parent_height = parent.height()
+                break
+            widget = parent
+        
+        scale = min(parent_width / 1920, parent_height / 480)
+        
+        dialog_width = int(400 * scale)
+        dialog_height = int(350 * scale)
+        btn_width = int(320 * scale)
+        btn_height = int(80 * scale)
+        title_font_size = max(12, int(28 * scale))
+        btn_font_size = max(10, int(20 * scale))
+        btn_radius = max(5, int(15 * scale))
+        margin = max(10, int(40 * scale))
+        spacing = max(10, int(20 * scale))
+        
+        dialog = QDialog()
+        dialog.setWindowTitle("設定")
+        dialog.setFixedSize(dialog_width, dialog_height)
+        dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
+        dialog.setStyleSheet(f"""
+            QDialog {{
+                background-color: {T('BG_CARD')};
+            }}
+            QLabel {{
+                color: {T('TEXT_PRIMARY')};
+                font-size: 18px;
+                background: transparent;
+            }}
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(margin, int(30 * scale), margin, int(30 * scale))
+        layout.setSpacing(spacing)
+        
+        # 標題
+        title = QLabel("⚙ 設定選項")
+        title.setStyleSheet(f"font-size: {title_font_size}px; font-weight: bold; color: {T('TEXT_PRIMARY')};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+        
+        layout.addSpacing(int(10 * scale))
+        
+        # 設定選項按鈕
+        def create_settings_btn(text, icon, description, callback):
+            btn = QPushButton(f"{icon} {text}")
+            btn.setFixedSize(btn_width, btn_height)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {T('BG_CARD_ALT')};
+                    color: {T('TEXT_PRIMARY')};
+                    border: none;
+                    border-radius: {btn_radius}px;
+                    font-size: {btn_font_size}px;
+                    font-weight: bold;
+                    padding: {int(10 * scale)}px;
+                }}
+                QPushButton:hover {{
+                    background-color: {T('BORDER_HOVER')};
+                }}
+            """)
+            btn.clicked.connect(callback)
+            return btn
+        
+        # MQTT 設定
+        def open_mqtt():
+            dialog.close()
+            parent = self.parent()
+            if parent and hasattr(parent, 'show_mqtt_settings'):
+                parent.show_mqtt_settings()
+        
+        # Spotify 設定
+        def open_spotify():
+            dialog.close()
+            parent = self.parent()
+            if parent and hasattr(parent, 'show_spotify_settings'):
+                parent.show_spotify_settings()
+        
+        # 主題設定（尚未實作）
+        def open_theme():
+            dialog.close()
+            from PyQt6.QtWidgets import QMessageBox
+            msg = QMessageBox()
+            msg.setWindowTitle("主題設定")
+            msg.setText("主題設定功能即將推出...")
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+            msg.exec()
+        
+        layout.addWidget(create_settings_btn("MQTT 設定", "📡", "設定 MQTT 伺服器連線", open_mqtt))
+        layout.addWidget(create_settings_btn("Spotify 設定", "🎵", "設定 Spotify 音樂播放", open_spotify))
+        layout.addWidget(create_settings_btn("主題強調色設定", "🎨", "自訂 UI 強調色（尚未實作）", open_theme))
+        
+        layout.addStretch()
+        
+        # 取消按鈕
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setFixedSize(btn_width, int(50 * scale))
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {T('TEXT_SECONDARY')};
+                border: 2px solid {T('BORDER_DEFAULT')};
+                border-radius: {btn_radius}px;
+                font-size: {int(btn_font_size * 0.8)}px;
+            }}
+            QPushButton:hover {{
+                border-color: {T('TEXT_SECONDARY')};
+            }}
+        """)
+        cancel_btn.clicked.connect(dialog.close)
+        layout.addWidget(cancel_btn)
+        
+        # 顯示並置中
+        dialog.show()
+        dialog.move(QApplication.instance().primaryScreen().geometry().center() - dialog.rect().center())
     
     def show_power_menu(self):
         """顯示電源選單"""
