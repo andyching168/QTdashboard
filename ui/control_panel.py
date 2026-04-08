@@ -1079,52 +1079,83 @@ class ControlPanel(QWidget):
             err_box.exec()
             return
         
-        # 確認對話框
-        msg = QMessageBox()
-        msg.setWindowTitle("自動更新")
-        msg.setText(f"是否要從「{selected_branch}」分支拉取最新版本並重新啟動？")
-        msg.setInformativeText(
-            "這將會：\n"
-            f"• 執行 git pull origin {selected_branch}\n"
-            "• 關閉目前程式\n"
-            "• 重新啟動儀表板"
-        )
-        msg.setIcon(QMessageBox.Icon.Question)
-        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        msg.setDefaultButton(QMessageBox.StandardButton.No)
-        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        # 選擇操作對話框
+        dialog = QDialog()
+        dialog.setWindowTitle("分支操作")
+        dialog.setWindowFlags(dialog.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        layout = QVBoxLayout(dialog)
         
-        if msg.exec() != QMessageBox.StandardButton.Yes:
+        label = QLabel(f"「{selected_branch}」分支：")
+        layout.addWidget(label)
+        
+        update_btn = QPushButton("更新（Pull + 重啟）")
+        update_btn.setToolTip("執行 git pull 並重新啟動")
+        switch_btn = QPushButton("切換分支（僅 Checkout）")
+        switch_btn.setToolTip="僅切換分支，不更新代碼"
+        cancel_btn = QPushButton("取消")
+        
+        layout.addWidget(update_btn)
+        layout.addWidget(switch_btn)
+        layout.addWidget(cancel_btn)
+        
+        def do_update():
+            dialog.done(1)
+        def do_switch():
+            dialog.done(2)
+        def do_cancel():
+            dialog.done(0)
+        
+        update_btn.clicked.connect(do_update)
+        switch_btn.clicked.connect(do_switch)
+        cancel_btn.clicked.connect(do_cancel)
+        
+        result = dialog.exec()
+        
+        if result == 0:
             return
+        
+        do_pull = (result == 1)
         
         try:
             script_dir = os.path.dirname(os.path.abspath(__file__))
             
-            print(f"[更新] 正在執行 git pull origin {selected_branch}...")
-            result = subprocess.run(
-                ['git', 'pull', 'origin', selected_branch],
-                cwd=script_dir,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
+            if do_pull:
+                print(f"[更新] 正在執行 git pull origin {selected_branch}...")
+                result = subprocess.run(
+                    ['git', 'pull', 'origin', selected_branch],
+                    cwd=script_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                action_desc = "更新"
+            else:
+                print(f"[分支] 正在執行 git checkout {selected_branch}...")
+                result = subprocess.run(
+                    ['git', 'checkout', selected_branch],
+                    cwd=script_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                action_desc = "分支切換"
             
             if result.returncode != 0:
                 error_msg = result.stderr or result.stdout or "未知錯誤"
                 err_box = QMessageBox()
-                err_box.setWindowTitle("更新失敗")
-                err_box.setText(f"Git pull 失敗:\n{error_msg}")
+                err_box.setWindowTitle(f"{action_desc}失敗")
+                err_box.setText(f"Git {'pull' if do_pull else 'checkout'} 失敗:\n{error_msg}")
                 err_box.setIcon(QMessageBox.Icon.Critical)
                 err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
                 err_box.exec()
                 return
             
-            print(f"[更新] Git pull 結果: {result.stdout}")
+            print(f"[{action_desc}] Git {'pull' if do_pull else 'checkout'} 結果: {result.stdout}")
             
             # 顯示成功訊息
             success_box = QMessageBox()
-            success_box.setWindowTitle("更新完成")
-            success_box.setText("已成功取得最新版本！")
+            success_box.setWindowTitle(f"{action_desc}完成")
+            success_box.setText(f"已成功{action_desc}！")
             success_box.setInformativeText(f"{result.stdout}\n\n程式將在 2 秒後重新啟動...")
             success_box.setIcon(QMessageBox.Icon.Information)
             success_box.setWindowFlags(success_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
