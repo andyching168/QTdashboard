@@ -1564,8 +1564,8 @@ class TripCardWide(QWidget):
         header_layout.setSpacing(10)
         
         title_label = QLabel(title)
-        title_label.setStyleSheet("""
-            color: #6af;
+        title_label.setStyleSheet(f"""
+            color: {T('PRIMARY')};
             font-size: 28px;
             font-weight: bold;
             background: transparent;
@@ -1574,21 +1574,21 @@ class TripCardWide(QWidget):
         reset_btn = QPushButton("Reset")
         reset_btn.setFixedSize(80, 36)
         reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        reset_btn.setStyleSheet("""
-            QPushButton {
+        reset_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: rgba(100, 150, 255, 0.3);
-                color: #6af;
-                border: 1px solid #6af;
+                color: {T('PRIMARY')};
+                border: 1px solid {T('PRIMARY')};
                 border-radius: 8px;
                 font-size: 14px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: rgba(100, 150, 255, 0.5);
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: rgba(100, 150, 255, 0.7);
-            }
+            }}
         """)
         
         if is_trip1:
@@ -1626,8 +1626,8 @@ class TripCardWide(QWidget):
             self.trip2_distance_label = QLabel("0.0")
             distance_label = self.trip2_distance_label
         
-        distance_label.setStyleSheet("""
-            color: white;
+        distance_label.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
             font-size: 72px;
             font-weight: bold;
             background: transparent;
@@ -1635,8 +1635,8 @@ class TripCardWide(QWidget):
         distance_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         
         unit_label = QLabel("km")
-        unit_label.setStyleSheet("""
-            color: #888;
+        unit_label.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
             font-size: 28px;
             background: transparent;
         """)
@@ -1655,8 +1655,8 @@ class TripCardWide(QWidget):
             self.trip2_reset_label = QLabel("Never reset")
             reset_time_label = self.trip2_reset_label
         
-        reset_time_label.setStyleSheet("""
-            color: #666;
+        reset_time_label.setStyleSheet(f"""
+            color: {T('TEXT_DISABLED')};
             font-size: 24px;
             background: transparent;
         """)
