@@ -1293,7 +1293,7 @@ class ControlPanel(QWidget):
             from ui.accent_color_settings import AccentColorSettingsDialog
             theme_dialog = AccentColorSettingsDialog(parent=self)
             theme_dialog.signals.accent_color_changed.connect(self.on_accent_color_changed)
-            theme_dialog.show()
+            theme_dialog.exec()
         
         layout.addWidget(create_settings_btn("MQTT 設定", "📡", "設定 MQTT 伺服器連線", open_mqtt))
         layout.addWidget(create_settings_btn("Spotify 設定", "🎵", "設定 Spotify 音樂播放", open_spotify))

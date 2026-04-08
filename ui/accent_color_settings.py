@@ -18,7 +18,7 @@ class AccentColorSignals(QObject):
     accent_color_changed = pyqtSignal(str)
 
 
-class AccentColorSettingsDialog(QWidget):
+class AccentColorSettingsDialog(QDialog):
     """強調色設定對話框"""
     
     signals = AccentColorSignals()
