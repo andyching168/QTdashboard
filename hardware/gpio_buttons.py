@@ -11,8 +11,7 @@ GPIO 按鈕處理模組 - 樹莓派實體按鈕控制
   - 長按: 重置 Trip
 
 - GPIO17: 手煞車感測器 (ESP32 數位輸出)
-  - HIGH: 手煞車拉起
-  - LOW: 手煞車放下
+    - 可設定邏輯（高有效或低有效）
 
 接線：
 - 按鈕一端接 GPIO 腳位
@@ -56,8 +55,19 @@ class GPIOButtonHandler(QObject):
     BUTTON_B_PIN = 19  # GPIO19
     BUTTON_A_PIN = 26  # GPIO26
     PARKING_BRAKE_PIN = 17  # GPIO17 - 手煞車感測器
+    PARKING_BRAKE_ACTIVE_LOW = True  # True: LOW=拉起, False: HIGH=拉起
     LONG_PRESS_TIME = 0.8  # 長按閾值（秒）
     DEBOUNCE_TIME = 0.05   # 防抖動時間（秒）
+
+    @classmethod
+    def _logic_text(cls) -> str:
+        """回傳目前手煞車邏輯描述"""
+        return "LOW=拉起, HIGH=放下" if cls.PARKING_BRAKE_ACTIVE_LOW else "HIGH=拉起, LOW=放下"
+
+    @classmethod
+    def _is_engaged_from_raw(cls, raw_active: bool) -> bool:
+        """將 GPIO 原始狀態轉換為手煞車是否拉起"""
+        return (not raw_active) if cls.PARKING_BRAKE_ACTIVE_LOW else raw_active
     
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -114,14 +124,14 @@ class GPIOButtonHandler(QObject):
             self._button_b.when_held = self._on_button_b_held
             self._button_b.when_released = self._on_button_b_released
             
-            # 手煞車感測器 - GPIO17 (ESP32 數位輸出)
-            # pull_up=False: 使用下拉電阻，ESP32 輸出 HIGH 表示手煞車拉起
+            # 手煞車感測器 - GPIO17（數位輸出）
             self._parking_brake_sensor = InputDevice(
                 self.PARKING_BRAKE_PIN,
                 pull_up=False
             )
             # 讀取初始狀態
-            self._parking_brake_state = self._parking_brake_sensor.is_active
+            raw_state = self._parking_brake_sensor.is_active
+            self._parking_brake_state = self._is_engaged_from_raw(raw_state)
             print(f"[GPIO] 手煞車初始狀態: {'拉起' if self._parking_brake_state else '放下'}")
             
             # 啟動手煞車監控執行緒
@@ -137,7 +147,7 @@ class GPIOButtonHandler(QObject):
             print(f"[GPIO] 按鈕初始化成功")
             print(f"  - 按鈕 A: GPIO{self.BUTTON_A_PIN} (短按=切換左卡片, 長按=詳細視圖)")
             print(f"  - 按鈕 B: GPIO{self.BUTTON_B_PIN} (短按=切換右卡片, 長按=重置Trip)")
-            print(f"  - 手煞車: GPIO{self.PARKING_BRAKE_PIN} (HIGH=拉起, LOW=放下)")
+            print(f"  - 手煞車: GPIO{self.PARKING_BRAKE_PIN} ({self._logic_text()})")
             print(f"  - 長按時間: {self.LONG_PRESS_TIME}秒")
             return True
             
@@ -241,11 +251,13 @@ class GPIOButtonHandler(QObject):
         while self._parking_brake_running:
             try:
                 if self._parking_brake_sensor:
-                    current_state = self._parking_brake_sensor.is_active
+                    raw_state = self._parking_brake_sensor.is_active
+                    current_state = self._is_engaged_from_raw(raw_state)
                     if current_state != self._parking_brake_state:
                         # 簡單防抖：等待 100ms 再確認
                         time.sleep(0.1)
-                        current_state = self._parking_brake_sensor.is_active
+                        raw_state = self._parking_brake_sensor.is_active
+                        current_state = self._is_engaged_from_raw(raw_state)
                         if current_state != self._parking_brake_state:
                             self._parking_brake_state = current_state
                             print(f"[GPIO] 手煞車: {'拉起' if current_state else '放下'}")
