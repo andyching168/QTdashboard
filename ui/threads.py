@@ -12,7 +12,7 @@ class GPSMonitorThread(QThread):
     """
     GPS 狀態監控執行緒
     - 掃描 /dev/ttyUSB* 和 /dev/ttyACM*
-    - 使用 38400 baud detection
+    - 使用多組 baud 自動偵測（9600 / 38400）
     - 監控是否定位完成 (Fix)
     - 提取座標資訊
     - 支援外部 GPS 注入（MQTT 導航 payload）
@@ -26,7 +26,8 @@ class GPSMonitorThread(QThread):
     def __init__(self):
         super().__init__()
         self.running = True
-        self.baud_rate = 38400
+        self.baud_rates = [9600, 38400]
+        self.baud_rate = self.baud_rates[0]
         self._last_fix_status = False
         self._current_port = None
         self._last_lat = None
@@ -57,8 +58,10 @@ class GPSMonitorThread(QThread):
                 # 簡單策略：嘗試每一個 port
                 found = False
                 for port in ports:
-                    if self._try_connect(port):
+                    detected_baud = self._try_connect(port)
+                    if detected_baud is not None:
                         self._current_port = port
+                        self.baud_rate = detected_baud
                         found = True
                         break
                 
@@ -75,23 +78,27 @@ class GPSMonitorThread(QThread):
                     
     def _try_connect(self, port):
         """測試連接"""
-        try:
-            with serial.Serial(port, self.baud_rate, timeout=1.0) as ser:
-                # 讀取幾行看看是不是 NMEA
-                for _ in range(5):
-                    line = ser.readline()
-                    try:
-                        line_str = line.decode('ascii', errors='ignore').strip()
-                        if ((line_str.startswith('$GPGGA') or line_str.startswith('$GNGGA') or
-                             line_str.startswith('$GPRMC') or line_str.startswith('$GNRMC')) and
-                                ',' in line_str):
-                            print(f"[GPS] Found GPS on {port} @ {self.baud_rate}")
-                            return True
-                    except:
-                        pass
-        except:
-            pass
-        return False
+        # 優先嘗試上一個成功的 baud rate，可加速重連
+        candidate_bauds = [self.baud_rate] + [b for b in self.baud_rates if b != self.baud_rate]
+
+        for baud in candidate_bauds:
+            try:
+                with serial.Serial(port, baud, timeout=1.0) as ser:
+                    # 讀取幾行看看是不是 NMEA
+                    for _ in range(5):
+                        line = ser.readline()
+                        try:
+                            line_str = line.decode('ascii', errors='ignore').strip()
+                            if ((line_str.startswith('$GPGGA') or line_str.startswith('$GNGGA') or
+                                 line_str.startswith('$GPRMC') or line_str.startswith('$GNRMC')) and
+                                    ',' in line_str):
+                                print(f"[GPS] Found GPS on {port} @ {baud}")
+                                return baud
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+        return None
         
     def _read_loop(self):
         """持續讀取迴圈"""
