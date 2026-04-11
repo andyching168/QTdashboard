@@ -43,6 +43,7 @@ class GPSMonitorThread(QThread):
         
     def run(self):
         print("[GPS] Starting monitor thread...")
+        self._consecutive_failures = 0
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
             if not self._current_port:
@@ -62,6 +63,7 @@ class GPSMonitorThread(QThread):
                     if detected_baud is not None:
                         self._current_port = port
                         self.baud_rate = detected_baud
+                        self._consecutive_failures = 0
                         found = True
                         break
                 
@@ -69,11 +71,18 @@ class GPSMonitorThread(QThread):
                     time.sleep(2)
             else:
                 # 2. 已鎖定 port，持續讀取
-                if not self._read_loop():
-                    # 讀取失敗（斷線），重置 port
-                    print(f"[GPS] Connection lost on {self._current_port}")
+                success = self._read_loop()
+                self._consecutive_failures += 1
+                
+                # 連續失敗超過 10 次視為真正的斷線（而非短暫干擾）
+                if not success or self._consecutive_failures > 10:
+                    if self._consecutive_failures > 10:
+                        print(f"[GPS] Too many consecutive failures, treating as disconnection")
+                    else:
+                        print(f"[GPS] Connection lost on {self._current_port}")
                     self._current_port = None
                     self._update_status(False)
+                    self._consecutive_failures = 0
                     time.sleep(1)
                     
     def _try_connect(self, port):
@@ -117,22 +126,27 @@ class GPSMonitorThread(QThread):
                         is_fixed = False
                         has_status = False
                         
+                        # 優先使用 RMC 判斷 fix 狀態，因為 RMC 包含速度資訊且依賴 GGA 的有效定位
+                        # 只有當 GGA quality >= 1 且 RMC status == 'A' 時才視為 fixed
+                        gga_quality = None
+                        rmc_status = None
+                        
                         if line_str.startswith('$GNGGA') or line_str.startswith('$GPGGA'):
                             parts = line_str.split(',')
                             if len(parts) >= 7:
-                                # Quality: 0=Invalid, 1=GPS, 2=DGPS...
-                                has_status = True
-                                is_fixed = (parts[6] != '0')
+                                try:
+                                    gga_quality = int(parts[6])
+                                except (ValueError, IndexError):
+                                    pass
                                 
                         if line_str.startswith('$GNRMC') or line_str.startswith('$GPRMC'):
                             parts = line_str.split(',')
                             if len(parts) >= 3:
-                                # Status: A=Active, V=Void
+                                rmc_status = parts[2]
                                 has_status = True
-                                is_fixed = (parts[2] == 'A')
                                 
                                 # Parse Speed (Field 7, in Knots)
-                                if is_fixed and len(parts) >= 8:
+                                if len(parts) >= 8:
                                     try:
                                         speed_knots = float(parts[7])
                                         speed_kmh = speed_knots * 1.852
@@ -141,15 +155,14 @@ class GPSMonitorThread(QThread):
                                         pass
                                 
                                 # Parse Position (Fields 3-6: lat, N/S, lon, E/W)
-                                if is_fixed and len(parts) >= 7:
+                                if len(parts) >= 7:
                                     try:
-                                        lat_raw = parts[3]  # DDMM.MMMM
-                                        lat_dir = parts[4]  # N or S
-                                        lon_raw = parts[5]  # DDDMM.MMMM
-                                        lon_dir = parts[6]  # E or W
+                                        lat_raw = parts[3]
+                                        lat_dir = parts[4]
+                                        lon_raw = parts[5]
+                                        lon_dir = parts[6]
                                         
                                         if lat_raw and lon_raw:
-                                            # Convert NMEA format to decimal degrees
                                             lat_deg = float(lat_raw[:2])
                                             lat_min = float(lat_raw[2:])
                                             lat = lat_deg + lat_min / 60.0
@@ -162,7 +175,6 @@ class GPSMonitorThread(QThread):
                                             if lon_dir == 'W':
                                                 lon = -lon
                                             
-                                            # 只在座標變化時發送（避免頻繁更新）
                                             if self._last_lat != lat or self._last_lon != lon:
                                                 self._last_lat = lat
                                                 self._last_lon = lon
@@ -170,14 +182,24 @@ class GPSMonitorThread(QThread):
                                     except (ValueError, IndexError):
                                         pass
                         
+                        # 只有 GGA quality >= 1 且 RMC status == 'A' 才視為 fixed
+                        if gga_quality is not None and rmc_status is not None:
+                            is_fixed = (gga_quality >= 1 and rmc_status == 'A')
+                        elif rmc_status is not None:
+                            is_fixed = (rmc_status == 'A')
+                        elif gga_quality is not None:
+                            is_fixed = (gga_quality >= 1)
+                        
                         if has_status:
                             self._update_status(is_fixed)
                             
                     except ValueError:
                         pass
         except serial.SerialException as e:
-            print(f"[GPS] Serial error: {e}")
-            return False # 斷線
+            # timeout 不應視為斷線，只打印一次避免刷屏
+            if "timeout" not in str(e).lower():
+                print(f"[GPS] Serial error: {e}")
+            return True  # Timeout 視為短暫無數據，不重置 port
         except Exception as e:
             print(f"[GPS] Error: {e}")
             return False
