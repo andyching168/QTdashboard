@@ -249,8 +249,8 @@ class HardwareInitializer:
         Returns:
             bool: True 如果 GPS 可用
         """
-        # require_gps=False 表示「不强制要求 GPS 存在」，但不阻止 GPS 初始化
-        # 让 GPS 线程自己检测，找不到设备时会显示"无GPS装置"
+        # require_gps=False 表示「不强制要求 GPS 存在」，找不到时也返回成功
+        # 因为 GPS 线程会在运行时自己检测 serial port
         
         try:
             import serial
@@ -289,6 +289,13 @@ class HardwareInitializer:
                         ser.close()
                     except:
                         continue
+            
+            # 找不到 GPS，但 require_gps=False 时不是错误，让初始化通过
+            # GPS 线程会在运行时自己检测 serial port
+            if not self.require_gps:
+                self._status.gps_error = "可选"
+                self._status.gps_ready = True  # 标记为已检查（可选）
+                return True
             
             self._status.gps_error = "未找到 GPS"
             return False
