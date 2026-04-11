@@ -1138,15 +1138,14 @@ def main():
             initializer = HardwareInitializer(
                 timeout=timeout,
                 retry_interval=0.5,  # 快速重試
-                require_gps=False,   # 不需要 GPS - 會自動標記為「跳過」
-                require_gpio=False   # 不需要 GPIO - 會自動標記為「跳過」
+                require_gps=False,   # 不需要 GPS - 會自動跳過（如未偵測到）
+                require_gpio=False   # 不需要 GPIO - 會自動跳過
             )
             
-            # GPS 和 GPIO 預先標記為「已跳過」
-            initializer._status.gps_ready = True
-            initializer._status.gps_port = "跳過（非必需）"
+            # GPIO 預先標記為「已跳過」（GPIO 目前可選）
             initializer._status.gpio_ready = True
             initializer._status.gpio_error = ""
+            # 注意：GPS 不要預先標記，讓它正常偵測
             
             start_time = time.time()
             attempt = 0
