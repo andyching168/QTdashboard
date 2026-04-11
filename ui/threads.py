@@ -56,8 +56,9 @@ class GPSMonitorThread(QThread):
                 # 發現至少一個 port，標記有裝置
                 self._update_device_status(found=True)
                 
-                # 簡單策略：嘗試每一個 port
+                # 嘗試每一個 port，按序檢測
                 found = False
+                print(f"[GPS] Scanning ports: {ports}")
                 for port in ports:
                     detected_baud = self._try_connect(port)
                     if detected_baud is not None:
@@ -65,7 +66,10 @@ class GPSMonitorThread(QThread):
                         self.baud_rate = detected_baud
                         self._consecutive_failures = 0
                         found = True
+                        print(f"[GPS] Connected to {port} @ {detected_baud}")
                         break
+                    else:
+                        print(f"[GPS] {port} not GPS")
                 
                 if not found:
                     time.sleep(2)
