@@ -56,20 +56,38 @@ class GPSMonitorThread(QThread):
                 # 發現至少一個 port，標記有裝置
                 self._update_device_status(found=True)
                 
-                # 嘗試每一個 port，按序檢測
+                # 智能策略：自動識別 GPS vs Radar
                 found = False
-                print(f"[GPS] Scanning ports: {ports}")
                 for port in ports:
-                    detected_baud = self._try_connect(port)
-                    if detected_baud is not None:
-                        self._current_port = port
-                        self.baud_rate = detected_baud
-                        self._consecutive_failures = 0
-                        found = True
-                        print(f"[GPS] Connected to {port} @ {detected_baud}")
+                    for baud in self.baud_rates:
+                        try:
+                            with serial.Serial(port, baud, timeout=0.5) as ser:
+                                for _ in range(3):
+                                    line = ser.readline()
+                                    if not line:
+                                        continue
+                                    s = line.decode('ascii', errors='ignore').strip()
+                                    
+                                    # 識別 GPS (NMEA)
+                                    if ('$GPGGA' in s or '$GNGGA' in s or 
+                                        '$GPRMC' in s or '$GNRMC' in s) and ',' in s:
+                                        self._current_port = port
+                                        self.baud_rate = baud
+                                        self._consecutive_failures = 0
+                                        found = True
+                                        print(f"[GPS] Found GPS on {port} @ {baud}")
+                                        break
+                                    
+                                    # 識別 Radar，跳過
+                                    if 'LR:' in s and 'RF:' in s:
+                                        print(f"[GPS] {port} is Radar, skipping")
+                                        break
+                                if found:
+                                    break
+                        except:
+                            pass
+                    if found:
                         break
-                    else:
-                        print(f"[GPS] {port} not GPS")
                 
                 if not found:
                     time.sleep(2)
