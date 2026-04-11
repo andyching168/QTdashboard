@@ -1217,9 +1217,9 @@ class ControlPanel(QWidget):
         
         scale = min(parent_width / 1920, parent_height / 480)
         
-        dialog_width = int(1200 * scale)
+        dialog_width = int(1400 * scale)
         dialog_height = int(260 * scale)
-        btn_width = int(320 * scale)
+        btn_width = int(280 * scale)
         btn_height = int(80 * scale)
         title_font_size = max(12, int(28 * scale))
         btn_font_size = max(10, int(18 * scale))
@@ -1294,6 +1294,13 @@ class ControlPanel(QWidget):
             parent = self.parent()
             if parent and hasattr(parent, 'show_spotify_settings'):
                 parent.show_spotify_settings()
+
+        # Telegram 設定
+        def open_telegram():
+            dialog.accept()
+            parent = self.parent()
+            if parent and hasattr(parent, 'show_telegram_settings'):
+                parent.show_telegram_settings()
         
         # 主題設定
         def open_theme():
@@ -1313,6 +1320,7 @@ class ControlPanel(QWidget):
         options_layout.addStretch()
         options_layout.addWidget(create_settings_btn("MQTT 設定", "📡", "設定 MQTT 伺服器連線", open_mqtt))
         options_layout.addWidget(create_settings_btn("Spotify 設定", "🎵", "設定 Spotify 音樂播放", open_spotify))
+        options_layout.addWidget(create_settings_btn("Telegram 設定", "✈", "設定 Telegram 通知", open_telegram))
         options_layout.addWidget(create_settings_btn("主題強調色設定", "🎨", "自訂 UI 強調色", open_theme))
         options_layout.addStretch()
         layout.addLayout(options_layout)

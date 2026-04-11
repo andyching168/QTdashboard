@@ -49,6 +49,7 @@ from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QLinearGradient, Q
 
 from ui.control_panel import TurnSignalBar, ControlPanel
 from ui.mqtt_settings import MQTTSettingsSignals, MQTTSettingsDialog
+from ui.telegram_settings import TelegramSettingsDialog
 from ui.analog_gauge import AnalogGauge
 from ui.gauge_card import DigitalGaugeCard, QuadGaugeCard, QuadGaugeDetailView
 from ui.common import GaugeStyle, RadarOverlay, ClickableLabel, MarqueeLabel
@@ -1617,6 +1618,40 @@ class Dashboard(QWidget):
 
         # 復用既有 Spotify 授權/綁定流程
         self.start_spotify_auth()
+
+    def show_telegram_settings(self):
+        """顯示 Telegram 設定對話框"""
+        print("開啟 Telegram 設定對話框...")
+
+        # 先隱藏控制面板
+        if self.panel_visible:
+            self.hide_control_panel()
+
+        # 創建 Telegram 設定對話框
+        self.telegram_dialog = TelegramSettingsDialog()
+        self.telegram_dialog.signals.settings_saved.connect(self.on_telegram_settings_saved)
+
+        # 設定為模態對話框
+        self.telegram_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+
+        # 設定視窗標誌
+        self.telegram_dialog.setWindowFlags(
+            Qt.WindowType.Dialog |
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.FramelessWindowHint
+        )
+
+        # 顯示對話框
+        self.telegram_dialog.show()
+
+        # 置於螢幕中央
+        primary_screen = QApplication.primaryScreen()
+        if primary_screen:
+            screen_geometry = primary_screen.geometry()
+            dialog_geometry = self.telegram_dialog.geometry()
+            x = (screen_geometry.width() - dialog_geometry.width()) // 2
+            y = (screen_geometry.height() - dialog_geometry.height()) // 2
+            self.telegram_dialog.move(x, y)
     
     def on_mqtt_settings_saved(self, success):
         """MQTT 設定儲存完成回調"""
@@ -1631,6 +1666,38 @@ class Dashboard(QWidget):
         if hasattr(self, 'mqtt_dialog'):
             self.mqtt_dialog.close()
             del self.mqtt_dialog
+
+    def on_telegram_settings_saved(self, success):
+        """Telegram 設定儲存完成回調"""
+        if success:
+            print("Telegram 設定已儲存！")
+            self._init_telegram_settings()
+        else:
+            print("Telegram 設定失敗")
+
+        # 關閉對話框 (如果還沒關閉)
+        if hasattr(self, 'telegram_dialog'):
+            self.telegram_dialog.close()
+            del self.telegram_dialog
+
+    def _init_telegram_settings(self):
+        """載入 Telegram 設定（供通知模組使用）"""
+        config_path = os.path.join(PROJECT_ROOT, "telegram_config.json")
+        if not os.path.exists(config_path):
+            print("[Telegram] 尚未找到 telegram_config.json")
+            return
+
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            has_token = bool(config.get('bot_token', '').strip())
+            has_chat_id = bool(config.get('chat_id', '').strip())
+            if has_token and has_chat_id:
+                print("[Telegram] 設定已載入")
+            else:
+                print("[Telegram] 設定檔欄位不完整")
+        except Exception as e:
+            print(f"[Telegram] 讀取設定失敗: {e}")
     
     def _check_network_status(self):
         """檢查網路連線狀態"""
