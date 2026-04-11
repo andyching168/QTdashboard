@@ -93,9 +93,11 @@ class GPSMonitorThread(QThread):
         for baud in candidate_bauds:
             try:
                 with serial.Serial(port, baud, timeout=1.0) as ser:
-                    # 讀取幾行看看是不是 NMEA
-                    for _ in range(5):
+                    # 讀取更多行確保捕捉到 NMEA（GGA/RMC 通常每秒1次）
+                    for _ in range(10):
                         line = ser.readline()
+                        if not line:
+                            continue
                         try:
                             line_str = line.decode('ascii', errors='ignore').strip()
                             if ((line_str.startswith('$GPGGA') or line_str.startswith('$GNGGA') or
