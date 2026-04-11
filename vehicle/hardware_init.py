@@ -249,12 +249,8 @@ class HardwareInitializer:
         Returns:
             bool: True 如果 GPS 可用
         """
-        # GPS 是可選的，如果不需要就直接標記為「已跳過」
-        if not self.require_gps:
-            self._status.gps_ready = True
-            self._status.gps_error = ""
-            self._status.gps_port = "跳過（非必需）"
-            return True
+        # require_gps=False 表示「不强制要求 GPS 存在」，但不阻止 GPS 初始化
+        # 让 GPS 线程自己检测，找不到设备时会显示"无GPS装置"
         
         try:
             import serial
