@@ -2001,6 +2001,16 @@ class Dashboard(QWidget):
         speed = data.get('speed')
         bearing = data.get('bearing', 0)
 
+        # 檢查是否為有效的 GPS 數值（排除空字符串、None）
+        try:
+            lat = float(lat) if lat not in (None, '', 'None') else None
+            lon = float(lon) if lon not in (None, '', 'None') else None
+            speed = float(speed) if speed not in (None, '', 'None') else None
+            bearing = float(bearing) if bearing not in (None, '', 'None') else 0
+        except (ValueError, TypeError):
+            lat = lon = speed = None
+            bearing = 0
+
         # 更新 bearing (用於速限查詢)
         self.current_bearing = bearing
 
