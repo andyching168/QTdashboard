@@ -1362,7 +1362,7 @@ class Dashboard(QWidget):
         # === 初始化 GPIO 按鈕（樹莓派實體按鈕）===
         # GPIO19: 按鈕 A (短按=切換左卡片, 長按=詳細視圖)
         # GPIO26: 按鈕 B (短按=切換右卡片, 長按=重置Trip)
-        # GPIO17: 手煞車感測器 (ESP32 數位輸出)
+        # GPIO27: 手煞車感測器 (ESP32 數位輸出)
         self._gpio_handler = setup_gpio_buttons(self)
         if self._gpio_handler:
             print("GPIO 按鈕已啟用 - 可使用實體按鈕控制")

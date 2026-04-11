@@ -10,14 +10,14 @@ GPIO 按鈕處理模組 - 樹莓派實體按鈕控制
   - 短按: 切換右側卡片/焦點
   - 長按: 重置 Trip
 
-- GPIO17: 手煞車感測器 (ESP32 數位輸出)
+- GPIO27: 手煞車感測器 (ESP32 數位輸出)
     - 可設定邏輯（高有效或低有效）
 
 接線：
 - 按鈕一端接 GPIO 腳位
 - 按鈕另一端接 GND
 - 使用內部上拉電阻 (按下為 LOW)
-- 手煞車: ESP32 GPIO25 -> RPi GPIO17
+- 手煞車: ESP32 GPIO25 -> RPi GPIO27
 """
 
 import sys
@@ -54,7 +54,7 @@ class GPIOButtonHandler(QObject):
     # 配置參數
     BUTTON_B_PIN = 19  # GPIO19
     BUTTON_A_PIN = 26  # GPIO26
-    PARKING_BRAKE_PIN = 17  # GPIO17 - 手煞車感測器
+    PARKING_BRAKE_PIN = 27  # GPIO27 - 手煞車感測器
     PARKING_BRAKE_ACTIVE_LOW = True  # True: LOW=拉起, False: HIGH=拉起
     LONG_PRESS_TIME = 0.8  # 長按閾值（秒）
     DEBOUNCE_TIME = 0.05   # 防抖動時間（秒）
@@ -124,7 +124,7 @@ class GPIOButtonHandler(QObject):
             self._button_b.when_held = self._on_button_b_held
             self._button_b.when_released = self._on_button_b_released
             
-            # 手煞車感測器 - GPIO17（數位輸出）
+            # 手煞車感測器 - GPIO27（數位輸出）
             self._parking_brake_sensor = InputDevice(
                 self.PARKING_BRAKE_PIN,
                 pull_up=False

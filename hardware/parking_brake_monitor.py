@@ -9,7 +9,7 @@
    - AO  -> GPIO34 (ADC)
 
 2. ESP32 -> Raspberry Pi:
-   - GPIO25 (輸出) -> GPIO17 (Pin 11)
+    - GPIO25 (輸出) -> GPIO27 (Pin 13)
    - GND -> GND (Pin 6)
 
 ESP32 負責讀取類比值並輸出 HIGH/LOW 給 RPi
@@ -19,7 +19,7 @@ import time
 import threading
 
 # GPIO 設定
-PARKING_BRAKE_GPIO = 17  # 使用 GPIO17，可自行更改
+PARKING_BRAKE_GPIO = 27  # 使用 GPIO27，可自行更改
 
 # 偵測設定
 ACTIVE_LOW = False  # False = ESP32 輸出 HIGH 時表示手煞車拉起
