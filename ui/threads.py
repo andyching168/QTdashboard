@@ -100,6 +100,8 @@ class GPSMonitorThread(QThread):
                             continue
                         try:
                             line_str = line.decode('ascii', errors='ignore').strip()
+                            # Debug: 顯示前幾行
+                            print(f"[GPS] Trying {port} @ {baud}: {line_str[:50]}")
                             if ((line_str.startswith('$GPGGA') or line_str.startswith('$GNGGA') or
                                  line_str.startswith('$GPRMC') or line_str.startswith('$GNRMC')) and
                                     ',' in line_str):
@@ -107,8 +109,8 @@ class GPSMonitorThread(QThread):
                                 return baud
                         except Exception:
                             pass
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[GPS] Error trying {port} @ {baud}: {e}")
         return None
         
     def _read_loop(self):
