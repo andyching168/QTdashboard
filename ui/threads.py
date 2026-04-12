@@ -44,7 +44,7 @@ class GPSMonitorThread(QThread):
         self._external_stale_threshold = 300
         self._search_without_device_count = 0  # 連續搜尋無結果次數
         
-def run(self):
+    def run(self):
         logger.info("[GPS] Starting monitor thread...")
         self._consecutive_failures = 0
         while self.running:
