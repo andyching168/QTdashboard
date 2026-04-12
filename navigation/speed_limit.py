@@ -195,10 +195,10 @@ class SpeedLimitLoader:
                 best_sign = sign
         
         if best_sign and best_distance < 0.5:  # 500m 內
-            # 根據 highway 決定行駛方向
+            # 根據 highway 決定行駛方向（用於顯示，不影響速限）
             if bearing is not None:
                 travel_direction = self._bearing_to_direction(bearing, best_sign['highway'])
-                speed_limit = self._get_speed_limit_for_km(best_sign['km'], best_sign['highway'], travel_direction)
+                speed_limit = self._get_speed_limit_for_km(best_sign['km'], best_sign['highway'])
                 if speed_limit is not None:
                     return speed_limit, travel_direction, None
                 else:
@@ -267,7 +267,7 @@ class SpeedLimitLoader:
                         if km >= rule['start_km'] and north_limit is None:
                             north_limit = rule['limit']
                     if '以南' in rule['desc']:
-                        if km <= rule['start_km'] and south_limit is None:
+                        if km >= rule['start_km'] and south_limit is None:
                             south_limit = rule['limit']
             
             if is_eastwest:
@@ -293,7 +293,7 @@ class SpeedLimitLoader:
             print(f"[SpeedLimit] 查詢雙向速限失敗: {e}")
             return None
     
-    def _get_speed_limit_for_km(self, km: float, highway: str, direction: Optional[str]) -> Optional[int]:
+    def _get_speed_limit_for_km(self, km: float, highway: str) -> Optional[int]:
         """根據里程和國道查詢速限"""
         import re
         
@@ -331,49 +331,39 @@ class SpeedLimitLoader:
                         applicable_limits.append((rule['limit'], '範圍', distance, None))
                     continue
                 
+                if '全線' in rule['desc']:
+                    applicable_limits.append((rule['limit'], '全線', 0))
+                    continue
+                
+                if rule['has_range']:
+                    start_km = rule['start_km']
+                    end_km = rule['end_km']
+                    if start_km < km < end_km:
+                        distance = min(abs(km - start_km), abs(km - end_km))
+                        applicable_limits.append((rule['limit'], '範圍', distance))
+                    continue
+                
                 if '以北' in rule['desc']:
                     if km >= rule['start_km']:
                         distance = km - rule['start_km']
-                        applicable_limits.append((rule['limit'], '北上', distance, '北上'))
+                        applicable_limits.append((rule['limit'], '里程', distance))
                 elif '以南' in rule['desc']:
-                    if km <= rule['start_km']:
-                        distance = rule['start_km'] - km
-                        applicable_limits.append((rule['limit'], '南下', distance, '南下'))
-                elif '以東' in rule['desc']:
                     if km >= rule['start_km']:
                         distance = km - rule['start_km']
-                        applicable_limits.append((rule['limit'], '東行', distance, '東行'))
-                elif '以西' in rule['desc']:
-                    if km <= rule['start_km']:
-                        distance = rule['start_km'] - km
-                        applicable_limits.append((rule['limit'], '西行', distance, '西行'))
+                        applicable_limits.append((rule['limit'], '里程', distance))
             
             if not applicable_limits:
                 return None
             
-            if direction == '北上':
-                filtered = [(l, mt, d) for l, mt, d, dir_match in applicable_limits if mt in ('全線', '範圍') or dir_match == '北上']
-            elif direction == '南下':
-                filtered = [(l, mt, d) for l, mt, d, dir_match in applicable_limits if mt in ('全線', '範圍') or dir_match == '南下']
-            elif direction == '東行':
-                filtered = [(l, mt, d) for l, mt, d, dir_match in applicable_limits if mt in ('全線', '範圍') or dir_match == '東行']
-            elif direction == '西行':
-                filtered = [(l, mt, d) for l, mt, d, dir_match in applicable_limits if mt in ('全線', '範圍') or dir_match == '西行']
-            else:
-                filtered = [(l, mt, d) for l, mt, d, _ in applicable_limits]
-            
-            if not filtered:
-                return None
-            
-            for limit, match_type, distance in filtered:
+            for limit, match_type, distance in applicable_limits:
                 if match_type == '全線':
                     return limit
             
-            for limit, match_type, distance in filtered:
+            for limit, match_type, distance in applicable_limits:
                 if match_type == '範圍':
                     return limit
             
-            best = min(filtered, key=lambda x: x[2])
+            best = min(applicable_limits, key=lambda x: x[2])
             return best[0]
             
         except Exception as e:
