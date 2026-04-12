@@ -316,24 +316,19 @@ class GPSMonitorThread(QThread):
             self.gps_position_changed.emit(lat, lon)
 
     def _update_status(self, is_fixed):
-        # 若正在使用外部 MQTT GPS，且仍在 fresh 窗口內，忽略內部 GPS 的 no-fix 抖動
-        if self._using_external_gps and not is_fixed:
-            now = time.time()
-            if self._last_mqtt_gps_time > 0 and (now - self._last_mqtt_gps_time) <= self._external_fresh_threshold:
-                return
-
+        # 若正在使用外部 MQTT GPS，且內部 GPS 有 fix，立即切換回內部
+        if is_fixed and self._using_external_gps:
+            self._using_external_gps = False
+            self._external_gps_timestamp = None
+            self.gps_source_changed.emit(True, True)  # True = internal, True = fresh
+            logger.info("[GPS] Reverted to internal GPS")
+        
+        # 只在 fix 狀態改變時發射信號
         if is_fixed != self._last_fix_status:
             self._last_fix_status = is_fixed
             self.gps_fixed_changed.emit(is_fixed)
             status = "FIXED" if is_fixed else "SEARCHING"
             logger.info(f"[GPS] Status changed: {status}")
-            
-            # 如果內部 GPS 恢復定位，切換回內部來源
-            if is_fixed and self._using_external_gps:
-                self._using_external_gps = False
-                self._external_gps_timestamp = None
-                self.gps_source_changed.emit(True, True)  # True = internal, True = fresh
-                logger.info("[GPS] Reverted to internal GPS")
 
     def _update_device_status(self, found: bool):
         """更新裝置狀態"""
