@@ -4,9 +4,12 @@ import glob
 import os
 import platform
 import serial
+import logging
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
+
+logger = logging.getLogger(__name__)
 
 class GPSMonitorThread(QThread):
     """
@@ -42,7 +45,7 @@ class GPSMonitorThread(QThread):
         self._search_without_device_count = 0  # 連續搜尋無結果次數
         
     def run(self):
-        print("[GPS] Starting monitor thread...")
+        logger.info("[GPS] Starting monitor thread...")
         self._consecutive_failures = 0
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
@@ -57,7 +60,7 @@ class GPSMonitorThread(QThread):
                 
                 # 發現至少一個 port，標記有裝置
                 self._update_device_status(found=True)
-                print(f"[GPS] Found ports: {ports}")
+                logger.info(f"[GPS] Found ports: {ports}")
                 
                 # 智能策略：自動識別 GPS vs Radar
                 found = False
@@ -78,12 +81,12 @@ class GPSMonitorThread(QThread):
                                         self.baud_rate = baud
                                         self._consecutive_failures = 0
                                         found = True
-                                        print(f"[GPS] Found GPS on {port} @ {baud}")
+                                        logger.info(f"[GPS] Found GPS on {port} @ {baud}")
                                         break
                                     
                                     # 識別 Radar，跳過
                                     if 'LR:' in s and 'RF:' in s:
-                                        print(f"[GPS] {port} is Radar, skipping")
+                                        logger.info(f"[GPS] {port} is Radar, skipping")
                                         break
                                 if found:
                                     break
@@ -107,9 +110,9 @@ class GPSMonitorThread(QThread):
                 # 連續失敗超過 10 次視為真正的斷線
                 if not success or self._consecutive_failures > 10:
                     if self._consecutive_failures > 10:
-                        print(f"[GPS] Too many consecutive failures, treating as disconnection")
+                        logger.warning(f"[GPS] Too many consecutive failures, treating as disconnection")
                     else:
-                        print(f"[GPS] Connection lost on {self._current_port}")
+                        logger.warning(f"[GPS] Connection lost on {self._current_port}")
                     self._current_port = None
                     self._update_status(False)
                     self._consecutive_failures = 0
@@ -131,16 +134,16 @@ class GPSMonitorThread(QThread):
                         try:
                             line_str = line.decode('ascii', errors='ignore').strip()
                             # Debug: 顯示前幾行
-                            print(f"[GPS] Trying {port} @ {baud}: {line_str[:50]}")
+                            logger.debug(f"[GPS] Trying {port} @ {baud}: {line_str[:50]}")
                             if ((line_str.startswith('$GPGGA') or line_str.startswith('$GNGGA') or
                                  line_str.startswith('$GPRMC') or line_str.startswith('$GNRMC')) and
                                     ',' in line_str):
-                                print(f"[GPS] Found GPS on {port} @ {baud}")
+                                logger.info(f"[GPS] Found GPS on {port} @ {baud}")
                                 return baud
                         except Exception:
                             pass
             except Exception as e:
-                print(f"[GPS] Error trying {port} @ {baud}: {e}")
+                logger.debug(f"[GPS] Error trying {port} @ {baud}: {e}")
         return None
         
     def _read_loop(self):
@@ -158,7 +161,7 @@ class GPSMonitorThread(QThread):
                         
                         # 識別並跳過 Radar 數據
                         if 'LR:' in line_str and 'RF:' in line_str:
-                            print(f"[GPS] Detected Radar data on {self._current_port}, need to rescan")
+                            logger.warning(f"[GPS] Detected Radar data on {self._current_port}, need to rescan")
                             return False
                         
                         # 解析 GPS Fix 狀態
@@ -237,10 +240,10 @@ class GPSMonitorThread(QThread):
         except serial.SerialException as e:
             # timeout 不應視為斷線，只打印一次避免刷屏
             if "timeout" not in str(e).lower():
-                print(f"[GPS] Serial error: {e}")
+                logger.error(f"[GPS] Serial error: {e}")
             return True  # Timeout 視為短暫無數據，不重置 port
         except Exception as e:
-            print(f"[GPS] Error: {e}")
+            logger.error(f"[GPS] Error: {e}")
             return False
             
         return True
@@ -249,7 +252,7 @@ class GPSMonitorThread(QThread):
         """停止監控並釋放資源"""
         self.running = False
         self.wait() # 等待執行緒結束
-        print("[GPS] Monitor thread stopped.")
+        logger.info("[GPS] Monitor thread stopped.")
 
     def inject_external_gps(self, lat: float, lon: float, speed: float, bearing: float, timestamp: str):
         """注入外部 GPS 資料（來自 MQTT 導航 payload）
@@ -274,13 +277,13 @@ class GPSMonitorThread(QThread):
         
         # 超過 5 分鐘不使用
         if time_since_last > STALE_THRESHOLD and self._last_mqtt_gps_time > 0:
-            print(f"[GPS] External GPS data too old ({time_since_last:.1f}s since last msg), ignoring")
+            logger.info(f"[GPS] External GPS data too old ({time_since_last:.1f}s since last msg), ignoring")
             return
         
         # 判斷是否為即時位置
         is_fresh = time_since_last <= FRESH_THRESHOLD
         freshness_label = "fresh" if is_fresh else "stale"
-        print(f"[GPS] Injecting external GPS: lat={lat}, lon={lon}, since_last={time_since_last:.1f}s ({freshness_label})")
+        logger.info(f"[GPS] Injecting external GPS: lat={lat}, lon={lon}, since_last={time_since_last:.1f}s ({freshness_label})")
         
         # 更新最後收到訊息的本地時間
         self._last_mqtt_gps_time = current_time
@@ -297,13 +300,13 @@ class GPSMonitorThread(QThread):
             if not self._last_fix_status:
                 self._last_fix_status = True
                 self.gps_fixed_changed.emit(True)
-                print("[GPS] External GPS: Status changed to FIXED (fresh data)")
+                logger.info("[GPS] External GPS: Status changed to FIXED (fresh data)")
         else:
             # 數據過時，不應視為 fixed
             if self._last_fix_status:
                 self._last_fix_status = False
                 self.gps_fixed_changed.emit(False)
-                print("[GPS] External GPS: Status changed to STALE (data too old)")
+                logger.warning("[GPS] External GPS: Status changed to STALE (data too old)")
         
         # 不發射速度信號（使用者說速度不用）
         
@@ -324,14 +327,14 @@ class GPSMonitorThread(QThread):
             self._last_fix_status = is_fixed
             self.gps_fixed_changed.emit(is_fixed)
             status = "FIXED" if is_fixed else "SEARCHING"
-            print(f"[GPS] Status changed: {status}")
+            logger.info(f"[GPS] Status changed: {status}")
             
             # 如果內部 GPS 恢復定位，切換回內部來源
             if is_fixed and self._using_external_gps:
                 self._using_external_gps = False
                 self._external_gps_timestamp = None
                 self.gps_source_changed.emit(True, True)  # True = internal, True = fresh
-                print("[GPS] Reverted to internal GPS")
+                logger.info("[GPS] Reverted to internal GPS")
 
     def _update_device_status(self, found: bool):
         """更新裝置狀態"""
@@ -339,9 +342,9 @@ class GPSMonitorThread(QThread):
             self._has_device = found
             self.gps_device_status_changed.emit(found)
             if found:
-                print("[GPS] Device found")
+                logger.info("[GPS] Device found")
             else:
-                print("[GPS] No device detected")
+                logger.warning("[GPS] No device detected")
     
     def is_using_external_gps(self) -> bool:
         """回傳是否正在使用外部 GPS"""
