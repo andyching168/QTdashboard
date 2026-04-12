@@ -47,6 +47,9 @@ class GPSMonitorThread(QThread):
     def run(self):
         logger.info("[GPS] Starting monitor thread...")
         self._consecutive_failures = 0
+        # 等待雷達線程先鎖定其 port
+        time.sleep(2)
+        
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
             if not self._current_port:
