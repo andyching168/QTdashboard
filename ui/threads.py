@@ -50,12 +50,8 @@ class GPSMonitorThread(QThread):
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
             if not self._current_port:
-                # 優先使用 stable path (by-id)，其次是 ttyUSB*
-                by_id = glob.glob('/dev/serial/by-id/*') + glob.glob('/dev/serial/by-path/*')
                 ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
-                all_ports = by_id + ports
-                # 去重並排序
-                ports = sorted(set(all_ports))
+                ports = sorted(ports)
                 
                 if not ports:
                     self._update_device_status(found=False)
