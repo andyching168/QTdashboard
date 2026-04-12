@@ -67,16 +67,15 @@ class GPSMonitorThread(QThread):
                 for port in ports:
                     logger.info(f"[GPS] Trying port {port}")
                     for baud in self.baud_rates:
+                        logger.info(f"[GPS]   Testing {port} @ {baud}")
                         try:
-                            with serial.Serial(port, baud, timeout=0.5) as ser:
-                                logger.info(f"[GPS] Opened {port} @ {baud}")
-                                for _ in range(3):
-                                    line = ser.readline()
-                                    if not line:
-                                        logger.info(f"[GPS] {port} @ {baud}: timeout (no data)")
-                                        continue
+                            ser = serial.Serial(port, baud, timeout=0.5)
+                            logger.info(f"[GPS]   Opened {port} @ {baud}")
+                            for i in range(3):
+                                line = ser.readline()
+                                if line:
                                     s = line.decode('ascii', errors='ignore').strip()
-                                    logger.info(f"[GPS] {port} @ {baud}: {s[:50]}")
+                                    logger.info(f"[GPS]   [{i}] {s[:60]}")
                                     
                                     # 識別 GPS (NMEA)
                                     if ('$GPGGA' in s or '$GNGGA' in s or 
@@ -85,17 +84,22 @@ class GPSMonitorThread(QThread):
                                         self.baud_rate = baud
                                         self._consecutive_failures = 0
                                         found = True
+                                        ser.close()
                                         logger.info(f"[GPS] *** FOUND GPS on {port} @ {baud} ***")
                                         break
                                     
                                     # 識別 Radar，跳過
                                     if 'LR:' in s and 'RF:' in s:
-                                        logger.info(f"[GPS] {port} is Radar, skipping")
+                                        ser.close()
+                                        logger.info(f"[GPS]   {port} is Radar, skipping")
                                         break
-                                if found:
-                                    break
+                                else:
+                                    logger.info(f"[GPS]   [{i}] timeout (no data)")
+                            ser.close()
                         except Exception as e:
-                            logger.info(f"[GPS] Error opening {port} @ {baud}: {e}")
+                            logger.info(f"[GPS]   Error: {e}")
+                        if found:
+                            break
                     if found:
                         break
                 
