@@ -90,12 +90,13 @@ class GPSMonitorThread(QThread):
                                         break
                                 if found:
                                     break
-                        except:
-                            pass
+                        except Exception as e:
+                            logger.info(f"[GPS] Error on {port} @ {baud}: {e}")
                     if found:
                         break
                 
                 if not found:
+                    logger.info("[GPS] No GPS found on any port, will retry...")
                     time.sleep(2)
             else:
                 # 2. 已鎖定 port，持續讀取
