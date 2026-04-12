@@ -94,9 +94,14 @@ class GPSMonitorThread(QThread):
             else:
                 # 2. 已鎖定 port，持續讀取
                 success = self._read_loop()
-                self._consecutive_failures += 1
                 
-                # 連續失敗超過 10 次視為真正的斷線（而非短暫干擾）
+                # 只有失敗時才計數（成功時重置）
+                if not success:
+                    self._consecutive_failures += 1
+                else:
+                    self._consecutive_failures = 0
+                
+                # 連續失敗超過 10 次視為真正的斷線
                 if not success or self._consecutive_failures > 10:
                     if self._consecutive_failures > 10:
                         print(f"[GPS] Too many consecutive failures, treating as disconnection")
