@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 # 共享鎖，防止 GPS 和 Radar 線程競爭同一個 serial port
 _serial_lock = threading.Lock()
 
+# === 雷達功能開關 ===
+# 設為 False 可停用雷達掃描功能（連接埠偵測、資料讀取等全部跳過）
+RADAR_ENABLED = False
+
 class GPSMonitorThread(QThread):
     """
     GPS 狀態監控執行緒
@@ -388,8 +392,13 @@ class RadarMonitorThread(QThread):
                 # 在 macOS 上增加額外的裝置路徑模式
                 if platform.system() == 'Darwin':
                     ports += glob.glob('/dev/cu.usb*') + glob.glob('/dev/cu.SLAB*')
-                    
-                if not ports:
+                
+                # 判斷是否要跳過掃描：開關關閉，或只有一個 port
+                if not RADAR_ENABLED or len(ports) <= 1:
+                    if not RADAR_ENABLED:
+                        print("[Radar] RADAR_ENABLED=False，雷達功能已停用")
+                    elif len(ports) <= 1:
+                        print(f"[Radar] 只找到 {len(ports)} 個 port，跳過掃描")
                     time.sleep(2)
                     continue
                 
