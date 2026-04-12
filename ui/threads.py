@@ -65,14 +65,18 @@ class GPSMonitorThread(QThread):
                 # 智能策略：自動識別 GPS vs Radar
                 found = False
                 for port in ports:
+                    logger.info(f"[GPS] Trying port {port}")
                     for baud in self.baud_rates:
                         try:
                             with serial.Serial(port, baud, timeout=0.5) as ser:
+                                logger.info(f"[GPS] Opened {port} @ {baud}")
                                 for _ in range(3):
                                     line = ser.readline()
                                     if not line:
+                                        logger.info(f"[GPS] {port} @ {baud}: timeout (no data)")
                                         continue
                                     s = line.decode('ascii', errors='ignore').strip()
+                                    logger.info(f"[GPS] {port} @ {baud}: {s[:50]}")
                                     
                                     # 識別 GPS (NMEA)
                                     if ('$GPGGA' in s or '$GNGGA' in s or 
@@ -81,7 +85,7 @@ class GPSMonitorThread(QThread):
                                         self.baud_rate = baud
                                         self._consecutive_failures = 0
                                         found = True
-                                        logger.info(f"[GPS] Found GPS on {port} @ {baud}")
+                                        logger.info(f"[GPS] *** FOUND GPS on {port} @ {baud} ***")
                                         break
                                     
                                     # 識別 Radar，跳過
@@ -91,7 +95,7 @@ class GPSMonitorThread(QThread):
                                 if found:
                                     break
                         except Exception as e:
-                            logger.info(f"[GPS] Error on {port} @ {baud}: {e}")
+                            logger.info(f"[GPS] Error opening {port} @ {baud}: {e}")
                     if found:
                         break
                 
