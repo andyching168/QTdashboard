@@ -407,13 +407,16 @@ class RadarMonitorThread(QThread):
         """測試連接"""
         try:
             # 嘗試開啟 serial port
-            with serial.Serial(port, self.baud_rate, timeout=1.0) as ser:
+            with serial.Serial(port, self.baud_rate, timeout=0.5) as ser:
                 # 讀取幾行看看是不是雷達數據
-                for _ in range(10): # 嘗試多讀幾行，確保有足夠機會抓到
+                for _ in range(3):  # 快速檢測
                     line = ser.readline()
                     try:
                         line_str = line.decode('ascii', errors='ignore').strip()
-                        # 檢查特徵：包含 'LR:' 和 'RR:' 和 'LF:' 和 'RF:' (支援有括號或無括號格式)
+                        # 跳過 GPS NMEA 數據
+                        if '$G' in line_str or '$GN' in line_str:
+                            return False  # 這是 GPS port
+                        # 檢查特徵：包含 'LR:' 和 'RR:' 和 'LF:' 和 'RF:'
                         if 'LR:' in line_str and 'RR:' in line_str and 'LF:' in line_str and 'RF:' in line_str:
                             print(f"[Radar] Found Radar on {port} @ {self.baud_rate}")
                             print(f"[Radar] Sample data: {line_str}")
