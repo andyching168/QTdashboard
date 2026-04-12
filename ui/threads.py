@@ -55,8 +55,13 @@ class GPSMonitorThread(QThread):
     def run(self):
         logger.info("[GPS] Starting monitor thread...")
         self._consecutive_failures = 0
-        # 等待雷達線程先鎖定其 port
-        time.sleep(2)
+        
+        # 雷達功能關閉時，不需要等待雷達線程，直接開始掃描
+        if not RADAR_ENABLED:
+            logger.info("[GPS] RADAR_ENABLED=False，跳過等待雷達線程")
+        else:
+            # 等待雷達線程先鎖定其 port
+            time.sleep(2)
         
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
@@ -74,9 +79,17 @@ class GPSMonitorThread(QThread):
                 logger.info(f"[GPS] Found ports: {ports}")
                 
                 # 智能策略：自動識別 GPS vs Radar（使用鎖防止競爭）
+                # 但雷達關閉時，無需偵測雷達
+                if not RADAR_ENABLED:
+                    # 雷達關閉：直接用 9600 baud 嘗試所有 port，不再嘗試 38400
+                    target_bauds = [9600]
+                    logger.info("[GPS] RADAR_ENABLED=False，直接用 9600 baud 掃描")
+                else:
+                    target_bauds = self.baud_rates
+                
                 found = False
                 for port in ports:
-                    for baud in self.baud_rates:
+                    for baud in target_bauds:
                         try:
                             with _serial_lock:
                                 ser = serial.Serial(port, baud, timeout=0.3)
@@ -86,8 +99,8 @@ class GPSMonitorThread(QThread):
                                     if line:
                                         s = line.decode('ascii', errors='ignore').strip()
                                     data_lines.append(s)
-                                    # 識別 Radar，立即跳過
-                                    if 'LR:' in s and 'RF:' in s:
+                                    # 識別 Radar，立即跳過（僅在雷達開啟時）
+                                    if RADAR_ENABLED and 'LR:' in s and 'RF:' in s:
                                         ser.close()
                                         found = True
                                         break
@@ -108,7 +121,7 @@ class GPSMonitorThread(QThread):
                                 if not any(('$G' in d or 'LR:' in d) for d in data_lines):
                                     logger.info(f"[GPS] {port} @ {baud}: garbled data, skipping rest of port")
                                     break  # 跳過這個port的其餘baud
-                            
+                                
                         except Exception as e:
                             pass
                         if self._current_port:
