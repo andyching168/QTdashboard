@@ -249,9 +249,14 @@ class HardwareInitializer:
         Returns:
             bool: True 如果 GPS 可用
         """
-        # require_gps=False 表示「不强制要求 GPS 存在」，找不到时也返回成功
-        # 因为 GPS 线程会在运行时自己检测 serial port
+        # require_gps=False 时，GPS 线程会在运行时自己检测 serial port
+        # 这里不需要提前检测，避免与线程竞争 serial port
+        if not self.require_gps:
+            self._status.gps_error = "可选"
+            self._status.gps_ready = True
+            return True
         
+        # require_gps=True 时才进行实际检测
         try:
             import serial
             import serial.tools.list_ports
@@ -264,19 +269,16 @@ class HardwareInitializer:
                     if 'bluetooth' not in port.device.lower():
                         gps_ports.append(port.device)
             except:
-                # Fallback 到常見端口
                 for i in range(4):
                     gps_ports.append(f'/dev/ttyUSB{i}')
                     gps_ports.append(f'/dev/ttyACM{i}')
             
-            # 嘗試多種波特率
             baud_rates = [9600, 115200, 38400, 4800]
             
             for port_path in gps_ports:
                 for baud in baud_rates:
                     try:
                         ser = serial.Serial(port_path, baud, timeout=0.5)
-                        # 快速讀取，看是否有 NMEA 數據
                         for _ in range(3):
                             line = ser.readline().decode('ascii', errors='ignore')
                             if line.startswith('$GP') or line.startswith('$GN'):
@@ -289,13 +291,6 @@ class HardwareInitializer:
                         ser.close()
                     except:
                         continue
-            
-            # 找不到 GPS，但 require_gps=False 时不是错误，让初始化通过
-            # GPS 线程会在运行时自己检测 serial port
-            if not self.require_gps:
-                self._status.gps_error = "可选"
-                self._status.gps_ready = True  # 标记为已检查（可选）
-                return True
             
             self._status.gps_error = "未找到 GPS"
             return False
