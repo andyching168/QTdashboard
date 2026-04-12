@@ -68,46 +68,48 @@ class GPSMonitorThread(QThread):
                 # 智能策略：自動識別 GPS vs Radar
                 found = False
                 for port in ports:
-                    logger.info(f"[GPS] Trying port {port}")
                     for baud in self.baud_rates:
-                        logger.info(f"[GPS]   Testing {port} @ {baud}")
                         try:
-                            ser = serial.Serial(port, baud, timeout=0.5)
-                            logger.info(f"[GPS]   Opened {port} @ {baud}")
+                            ser = serial.Serial(port, baud, timeout=0.3)
+                            data_lines = []
                             for i in range(3):
                                 line = ser.readline()
                                 if line:
                                     s = line.decode('ascii', errors='ignore').strip()
-                                    logger.info(f"[GPS]   [{i}] {s[:60]}")
-                                    
-                                    # 識別 GPS (NMEA)
+                                    data_lines.append(s)
+                                    # 識別 Radar，立即跳過
+                                    if 'LR:' in s and 'RF:' in s:
+                                        ser.close()
+                                        found = True
+                                        break
+                                    # 識別 GPS
                                     if ('$GPGGA' in s or '$GNGGA' in s or 
                                         '$GPRMC' in s or '$GNRMC' in s) and ',' in s:
                                         self._current_port = port
                                         self.baud_rate = baud
                                         self._consecutive_failures = 0
-                                        found = True
                                         ser.close()
                                         logger.info(f"[GPS] *** FOUND GPS on {port} @ {baud} ***")
                                         break
-                                    
-                                    # 識別 Radar，跳過
-                                    if 'LR:' in s and 'RF:' in s:
-                                        ser.close()
-                                        logger.info(f"[GPS]   {port} is Radar, skipping")
-                                        break
-                                else:
-                                    logger.info(f"[GPS]   [{i}] timeout (no data)")
                             ser.close()
+                            
+                            # 如果檢測到乱码数据（不是GPS也不是Radar），可能port被佔用，快速跳過
+                            if not found and not self._current_port and data_lines:
+                                # 如果没有任何有效identifiers，可能是乱码
+                                if not any(('$G' in d or 'LR:' in d) for d in data_lines):
+                                    logger.info(f"[GPS] {port} @ {baud}: garbled data, skipping rest of port")
+                                    break  # 跳過這個port的其餘baud
+                            
                         except Exception as e:
-                            logger.info(f"[GPS]   Error: {e}")
-                        if found:
+                            pass
+                        if self._current_port:
                             break
-                    if found:
+                    if self._current_port:
                         break
                 
-                if not found:
-                    logger.info("[GPS] No GPS found on any port, will retry...")
+                if not self._current_port:
+                    logger.info("[GPS] No GPS found, will retry...")
+                    time.sleep(2)
                     time.sleep(2)
             else:
                 # 2. 已鎖定 port，持續讀取
