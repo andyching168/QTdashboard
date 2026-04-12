@@ -44,15 +44,19 @@ class GPSMonitorThread(QThread):
         self._external_stale_threshold = 300
         self._search_without_device_count = 0  # 連續搜尋無結果次數
         
-    def run(self):
+def run(self):
         logger.info("[GPS] Starting monitor thread...")
         self._consecutive_failures = 0
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
             if not self._current_port:
+                # 優先使用 stable path (by-id)，其次是 ttyUSB*
+                by_id = glob.glob('/dev/serial/by-id/*') + glob.glob('/dev/serial/by-path/*')
                 ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
-                # 排序以確保一致的順序
-                ports = sorted(ports)
+                all_ports = by_id + ports
+                # 去重並排序
+                ports = sorted(set(all_ports))
+                
                 if not ports:
                     self._update_device_status(found=False)
                     time.sleep(2)
