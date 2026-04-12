@@ -5,11 +5,15 @@ import os
 import platform
 import serial
 import logging
+import threading
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
 logger = logging.getLogger(__name__)
+
+# 共享鎖，防止 GPS 和 Radar 線程競爭同一個 serial port
+_serial_lock = threading.Lock()
 
 class GPSMonitorThread(QThread):
     """
@@ -65,17 +69,18 @@ class GPSMonitorThread(QThread):
                 self._update_device_status(found=True)
                 logger.info(f"[GPS] Found ports: {ports}")
                 
-                # 智能策略：自動識別 GPS vs Radar
+                # 智能策略：自動識別 GPS vs Radar（使用鎖防止競爭）
                 found = False
                 for port in ports:
                     for baud in self.baud_rates:
                         try:
-                            ser = serial.Serial(port, baud, timeout=0.3)
-                            data_lines = []
-                            for i in range(3):
-                                line = ser.readline()
-                                if line:
-                                    s = line.decode('ascii', errors='ignore').strip()
+                            with _serial_lock:
+                                ser = serial.Serial(port, baud, timeout=0.3)
+                                data_lines = []
+                                for i in range(3):
+                                    line = ser.readline()
+                                    if line:
+                                        s = line.decode('ascii', errors='ignore').strip()
                                     data_lines.append(s)
                                     # 識別 Radar，立即跳過
                                     if 'LR:' in s and 'RF:' in s:
@@ -161,7 +166,8 @@ class GPSMonitorThread(QThread):
     def _read_loop(self):
         """持續讀取迴圈"""
         try:
-            with serial.Serial(self._current_port, self.baud_rate, timeout=1.0) as ser:
+            with _serial_lock:
+                ser = serial.Serial(self._current_port, self.baud_rate, timeout=1.0)
                 while self.running:
                     line = ser.readline()
                     if not line:
@@ -408,23 +414,24 @@ class RadarMonitorThread(QThread):
     def _try_connect(self, port):
         """測試連接"""
         try:
-            # 嘗試開啟 serial port
-            with serial.Serial(port, self.baud_rate, timeout=0.5) as ser:
-                # 讀取幾行看看是不是雷達數據
-                for _ in range(3):  # 快速檢測
-                    line = ser.readline()
-                    try:
-                        line_str = line.decode('ascii', errors='ignore').strip()
-                        # 跳過 GPS NMEA 數據
-                        if '$G' in line_str or '$GN' in line_str:
-                            return False  # 這是 GPS port
-                        # 檢查特徵：包含 'LR:' 和 'RR:' 和 'LF:' 和 'RF:'
-                        if 'LR:' in line_str and 'RR:' in line_str and 'LF:' in line_str and 'RF:' in line_str:
-                            print(f"[Radar] Found Radar on {port} @ {self.baud_rate}")
-                            print(f"[Radar] Sample data: {line_str}")
-                            return True
-                    except:
-                        pass
+            with _serial_lock:
+                # 嘗試開啟 serial port
+                with serial.Serial(port, self.baud_rate, timeout=0.5) as ser:
+                    # 讀取幾行看看是不是雷達數據
+                    for _ in range(3):  # 快速檢測
+                        line = ser.readline()
+                        try:
+                            line_str = line.decode('ascii', errors='ignore').strip()
+                            # 跳過 GPS NMEA 數據
+                            if '$G' in line_str or '$GN' in line_str:
+                                return False  # 這是 GPS port
+                            # 檢查特徵：包含 'LR:' 和 'RR:' 和 'LF:' 和 'RF:'
+                            if 'LR:' in line_str and 'RR:' in line_str and 'LF:' in line_str and 'RF:' in line_str:
+                                print(f"[Radar] Found Radar on {port} @ {self.baud_rate}")
+                                print(f"[Radar] Sample data: {line_str}")
+                                return True
+                        except:
+                            pass
         except:
             pass
         return False
@@ -432,7 +439,8 @@ class RadarMonitorThread(QThread):
     def _read_loop(self):
         """持續讀取迴圈"""
         try:
-            with serial.Serial(self._current_port, self.baud_rate, timeout=1.0) as ser:
+            with _serial_lock:
+                ser = serial.Serial(self._current_port, self.baud_rate, timeout=1.0)
                 while self.running:
                     line = ser.readline()
                     if not line:
