@@ -48,6 +48,8 @@ class GPSMonitorThread(QThread):
             # 1. 如果沒有鎖定 port，進行掃描
             if not self._current_port:
                 ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
+                # 排序以確保一致的順序
+                ports = sorted(ports)
                 if not ports:
                     self._update_device_status(found=False)
                     time.sleep(2)
@@ -55,6 +57,7 @@ class GPSMonitorThread(QThread):
                 
                 # 發現至少一個 port，標記有裝置
                 self._update_device_status(found=True)
+                print(f"[GPS] Found ports: {ports}")
                 
                 # 智能策略：自動識別 GPS vs Radar
                 found = False
