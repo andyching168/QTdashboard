@@ -153,7 +153,12 @@ class GPSMonitorThread(QThread):
                     try:
                         line_str = line.decode('ascii', errors='ignore').strip()
                         
-                        # 簡單解析 Fix 狀態
+                        # 識別並跳過 Radar 數據
+                        if 'LR:' in line_str and 'RF:' in line_str:
+                            print(f"[GPS] Detected Radar data on {self._current_port}, need to rescan")
+                            return False
+                        
+                        # 解析 GPS Fix 狀態
                         is_fixed = False
                         has_status = False
                         
