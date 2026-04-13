@@ -1367,6 +1367,9 @@ class Dashboard(QWidget):
         self._gpio_handler = setup_gpio_buttons(self)
         if self._gpio_handler:
             print("GPIO 按鈕已啟用 - 可使用實體按鈕控制")
+            # 連接 A+B 同時長按 10 秒重開機信號
+            self._gpio_handler.both_buttons_reboot.connect(self._on_both_buttons_reboot)
+            print("GPIO A+B 同時按 10 秒重開機已啟用")
         else:
             print("GPIO 按鈕不可用 - 請使用鍵盤 F1/F2 控制")
         
@@ -3567,7 +3570,25 @@ class Dashboard(QWidget):
             return
         
         print("長按按鈕B: 不在 Trip 焦點狀態，忽略")
-    
+
+    def _on_both_buttons_reboot(self):
+        """A+B 同時長按 10 秒 - 執行系統重開機"""
+        print("=" * 50)
+        print("⚠️  收到 A+B 雙按重開機指令，即將重開機！")
+        print("=" * 50)
+        try:
+            import os
+            # 延後 1 秒執行，讓 signal 處理完
+            import threading
+            def delayed_reboot():
+                import time
+                time.sleep(1)
+                print("[GPIO] 執行 sudo reboot...")
+                os.system("sudo reboot")
+            threading.Thread(target=delayed_reboot, daemon=True).start()
+        except Exception as e:
+            print(f"[GPIO] 重開機失敗: {e}")
+
     def keyPressEvent(self, a0):  # type: ignore
         """鍵盤模擬控制"""
         if a0 is None:
