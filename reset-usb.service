@@ -1,0 +1,25 @@
+[Unit]
+Description=USB Controller Health Monitor - Reset USB on Failure
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /home/ac/QTdashboard/scripts/reset_usb.sh
+# 執行後立即結束，由 timer 再次排程
+StandardOutput=journal
+StandardError=journal
+
+# 如果需要網路（某些 USB 設備依賴網路），取消下面這行註解
+# Requires=network.target
+
+# 資源限制
+MemoryMax=64M
+CPULimit=30
+
+# 安全：降級權限（但需要实际有能力操作 USB reset）
+# 注意：xhci_hcd unbind/bind 需要 root，我留給 script 內部檢查
+User=root
+Group=root
+
+# 如果重置失敗，不斷重試（最多 1 次）
+Restart=no

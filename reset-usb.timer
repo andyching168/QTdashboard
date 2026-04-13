@@ -1,0 +1,18 @@
+[Unit]
+Description=USB Controller Health Check Timer (每 5 分鐘檢查一次)
+# 需要等系統完全啟動後才執行
+After=multi-user.target
+
+[Timer]
+# 系統啟動後 30 秒先執行一次
+OnBootSec=30
+#之後每 5 分鐘執行一次
+OnUnitActiveSec=5min
+# 精確度（預設 1 分鐘，改成 10 秒）
+AccuracySec=10s
+
+# 如果錯過了某次執行（例如系統休眠），補回來
+Persistent=true
+
+[Install]
+WantedBy=timers.target
