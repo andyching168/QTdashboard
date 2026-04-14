@@ -49,7 +49,6 @@ class GPIOButtonHandler(QObject):
     button_a_long_pressed = pyqtSignal() # 按鈕 A 長按
     button_b_pressed = pyqtSignal()      # 按鈕 B 短按
     button_b_long_pressed = pyqtSignal() # 按鈕 B 長按
-    both_buttons_reboot = pyqtSignal()   # A+B 同時長按 10 秒觸發重開機
     parking_brake_changed = pyqtSignal(bool)  # 手煞車狀態變化
     
     # 配置參數
@@ -59,7 +58,6 @@ class GPIOButtonHandler(QObject):
     PARKING_BRAKE_ACTIVE_LOW = True  # True: LOW=拉起, False: HIGH=拉起
     LONG_PRESS_TIME = 0.8  # 長按閾值（秒）
     DEBOUNCE_TIME = 0.05   # 防抖動時間（秒）
-    DUAL_BUTTON_REBOOT_TIME = 10.0  # A+B 同時長按重開機閾值（秒）
 
     @classmethod
     def _logic_text(cls) -> str:
@@ -82,11 +80,6 @@ class GPIOButtonHandler(QObject):
         # 長按標記 - 追蹤長按是否已觸發，避免釋放時再觸發短按
         self._button_a_held_triggered = False
         self._button_b_held_triggered = False
-
-        # 雙按鈕同按監控
-        self._dual_button_start_time: Optional[float] = None
-        self._dual_button_thread_running = False
-        self._both_buttons_pressed = False  # 兩鍵同時被按住（用於抑制單鍵原有功能）
         
         # 延遲重試配置
         self._retry_interval = 5.0   # 重試間隔（秒）
@@ -153,20 +146,9 @@ class GPIOButtonHandler(QObject):
             self._initialized = True
             print(f"[GPIO] 按鈕初始化成功")
             print(f"  - 按鈕 A: GPIO{self.BUTTON_A_PIN} (短按=切換左卡片, 長按=詳細視圖)")
-            print(f"[GPIO] 按鈕 B: GPIO{self.BUTTON_B_PIN} (短按=切換右卡片, 長按=重置Trip)")
+            print(f"  - 按鈕 B: GPIO{self.BUTTON_B_PIN} (短按=切換右卡片, 長按=重置Trip)")
             print(f"  - 手煞車: GPIO{self.PARKING_BRAKE_PIN} ({self._logic_text()})")
             print(f"  - 長按時間: {self.LONG_PRESS_TIME}秒")
-            print(f"  - 雙按重開機: A+B 同時按 {self.DUAL_BUTTON_REBOOT_TIME}秒")
-
-            # 啟動雙按同按監控執行緒
-            self._dual_button_thread_running = True
-            dual_thread = threading.Thread(
-                target=self._monitor_dual_buttons,
-                daemon=True,
-                name="GPIO-DualButton"
-            )
-            dual_thread.start()
-            print(f"[GPIO] 雙按同按監控執行緒已啟動")
             return True
             
         except BadPinFactory as e:
@@ -229,10 +211,6 @@ class GPIOButtonHandler(QObject):
     # === 按鈕 A 事件處理 ===
     def _on_button_a_held(self):
         """按鈕 A 長按"""
-        # 如果兩鍵同時被按，不觸發原有功能
-        if self._both_buttons_pressed:
-            print("[GPIO] 按鈕 A 長按（雙按抑制中）")
-            return
         self._button_a_held_triggered = True  # 標記長按已觸發
         print("[GPIO] 按鈕 A 長按")
         self.button_a_long_pressed.emit()
@@ -243,9 +221,6 @@ class GPIOButtonHandler(QObject):
             # 長按後釋放，重置標記，不觸發短按
             self._button_a_held_triggered = False
             print("[GPIO] 按鈕 A 長按釋放（忽略）")
-        elif self._both_buttons_pressed:
-            # 雙按抑制中，不觸發短按
-            print("[GPIO] 按鈕 A 釋放（雙按抑制中）")
         else:
             # 真正的短按
             print("[GPIO] 按鈕 A 短按")
@@ -254,10 +229,6 @@ class GPIOButtonHandler(QObject):
     # === 按鈕 B 事件處理 ===
     def _on_button_b_held(self):
         """按鈕 B 長按"""
-        # 如果兩鍵同時被按，不觸發原有功能
-        if self._both_buttons_pressed:
-            print("[GPIO] 按鈕 B 長按（雙按抑制中）")
-            return
         self._button_b_held_triggered = True  # 標記長按已觸發
         print("[GPIO] 按鈕 B 長按")
         self.button_b_long_pressed.emit()
@@ -268,62 +239,13 @@ class GPIOButtonHandler(QObject):
             # 長按後釋放，重置標記，不觸發短按
             self._button_b_held_triggered = False
             print("[GPIO] 按鈕 B 長按釋放（忽略）")
-        elif self._both_buttons_pressed:
-            # 雙按抑制中，不觸發短按
-            print("[GPIO] 按鈕 B 釋放（雙按抑制中）")
         else:
             # 真正的短按
             print("[GPIO] 按鈕 B 短按")
             self.button_b_pressed.emit()
     
-    # === 雙按鈕同按監控 ===
-    def _monitor_dual_buttons(self):
-        """監控按鈕 A+B 同時長按，10 秒後觸發重開機"""
-        import time
-        print(f"[GPIO] 雙按監控執行緒啟動（監控 GPIO{self.BUTTON_A_PIN} + GPIO{self.BUTTON_B_PIN}）")
-
-        while self._dual_button_thread_running:
-            try:
-                if not self._button_a or not self._button_b:
-                    time.sleep(0.2)
-                    continue
-
-                a_pressed = self._button_a.is_pressed
-                b_pressed = self._button_b.is_pressed
-
-                if a_pressed and b_pressed:
-                    # 兩鍵同時被按住
-                    if self._dual_button_start_time is None:
-                        # 剛開始同時按，記錄時間
-                        self._dual_button_start_time = time.time()
-                        self._both_buttons_pressed = True
-                        elapsed = 0.0
-                        print(f"[GPIO] A+B 同時按下，開始計時（目標: {self.DUAL_BUTTON_REBOOT_TIME}秒）")
-                    else:
-                        # 持續同時按，檢查是否達標
-                        elapsed = time.time() - self._dual_button_start_time
-                        remaining = self.DUAL_BUTTON_REBOOT_TIME - elapsed
-                        if remaining <= 0:
-                            # 達標！觸發重開機
-                            print(f"[GPIO] ⚠️ A+B 同時按已達 {elapsed:.1f} 秒，觸發重開機！")
-                            self.both_buttons_reboot.emit()
-                            # 重置計時（避免重複觸發）
-                            self._dual_button_start_time = None
-                        # else: 繼續倒數，不做任何事
-
-                else:
-                    # 任一鍵放開或兩鍵都沒按
-                    if self._dual_button_start_time is not None:
-                        elapsed = time.time() - self._dual_button_start_time
-                        print(f"[GPIO] A+B 同時按放開（計時 {elapsed:.1f}秒 < {self.DUAL_BUTTON_REBOOT_TIME}秒，取消）")
-                    self._dual_button_start_time = None
-                    self._both_buttons_pressed = False
-
-            except Exception as e:
-                print(f"[GPIO] 雙按監控錯誤: {e}")
-            time.sleep(0.1)  # 100ms 輪詢
-
-        print("[GPIO] 雙按監控執行緒已結束")
+    # === 手煞車監控 ===
+    def _monitor_parking_brake(self):
         """手煞車監控執行緒"""
         import time
         while self._parking_brake_running:
@@ -353,10 +275,7 @@ class GPIOButtonHandler(QObject):
         """清理 GPIO 資源"""
         # 停止重試執行緒
         self._retry_running = False
-
-        # 停止雙按同按監控執行緒
-        self._dual_button_thread_running = False
-
+        
         # 停止手煞車監控執行緒
         self._parking_brake_running = False
         
