@@ -74,7 +74,7 @@ detect_usb_host() {
                 local class_id
                 class_id=$(cat "$pci_path/class" 2>/dev/null | cut -c1-6)
                 if [ "$class_id" = "0c0330" ]; then
-                    echo "Found xhci_hcd at $path (class=0c0330)"
+                    echo "Found xhci_hcd at $path (class=0c0330)" >&2
                     echo "$path"
                     return 0
                 fi
@@ -90,13 +90,7 @@ detect_usb_host() {
 #  取得目前 USB device 數量
 #------------------
 count_usb_devices() {
-    # lsusb 輸出行數 = USB 設備數
-    if command -v lsusb &>/dev/null; then
-        lsusb 2>/dev/null | wc -l
-    else
-        # 沒有 lsusb，就用 sysfs 枚舉
-        find /sys/bus/usb/devices -name "idVendor" -maxdepth 2 2>/dev/null | wc -l
-    fi
+    timeout 3 lsusb 2>/dev/null | wc -l || echo "0"
 }
 
 #------------------

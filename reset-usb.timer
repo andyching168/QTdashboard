@@ -7,7 +7,7 @@ After=multi-user.target
 # 系統啟動後 30 秒先執行一次
 OnBootSec=30
 #之後每 5 分鐘執行一次
-OnUnitActiveSec=5min
+OnUnitActiveSec=1min
 # 精確度（預設 1 分鐘，改成 10 秒）
 AccuracySec=10s
 
