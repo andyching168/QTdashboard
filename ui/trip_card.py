@@ -430,12 +430,13 @@ class TripInfoCardWide(QWidget):
         """)
         
         # 行程數據
-        self.start_time = time.time()  # 啟動時間戳
+        # 使用 monotonic 避免 NTP/時區校時造成經過時間跳動
+        self.start_time = time.monotonic()
         self.trip_distance = 0.0        # 本次行駛距離 (km)
         self.instant_fuel = 0.0         # 瞬時油耗 (L/100km)
         self.avg_fuel = 0.0             # 平均油耗 (L/100km)
         self.last_speed = 0.0           # 上次車速
-        self.last_update_time = time.time()  # 上次更新時間
+        self.last_update_time = time.monotonic()  # 上次更新時間
         
         # 油耗計算用緩存
         self.rpm = 0.0                  # 當前 RPM
@@ -443,7 +444,7 @@ class TripInfoCardWide(QWidget):
         self.turbo = 0.0                # 渦輪負壓 (bar)
         self.total_fuel_used = 0.0      # 累計燃油消耗 (L)
         self.total_distance = 0.0       # 累計行駛距離 (km)
-        self.last_calc_time = time.time()  # 上次計算時間
+        self.last_calc_time = time.monotonic()  # 上次計算時間
         self.has_valid_data = False     # 是否有有效數據
         
         # 主佈局
@@ -517,7 +518,7 @@ class TripInfoCardWide(QWidget):
     
     def _format_elapsed_time(self):
         """格式化經過時間為 hh:mm"""
-        elapsed_seconds = int(time.time() - self.start_time)
+        elapsed_seconds = int(time.monotonic() - self.start_time)
         hours = elapsed_seconds // 3600
         minutes = (elapsed_seconds % 3600) // 60
         return f"{hours:02d}:{minutes:02d}"
@@ -605,7 +606,7 @@ class TripInfoCardWide(QWidget):
     
     def update_from_speed(self, speed_kmh):
         """根據車速更新行駛距離"""
-        current_time = time.time()
+        current_time = time.monotonic()
         delta_time = current_time - self.last_update_time
         
         # 合理的時間間隔內計算距離
@@ -745,7 +746,7 @@ class TripInfoCardWide(QWidget):
         self.instant_fuel_label.setText(f"{display_instant:.1f}")
 
         # --- 平均油耗累積計算 ---
-        current_time = time.time()
+        current_time = time.monotonic()
         
         if not self.has_valid_data:
             self.last_calc_time = current_time
