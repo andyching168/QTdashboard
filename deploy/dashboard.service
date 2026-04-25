@@ -40,9 +40,8 @@ WorkingDirectory=/home/ac/QTdashboard
 # 啟動命令 - 使用 xinit 直接在 vt1 上啟動 X
 ExecStart=/bin/bash -c 'exec /usr/bin/xinit /home/ac/QTdashboard/startx_dashboard.sh -- :0 vt1 -keeptty -novtswitch'
 
-# 失敗時自動重啟
-Restart=on-failure
-RestartSec=3
+# 不自動重啟（熄火關機時避免與 poweroff 衝突）
+Restart=no
 
 # 資源限制
 TimeoutStartSec=60
