@@ -52,7 +52,8 @@ class GPSMonitorThread(QThread):
         self._external_stale_threshold = 300
         self._search_without_device_count = 0  # 連續搜尋無結果次數
         self._soft_reset_requested = False  # D→N 等事件觸發的軟重啟請求
-        self._last_ubx_reset_time = 0  # 上次 UBX reset 時間（防頻繁重啟）
+        self._last_ubx_reset_time = 0  # 上次 reset 時間（防頻繁重啟）
+        self._usb_reset_count = 0  # 連續軟 reset 無效次數（累積後觸發 USB unbind/bind）
         
     def request_soft_reset(self):
         """外部介面：請求 GPS 軟重啟（如 D→N 換檔時觸發）
@@ -207,9 +208,11 @@ class GPSMonitorThread(QThread):
         last_speed_emit_time = time.time()
         last_rmc_time = time.time()
         last_flush_time = time.time()
-        SPEED_TIMEOUT = 3.0     # 3 秒沒收到速度就 emit 0
+        last_speed_parse_time = time.time()  # 上次成功解析速度的時間
+        SPEED_TIMEOUT = 3.0      # 3 秒沒收到速度就 emit 0
         RMC_WATCHDOG = 10.0     # 10 秒沒收到有效 RMC → 視為連線異常
-        FLUSH_INTERVAL = 60.0   # 每 60 秒清空 serial 輸入緩衝區
+        FLUSH_INTERVAL = 30.0    # 每 30 秒清空 serial 輸入緩衝區
+        SPEED_PARSE_WATCHDOG = 30.0  # 30 秒速度沒更新 → 強制 soft reset
         
         try:
             with _serial_lock:
@@ -227,6 +230,21 @@ class GPSMonitorThread(QThread):
                     if now - last_rmc_time > RMC_WATCHDOG:
                         logger.warning("[GPS] RMC watchdog: no valid RMC for %.1fs, forcing reconnect", now - last_rmc_time)
                         return False  # 觸發上層重連邏輯
+                    
+                    # === 速度解析看門狗：RMC 正常但速度卡住的守護 ===
+                    # 現象：RMC 有進來（last_rmc_time 不斷更新），但速度解析連續 30 秒無更新
+                    # 代表 CH340 FIFO 或 GPS 模組內部緩衝區邏輯卡死，必須觸發 USB unbind/bind
+                    if now - last_speed_parse_time > SPEED_PARSE_WATCHDOG:
+                        logger.warning("[GPS] Speed parse watchdog: no valid speed for %.1fs (RMC OK), "
+                                       "triggering USB unbind/bind!", now - last_speed_parse_time)
+                        if self._usb_reset_by_unbind_bind():
+                            last_rmc_time = time.time()
+                            last_speed_parse_time = time.time()
+                            last_speed_emit_time = time.time()
+                            logger.info("[GPS] USB unbind/bind succeeded, continuing")
+                        else:
+                            logger.warning("[GPS] USB unbind/bind failed, forcing reconnect")
+                            return False
                     
                     # === 定期 flush serial 緩衝區 ===
                     if now - last_flush_time > FLUSH_INTERVAL:
@@ -251,7 +269,23 @@ class GPSMonitorThread(QThread):
                         last_rmc_time = time.time()  # 重置看門狗
                         self._last_ubx_reset_time = time.time()
                         self._soft_reset_requested = False
-                        logger.info("[GPS] Soft reset executed (buffer cleared), continuing read loop")
+                        self._usb_reset_count += 1  # 記錄一次軟 reset（無論如何都算）
+                        logger.info(f"[GPS] Soft reset executed (buffer cleared), usb_reset_count={self._usb_reset_count}")
+                        
+                        # 累積 3 次軟 reset 無效 → 觸發 USB unbind/bind
+                        if self._usb_reset_count >= 3:
+                            logger.warning("[GPS] 3 soft resets ineffective, triggering USB unbind/bind!")
+                            self._usb_reset_count = 0
+                            # USB reset後需要回到 run() 重掃描，所以 return False 觸發外層重連
+                            if self._usb_reset_by_unbind_bind():
+                                # USB reset 成功，回到 read_loop 繼續
+                                last_rmc_time = time.time()
+                                last_speed_emit_time = time.time()
+                                logger.info("[GPS] USB unbind/bind succeeded, continuing read loop")
+                            else:
+                                # USB reset 失敗，強制重連
+                                logger.warning("[GPS] USB unbind/bind failed, will reconnect")
+                                return False
                     
                     line = ser.readline()
                     if not line:
@@ -300,6 +334,7 @@ class GPSMonitorThread(QThread):
                                         speed_kmh = speed_knots * 1.852
                                         self.gps_speed_changed.emit(speed_kmh)
                                         last_speed_emit_time = time.time()
+                                        last_speed_parse_time = time.time()  # 重置速度解析看門狗
                                         speed_parsed = True
                                     except (ValueError, IndexError):
                                         logger.debug(f"[GPS] Invalid speed field in RMC: '{parts[7]}'")
@@ -466,6 +501,113 @@ class GPSMonitorThread(QThread):
         return self._using_external_gps
 
 
+
+
+    def _usb_reset_by_unbind_bind(self):
+        """透過 USB driver unbind/bind 重置 CH340/CP2102 橋接晶片。
+        
+        這是網路上最普遍推荐的方案，專門用於「USB serial 長時間運行後卡死」的問題。
+        原理：卸載再重新綁定 USB 設備，讓 Linux USB stack 重新初始化 CH340 的 FIFO。
+        
+        注意：需要找到 GPS 設備對應的 USB bus:device 路徑（如 1-1.2:1.0）
+        Returns:
+            True 若成功，False 若失敗
+        """
+        import glob as glob_module
+        
+        try:
+            # 找出 GPS 所在的 USB 埠
+            # 策略：讀取 /sys/class/tty/*/device/driver/ 找到綁定到 ch341/cp210x 的埠
+            tty_devices = glob_module.glob('/sys/class/tty/*')
+            gps_driver_path = None
+            
+            for tty_dev in tty_devices:
+                try:
+                    driver_link = os.readlink(f"{tty_dev}/device/driver")
+                    driver_name = os.path.basename(driver_link)
+                    if driver_name in ('ch341', 'cp210x', 'ftdi_sio', 'pl2303'):
+                        # 檢查這個 tty 是否對應到 current_port
+                        device_link = os.readlink(f"{tty_dev}/device")
+                        if self._current_port and self._current_port.lstrip('/dev/') in tty_dev:
+                            gps_driver_path = f"{tty_dev}/device/driver"
+                            logger.info(f"[GPS] Found GPS on {tty_dev}, driver={driver_name}")
+                            break
+                except (FileNotFoundError, OSError):
+                    continue
+            
+            if not gps_driver_path:
+                # fallback: 嘗試直接從 /dev/ttyUSB* 找到對應的 usb device path
+                if self._current_port:
+                    port_name = self._current_port.lstrip('/dev/')
+                    for tty_dev in tty_devices:
+                        if port_name in tty_dev:
+                            try:
+                                gps_driver_path = f"{tty_dev}/device/driver"
+                                driver_name = os.path.basename(os.readlink(gps_driver_path))
+                                logger.info(f"[GPS] Found GPS driver via fallback: {driver_name}")
+                                break
+                            except (FileNotFoundError, OSError):
+                                continue
+            
+            if not gps_driver_path:
+                logger.warning("[GPS] Cannot find USB driver path for GPS device")
+                return False
+            
+            driver_name = os.path.basename(os.readlink(gps_driver_path))
+            driver_syspath = f"/sys/bus/usb/drivers/{driver_name}"
+            
+            # 列出所有已綁定的設備
+            try:
+                bound_devices = os.listdir(driver_syspath)
+            except FileNotFoundError:
+                logger.warning(f"[GPS] Driver {driver_name} not found at {driver_syspath}")
+                return False
+            
+            # 找到與 current_port 相關的設備
+            port_basename = self._current_port.lstrip('/dev/')
+            target_device = None
+            for dev in bound_devices:
+                try:
+                    dev_link = os.readlink(f"{driver_syspath}/{dev}/device")
+                    if port_basename in os.readlink(f"/sys/class/tty/{port_basename}/device"):
+                        target_device = dev
+                        break
+                except (FileNotFoundError, OSError):
+                    continue
+            
+            if not target_device:
+                logger.warning(f"[GPS] Cannot find USB device for port {self._current_port}")
+                return False
+            
+            # 執行 unbind → 等待 → bind
+            unbind_path = f"{driver_syspath}/unbind"
+            bind_path = f"{driver_syspath}/bind"
+            
+            logger.info(f"[GPS] USB unbind: {target_device}")
+            with open(unbind_path, 'w') as f:
+                f.write(target_device)
+            
+            time.sleep(2)  # 等待設物重新列舉（網路常見：需要 2-15 秒）
+            
+            logger.info(f"[GPS] USB bind: {target_device}")
+            with open(bind_path, 'w') as f:
+                f.write(target_device)
+            
+            time.sleep(1)  # 等待驅動重新掛載
+            logger.info("[GPS] USB unbind/bind completed")
+            return True
+            
+        except PermissionError:
+            logger.warning("[GPS] USB reset requires sudo (skipping)")
+            return False
+        except FileNotFoundError as e:
+            logger.warning(f"[GPS] USB reset: device path not found: {e}")
+            return False
+        except Exception as e:
+            logger.warning(f"[GPS] USB reset failed: {e}")
+            return False
+
+
 class RadarMonitorThread(QThread):
     """
     ESP32 雷達訊號監控執行緒
@@ -549,22 +691,6 @@ class RadarMonitorThread(QThread):
             with _serial_lock:
                 ser = serial.Serial(self._current_port, self.baud_rate, timeout=1.0)
                 while self.running:
-                    # === 外部請求的軟重啟（D→N 等）===
-                    # 策略：清除 input buffer + 短暫 delay，讓 GPS 模組重新同步
-                    # 不做 close/reopen（會破壞 with context 的資源管理）
-                    if self._soft_reset_requested:
-                        try:
-                            ser.reset_input_buffer()
-                            ser.reset_output_buffer()
-                        except Exception:
-                            pass
-                        # 等待 GPS 模組清理內部狀態（NMEA 輸出重新同步）
-                        time.sleep(0.5)
-                        last_rmc_time = time.time()  # 重置看門狗
-                        self._last_ubx_reset_time = time.time()
-                        self._soft_reset_requested = False
-                        logger.info("[GPS] Soft reset executed (buffer cleared), continuing read loop")
-                    
                     line = ser.readline()
                     if not line:
                         continue
