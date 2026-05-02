@@ -181,27 +181,57 @@ class GPSMonitorThread(QThread):
         return None
         
     def _read_loop(self):
-        """持續讀取迴圈（含速度心跳與資源安全釋放）"""
+        """持續讀取迴圈（含速度心跳、RMC 看門狗與資源安全釋放）
+        
+        防禦三層：
+        1. 速度心跳：每個迭代都檢查，不只依賴空行 timeout
+        2. RMC 看門狗：超過 10 秒沒收到任何有效 RMC → 強制重連
+        3. Serial flush：每 60 秒清空輸入緩衝區，避免殘留垃圾數據
+        """
         ser = None
         last_speed_emit_time = time.time()
-        SPEED_TIMEOUT = 3.0  # 3 秒沒收到速度就 emit 0，防止速度卡住
+        last_rmc_time = time.time()
+        last_flush_time = time.time()
+        SPEED_TIMEOUT = 3.0     # 3 秒沒收到速度就 emit 0
+        RMC_WATCHDOG = 10.0     # 10 秒沒收到有效 RMC → 視為連線異常
+        FLUSH_INTERVAL = 60.0   # 每 60 秒清空 serial 輸入緩衝區
         
         try:
             with _serial_lock:
                 ser = serial.Serial(self._current_port, self.baud_rate, timeout=1.0)
                 while self.running:
+                    now = time.time()
+                    
+                    # === 速度心跳檢查（每個迭代都檢查，不限空行） ===
+                    if now - last_speed_emit_time > SPEED_TIMEOUT:
+                        self.gps_speed_changed.emit(0.0)
+                        last_speed_emit_time = now
+                        logger.debug("[GPS] Speed heartbeat: no speed for %.1fs, emitting 0.0", SPEED_TIMEOUT)
+                    
+                    # === RMC 看門狗：長時間沒收到 RMC = 連線退化 ===
+                    if now - last_rmc_time > RMC_WATCHDOG:
+                        logger.warning("[GPS] RMC watchdog: no valid RMC for %.1fs, forcing reconnect", now - last_rmc_time)
+                        return False  # 觸發上層重連邏輯
+                    
+                    # === 定期 flush serial 緩衝區 ===
+                    if now - last_flush_time > FLUSH_INTERVAL:
+                        try:
+                            ser.reset_input_buffer()
+                            last_flush_time = now
+                            logger.debug("[GPS] Flushed serial input buffer")
+                        except Exception:
+                            pass
+                    
                     line = ser.readline()
                     if not line:
-                        # Timeout，檢查速度超時 — 防止 GPS 速度卡住
-                        now = time.time()
-                        if now - last_speed_emit_time > SPEED_TIMEOUT:
-                            self.gps_speed_changed.emit(0.0)
-                            last_speed_emit_time = now
-                            logger.debug("[GPS] Speed timeout, emitting 0.0")
                         continue
                         
                     try:
                         line_str = line.decode('ascii', errors='ignore').strip()
+                        
+                        # 跳過空行
+                        if not line_str:
+                            continue
                         
                         # 識別並跳過 Radar 數據
                         if 'LR:' in line_str and 'RF:' in line_str:
@@ -212,8 +242,6 @@ class GPSMonitorThread(QThread):
                         is_fixed = False
                         has_status = False
                         
-                        # 優先使用 RMC 判斷 fix 狀態，因為 RMC 包含速度資訊且依賴 GGA 的有效定位
-                        # 只有當 GGA quality >= 1 且 RMC status == 'A' 時才視為 fixed
                         gga_quality = None
                         rmc_status = None
                         
@@ -227,19 +255,29 @@ class GPSMonitorThread(QThread):
                                 
                         if line_str.startswith('$GNRMC') or line_str.startswith('$GPRMC'):
                             parts = line_str.split(',')
+                            # RMC checksum 驗證：至少要有 status + 速度欄位
                             if len(parts) >= 3:
                                 rmc_status = parts[2]
                                 has_status = True
+                                last_rmc_time = time.time()  # 更新 RMC 看門狗
                                 
                                 # Parse Speed (Field 7, in Knots) — 加強空值檢查
+                                speed_parsed = False
                                 if len(parts) >= 8 and parts[7].strip():
                                     try:
                                         speed_knots = float(parts[7])
                                         speed_kmh = speed_knots * 1.852
                                         self.gps_speed_changed.emit(speed_kmh)
                                         last_speed_emit_time = time.time()
+                                        speed_parsed = True
                                     except (ValueError, IndexError):
                                         logger.debug(f"[GPS] Invalid speed field in RMC: '{parts[7]}'")
+                                
+                                # RMC status='A' 但速度欄位無效 → 模組可能退化，emit 0
+                                if not speed_parsed and rmc_status == 'A' and len(parts) >= 8:
+                                    logger.warning(f"[GPS] RMC active but speed field invalid: '{parts[7]}', emitting 0")
+                                    self.gps_speed_changed.emit(0.0)
+                                    last_speed_emit_time = time.time()
                                 
                                 # Parse Position (Fields 3-6: lat, N/S, lon, E/W)
                                 if len(parts) >= 7:
@@ -269,7 +307,7 @@ class GPSMonitorThread(QThread):
                                     except (ValueError, IndexError):
                                         pass
                         
-                        # 只有 GGA quality >= 1 且 RMC status == 'A' 才視為 fixed
+                        # Fix 狀態判斷
                         if gga_quality is not None and rmc_status is not None:
                             is_fixed = (gga_quality >= 1 and rmc_status == 'A')
                         elif rmc_status is not None:
@@ -283,15 +321,13 @@ class GPSMonitorThread(QThread):
                     except ValueError:
                         pass
         except serial.SerialException as e:
-            # timeout 不應視為斷線，只打印一次避免刷屏
             if "timeout" not in str(e).lower():
                 logger.error(f"[GPS] Serial error: {e}")
-            return True  # Timeout 視為短暫無數據，不重置 port
+            return True
         except Exception as e:
             logger.error(f"[GPS] Error: {e}")
             return False
         finally:
-            # 確保 serial port 正確釋放，避免資源洩漏
             if ser is not None:
                 try:
                     if ser.is_open:
