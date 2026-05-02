@@ -181,14 +181,23 @@ class GPSMonitorThread(QThread):
         return None
         
     def _read_loop(self):
-        """持續讀取迴圈"""
+        """持續讀取迴圈（含速度心跳與資源安全釋放）"""
+        ser = None
+        last_speed_emit_time = time.time()
+        SPEED_TIMEOUT = 3.0  # 3 秒沒收到速度就 emit 0，防止速度卡住
+        
         try:
             with _serial_lock:
                 ser = serial.Serial(self._current_port, self.baud_rate, timeout=1.0)
                 while self.running:
                     line = ser.readline()
                     if not line:
-                        # Timeout，可能沒資料，但不一定斷線
+                        # Timeout，檢查速度超時 — 防止 GPS 速度卡住
+                        now = time.time()
+                        if now - last_speed_emit_time > SPEED_TIMEOUT:
+                            self.gps_speed_changed.emit(0.0)
+                            last_speed_emit_time = now
+                            logger.debug("[GPS] Speed timeout, emitting 0.0")
                         continue
                         
                     try:
@@ -222,14 +231,15 @@ class GPSMonitorThread(QThread):
                                 rmc_status = parts[2]
                                 has_status = True
                                 
-                                # Parse Speed (Field 7, in Knots)
-                                if len(parts) >= 8:
+                                # Parse Speed (Field 7, in Knots) — 加強空值檢查
+                                if len(parts) >= 8 and parts[7].strip():
                                     try:
                                         speed_knots = float(parts[7])
                                         speed_kmh = speed_knots * 1.852
                                         self.gps_speed_changed.emit(speed_kmh)
+                                        last_speed_emit_time = time.time()
                                     except (ValueError, IndexError):
-                                        pass
+                                        logger.debug(f"[GPS] Invalid speed field in RMC: '{parts[7]}'")
                                 
                                 # Parse Position (Fields 3-6: lat, N/S, lon, E/W)
                                 if len(parts) >= 7:
@@ -280,6 +290,14 @@ class GPSMonitorThread(QThread):
         except Exception as e:
             logger.error(f"[GPS] Error: {e}")
             return False
+        finally:
+            # 確保 serial port 正確釋放，避免資源洩漏
+            if ser is not None:
+                try:
+                    if ser.is_open:
+                        ser.close()
+                except Exception:
+                    pass
             
         return True
 
