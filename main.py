@@ -2608,6 +2608,9 @@ class Dashboard(QWidget):
     @pyqtSlot(str)
     def _slot_set_gear(self, gear):
         """Slot: 在主執行緒中更新檔位顯示"""
+        # 記錄換檔前的狀態（用於 D→N 偵測）
+        prev_display_gear = self.gear
+        
         # 儲存實際檔位
         self.actual_gear = gear
         
@@ -2627,6 +2630,22 @@ class Dashboard(QWidget):
         # 檔位變更時立即上傳 MQTT 數據
         if gear_changed and self._mqtt_connected:
             self._publish_telemetry()
+        
+        # === D→N 換檔時觸發 GPS 軟重啟（UBX Hot Start）===
+        # 利用停車/暫停的自然時機刷新 GPS 模組狀態
+        # 防止長時間行駛後 GPS 速度卡死的問題
+        # 偵測：從行駛檔（D/1/2/3/4/5/S/L）→ 空檔（N）
+        if gear_changed and display_gear == 'N':
+            # prev_display_gear 保留了換檔前的顯示檔位
+            # 只有從行駛檔切入 N 才觸發（排除 P→N、R→N）
+            driving_gears = {'D', '1', '2', '3', '4', '5', 'S', 'L'}
+            if prev_display_gear in driving_gears:
+                try:
+                    if hasattr(self, 'gps_monitor_thread') and self.gps_monitor_thread.isRunning():
+                        self.gps_monitor_thread.request_soft_reset()
+                        logger.info(f"[Dashboard] {prev_display_gear}→N detected, requested GPS soft reset")
+                except Exception as e:
+                    logger.debug(f"[Dashboard] GPS soft reset request failed: {e}")
     
     def _get_display_gear(self, actual_gear):
         """根據顯示模式決定要顯示的檔位"""
