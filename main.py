@@ -2643,9 +2643,9 @@ class Dashboard(QWidget):
                 try:
                     if hasattr(self, 'gps_monitor_thread') and self.gps_monitor_thread.isRunning():
                         self.gps_monitor_thread.request_soft_reset()
-                        logger.info(f"[Dashboard] {prev_display_gear}→N detected, requested GPS soft reset")
+                        print(f"[Dashboard] {prev_display_gear}→N detected, requested GPS soft reset")
                 except Exception as e:
-                    logger.debug(f"[Dashboard] GPS soft reset request failed: {e}")
+                    print(f"[Dashboard] GPS soft reset request failed: {e}")
     
     def _get_display_gear(self, actual_gear):
         """根據顯示模式決定要顯示的檔位"""

@@ -6,7 +6,6 @@ import platform
 import serial
 import logging
 import threading
-import struct
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
@@ -67,48 +66,6 @@ class GPSMonitorThread(QThread):
             return
         self._soft_reset_requested = True
         logger.info("[GPS] Soft reset requested (will execute in read loop)")
-
-    def _send_ubx_reset(self, ser):
-        """發送 UBX-CFG-RST 給 u-blox GPS 模組（Hot Start，保留星曆）
-        
-        UBX protocol:
-        - Header: 0xB5 0x62
-        - Class 0x06 (CFG), ID 0x04 (RST)
-        - Payload: navBbrMask=0x0000 (hot start), resetMode=0x01 (controlled software reset)
-        - 保留星曆，重啟後幾秒內可重新定位
-        
-        Args:
-            ser: 已開啟的 serial.Serial 物件
-        Returns:
-            True 若成功發送，False 若失敗
-        """
-        try:
-            # UBX-CFG-RST payload: navBbrMask(2 bytes) + resetMode(1 byte)
-            # navBbrMask=0x0000 = hot start (保留所有 BBR 數據)
-            # resetMode=0x01 = controlled software reset
-            payload = struct.pack('<HB', 0x0000, 0x01)
-            
-            # Class + ID
-            cls_id = [0x06, 0x04]
-            
-            # Calculate checksum (over Class, ID, Length, Payload)
-            length = struct.pack('<H', len(payload))
-            ck_a, ck_b = 0, 0
-            for b in cls_id + list(length) + list(payload):
-                ck_a = (ck_a + b) & 0xFF
-                ck_b = (ck_b + ck_a) & 0xFF
-            
-            msg = b'\xB5\x62' + bytes(cls_id) + length + payload + bytes([ck_a, ck_b])
-            ser.write(msg)
-            
-            self._last_ubx_reset_time = time.time()
-            self._soft_reset_requested = False
-            logger.info("[GPS] UBX-CFG-RST (Hot Start) sent successfully")
-            return True
-        except Exception as e:
-            logger.warning(f"[GPS] Failed to send UBX reset: {e}")
-            self._soft_reset_requested = False
-            return False
 
     def run(self):
         logger.info("[GPS] Starting monitor thread...")
@@ -280,18 +237,21 @@ class GPSMonitorThread(QThread):
                         except Exception:
                             pass
                     
-                    # === 外部請求的軟重啟（D→N 等） ===
+                    # === 外部請求的軟重啟（D→N 等）===
+                    # 策略：清除 input buffer + 短暫 delay，讓 GPS 模組重新同步
+                    # 不做 close/reopen（會破壞 with context 的資源管理）
                     if self._soft_reset_requested:
-                        self._send_ubx_reset(ser)
-                        # UBX reset 後，GPS 模組需要 ~1-2 秒重啟
-                        # 清空緩衝區避免讀到重啟前的殘留數據
-                        time.sleep(0.5)
                         try:
                             ser.reset_input_buffer()
+                            ser.reset_output_buffer()
                         except Exception:
                             pass
+                        # 等待 GPS 模組清理內部狀態（NMEA 輸出重新同步）
+                        time.sleep(0.5)
                         last_rmc_time = time.time()  # 重置看門狗
-                        logger.info("[GPS] Soft reset executed, buffer flushed, continuing read loop")
+                        self._last_ubx_reset_time = time.time()
+                        self._soft_reset_requested = False
+                        logger.info("[GPS] Soft reset executed (buffer cleared), continuing read loop")
                     
                     line = ser.readline()
                     if not line:
@@ -589,18 +549,21 @@ class RadarMonitorThread(QThread):
             with _serial_lock:
                 ser = serial.Serial(self._current_port, self.baud_rate, timeout=1.0)
                 while self.running:
-                    # === 外部請求的軟重啟（D→N 等） ===
+                    # === 外部請求的軟重啟（D→N 等）===
+                    # 策略：清除 input buffer + 短暫 delay，讓 GPS 模組重新同步
+                    # 不做 close/reopen（會破壞 with context 的資源管理）
                     if self._soft_reset_requested:
-                        self._send_ubx_reset(ser)
-                        # UBX reset 後，GPS 模組需要 ~1-2 秒重啟
-                        # 清空緩衝區避免讀到重啟前的殘留數據
-                        time.sleep(0.5)
                         try:
                             ser.reset_input_buffer()
+                            ser.reset_output_buffer()
                         except Exception:
                             pass
+                        # 等待 GPS 模組清理內部狀態（NMEA 輸出重新同步）
+                        time.sleep(0.5)
                         last_rmc_time = time.time()  # 重置看門狗
-                        logger.info("[GPS] Soft reset executed, buffer flushed, continuing read loop")
+                        self._last_ubx_reset_time = time.time()
+                        self._soft_reset_requested = False
+                        logger.info("[GPS] Soft reset executed (buffer cleared), continuing read loop")
                     
                     line = ser.readline()
                     if not line:
