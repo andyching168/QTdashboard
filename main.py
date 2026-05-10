@@ -1163,6 +1163,7 @@ class Dashboard(QWidget):
         
         # 連接無電壓訊號超時信號（3 分鐘沒收到 OBD 電壓數據）
         self._shutdown_monitor.no_signal_timeout.connect(self._on_no_voltage_signal_timeout)
+        self._shutdown_monitor.telegram_notification_finished.connect(self._on_telegram_notification_finished)
         
         # 連接轉速信號到關機監控器（用於判斷是否低於 300 RPM）
         self.signal_update_rpm.connect(lambda rpm: self._shutdown_monitor.update_rpm(rpm * 1000))
@@ -1171,6 +1172,13 @@ class Dashboard(QWidget):
         self._shutdown_monitor.start_no_signal_monitoring()
         
         print("[ShutdownMonitor] 關機監控器已初始化（含無訊號超時監控）")
+
+    def _on_telegram_notification_finished(self, success: bool, message: str):
+        """顯示熄火 Telegram 通知結果。"""
+        if success:
+            self.show_toast(message or "Telegram 通知已傳送", "success", 3500)
+        else:
+            self.show_toast(message or "Telegram 通知傳送失敗", "warning", 4500)
     
     def _on_power_lost(self):
         """電源中斷時顯示關機對話框"""

@@ -325,6 +325,7 @@ class ShutdownMonitor(QObject):
     power_restored = pyqtSignal()  # 電源恢復
     exit_app = pyqtSignal()        # 退出程式（測試模式用）
     no_signal_timeout = pyqtSignal()  # 無訊號超時
+    telegram_notification_finished = pyqtSignal(bool, str)  # Telegram 熄火通知結果
     
     # 無電壓訊號超時時間（秒）
     NO_VOLTAGE_SIGNAL_TIMEOUT = 180  # 3 分鐘（針對從未發動的情況）
@@ -378,6 +379,7 @@ class ShutdownMonitor(QObject):
         self.trip_elapsed_time = None  # 字串格式 "hh:mm"
         self.trip_distance = None
         self.current_rpm = 0.0  # 當前轉速 (RPM)
+        self._telegram_notification_in_progress = False
 
     def update_fuel_level(self, level: float):
         """更新油量"""
@@ -397,6 +399,39 @@ class ShutdownMonitor(QObject):
         self.trip_distance = distance
         if avg_fuel is not None:
             self.current_avg_fuel = avg_fuel
+
+    def _send_location_notification(self):
+        """背景傳送熄火位置通知，完成後回報給 UI。"""
+        if self._telegram_notification_in_progress:
+            print("[ShutdownMonitor] Telegram 通知已在傳送中，略過重複請求")
+            return
+
+        self._telegram_notification_in_progress = True
+
+        def _worker():
+            try:
+                result = notify_current_location(
+                    self.current_fuel_level,
+                    self.current_avg_fuel,
+                    self.trip_elapsed_time,
+                    self.trip_distance
+                )
+                if isinstance(result, dict):
+                    success = bool(result.get("success"))
+                    message = str(result.get("message") or ("Telegram 通知已傳送" if success else "Telegram 通知傳送失敗"))
+                else:
+                    success = bool(result)
+                    message = "Telegram 通知已傳送" if success else "Telegram 通知傳送失敗"
+            except Exception as e:
+                print(f"[ShutdownMonitor] Telegram 通知例外: {e}")
+                success = False
+                message = "Telegram 通知傳送失敗"
+            finally:
+                self._telegram_notification_in_progress = False
+
+            self.telegram_notification_finished.emit(success, message)
+
+        threading.Thread(target=_worker, daemon=True).start()
     
     def start_no_signal_monitoring(self):
         """啟動無電壓訊號監控
@@ -475,12 +510,7 @@ class ShutdownMonitor(QObject):
             
             # 啟動位置通知 (背景執行)
             print("[ShutdownMonitor] 觸發位置通知...")
-            threading.Thread(target=notify_current_location, args=(
-                self.current_fuel_level,
-                self.current_avg_fuel,
-                self.trip_elapsed_time,
-                self.trip_distance
-            ), daemon=True).start()
+            self._send_location_notification()
             
             self.power_lost.emit()
     
@@ -575,12 +605,7 @@ class ShutdownMonitor(QObject):
                 
                 # 啟動位置通知 (背景執行)
                 print("[ShutdownMonitor] 觸發位置通知...")
-                threading.Thread(target=notify_current_location, args=(
-                    self.current_fuel_level,
-                    self.current_avg_fuel,
-                    self.trip_elapsed_time,
-                    self.trip_distance
-                ), daemon=True).start()
+                self._send_location_notification()
                 
                 self.power_lost.emit()
         

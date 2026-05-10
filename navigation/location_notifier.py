@@ -52,7 +52,7 @@ def load_telegram_credentials():
 
     return None, None, None
 
-def send_telegram_message(token, chat_id, message):
+def send_telegram_message_with_status(token, chat_id, message):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -62,13 +62,27 @@ def send_telegram_message(token, chat_id, message):
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code == 200:
             print("[+] Telegram message sent successfully.")
-            return True
+            return True, "Telegram 通知已傳送"
+        elif response.status_code in (401, 404):
+            print(f"[-] Telegram send failed: {response.text}")
+            return False, "Telegram 設定可能有誤，無法傳送通知"
         else:
             print(f"[-] Telegram send failed: {response.text}")
-            return False
+            return False, "Telegram 伺服器暫時沒有回應"
+    except requests.exceptions.Timeout as e:
+        print(f"[-] Telegram timeout: {e}")
+        return False, "網路連線逾時，無法傳送 Telegram"
+    except requests.exceptions.ConnectionError as e:
+        print(f"[-] Telegram connection error: {e}")
+        return False, "網路中斷，無法連上 Telegram"
     except Exception as e:
         print(f"[-] Telegram error: {e}")
-        return False
+        return False, "Telegram 通知傳送失敗"
+
+
+def send_telegram_message(token, chat_id, message):
+    success, _ = send_telegram_message_with_status(token, chat_id, message)
+    return success
 
 CPC_PRICE_URL = "https://vipmbr.cpc.com.tw/cpcstn/listpricewebservice.asmx/getCPCMainProdListPrice"
 
@@ -303,7 +317,7 @@ def notify_current_location(fuel_level=None, avg_fuel=None, elapsed_time=None, t
     token, chat_id, source = load_telegram_credentials()
     if not token or not chat_id:
         print("[Notifier] Invalid Telegram credentials in both new and legacy config.")
-        return
+        return {"success": False, "message": "尚未設定 Telegram，無法傳送熄火通知"}
 
     print(f"[Notifier] Using Telegram credentials from: {source}")
 
@@ -351,7 +365,8 @@ def notify_current_location(fuel_level=None, avg_fuel=None, elapsed_time=None, t
                 print("[Notifier] Failed to fetch CPC prices")
 
         message = f"🚗 車輛已熄火\n{time_str}{dist_str}{fuel_str}{avg_fuel_str}{fuel_consumed_str}{fuel_cost_str}📍 位置: {lat:.6f}, {lon:.6f}{note}\n🔗 {maps_url}"
-        send_telegram_message(token, chat_id, message)
+        success, status_message = send_telegram_message_with_status(token, chat_id, message)
+        return {"success": success, "message": status_message}
     else:
         print("[GPS] 未找到 GPS 位置，發送無位置通知")
         fuel_str = f"⛽ 油量: {fuel_level:.0f}%\n" if fuel_level is not None else ""
@@ -387,7 +402,8 @@ def notify_current_location(fuel_level=None, avg_fuel=None, elapsed_time=None, t
                 print("[Notifier] Failed to fetch CPC prices")
 
         message = f"🚗 車輛已熄火（無 GPS 定位）\n{time_str}{dist_str}{fuel_str}{avg_fuel_str}{fuel_consumed_str}{fuel_cost_str}"
-        send_telegram_message(token, chat_id, message)
+        success, status_message = send_telegram_message_with_status(token, chat_id, message)
+        return {"success": success, "message": status_message}
 
 if __name__ == "__main__":
     # Test mode
