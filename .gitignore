@@ -48,3 +48,4 @@ config.json
 gps_debug.log
 mqtt_config.json
 telegram_config.json
+shutdown_mqtt_pending.json

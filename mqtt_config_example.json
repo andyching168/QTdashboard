@@ -4,5 +4,6 @@
   "username": "",
   "password": "",
   "topic": "navigation/info",
-  "publish_topic": "car/telemetry"
+  "publish_topic": "car/telemetry",
+  "shutdown_topic": "car/shutdown"
 }

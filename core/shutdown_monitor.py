@@ -326,6 +326,7 @@ class ShutdownMonitor(QObject):
     exit_app = pyqtSignal()        # 退出程式（測試模式用）
     no_signal_timeout = pyqtSignal()  # 無訊號超時
     telegram_notification_finished = pyqtSignal(bool, str)  # Telegram 熄火通知結果
+    shutdown_cancelled = pyqtSignal()  # 使用者取消關機對話框
     
     # 無電壓訊號超時時間（秒）
     NO_VOLTAGE_SIGNAL_TIMEOUT = 180  # 3 分鐘（針對從未發動的情況）
@@ -656,6 +657,7 @@ class ShutdownMonitor(QObject):
         # 也重置無訊號超時狀態，重新計時
         self.no_signal_triggered = False
         self.last_voltage_received_time = time.time()  # 重新計時
+        self.shutdown_cancelled.emit()
 
 
 # === 全域單例 ===

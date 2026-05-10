@@ -83,6 +83,7 @@ from core.utils import (
 from core.shutdown_monitor import get_shutdown_monitor
 from core.max_value_logger import get_max_value_logger
 from core.startup_progress import StartupProgressWindow
+from core.shutdown_mqtt import build_shutdown_event, publish_pending_then_current, upsert_pending_event
 
 
 class Dashboard(QWidget):
@@ -785,10 +786,15 @@ class Dashboard(QWidget):
         fuel_layout.addWidget(self.fuel_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
         fuel_layout.addWidget(self.fuel_percent_label, alignment=Qt.AlignmentFlag.AlignHCenter)
         self.fuel_card.setFixedSize(380, 380)
+
+        # 熄火總結卡片：平時隱藏，不參與左側卡片切換
+        self.shutdown_summary_card = self._create_shutdown_summary_card()
         
         # 詳細視圖狀態
         self._in_detail_view = False
         self._detail_gauge_index = -1
+        self._shutdown_summary_visible = False
+        self._shutdown_summary_previous_index = 0
         
         # 左側卡片動畫狀態
         self._left_card_animating = False
@@ -800,6 +806,7 @@ class Dashboard(QWidget):
         self.left_card_stack.addWidget(self.quad_gauge_card)    # index 0
         self.left_card_stack.addWidget(self.quad_gauge_detail)  # index 1 (詳細視圖)
         self.left_card_stack.addWidget(self.fuel_card)          # index 2
+        self.left_card_stack.addWidget(self.shutdown_summary_card)  # index 3 (熄火總結，平時隱藏)
         
         # 左側卡片指示器
         left_indicator_widget = QWidget()
@@ -1141,6 +1148,199 @@ class Dashboard(QWidget):
         self.toast_manager = ToastManager(self)
         self.toast_manager.raise_()
 
+    def _create_shutdown_summary_card(self):
+        """建立熄火時才顯示的本次行程總結卡片。"""
+        card = QWidget()
+        card.setFixedSize(380, 380)
+        card.setStyleSheet(f"""
+            QWidget {{
+                background: rgba(26, 26, 37, 0.95);
+                border: 2px solid {T('PRIMARY')};
+                border-radius: 14px;
+            }}
+            QLabel {{
+                background: transparent;
+                border: none;
+                font-family: Arial, Helvetica, sans-serif;
+            }}
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(24, 22, 24, 22)
+        layout.setSpacing(14)
+
+        title = QLabel("本次行程")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(f"""
+            color: {T('TEXT_PRIMARY')};
+            font-size: 30px;
+            font-weight: bold;
+        """)
+        layout.addWidget(title)
+
+        subtitle = QLabel("熄火總結")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setStyleSheet(f"""
+            color: {T('TEXT_SECONDARY')};
+            font-size: 18px;
+        """)
+        layout.addWidget(subtitle)
+        layout.addSpacing(8)
+
+        def make_metric(label_text):
+            row = QWidget()
+            row.setStyleSheet("background: transparent; border: none;")
+            row_layout = QVBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(4)
+
+            label = QLabel(label_text)
+            label.setStyleSheet(f"color: {T('TEXT_SECONDARY')}; font-size: 16px;")
+
+            value = QLabel("--")
+            value.setStyleSheet(f"""
+                color: {T('PRIMARY')};
+                font-size: 34px;
+                font-weight: bold;
+            """)
+
+            row_layout.addWidget(label)
+            row_layout.addWidget(value)
+            layout.addWidget(row)
+            return value
+
+        self.shutdown_summary_time_label = make_metric("行駛時間")
+        self.shutdown_summary_distance_label = make_metric("本次距離")
+        self.shutdown_summary_avg_fuel_label = make_metric("平均油耗")
+
+        layout.addStretch()
+        return card
+
+    def _refresh_shutdown_summary_card(self):
+        """更新熄火總結卡片內容。"""
+        trip_info = {}
+        if hasattr(self, "trip_info_card") and hasattr(self.trip_info_card, "get_trip_info"):
+            try:
+                trip_info = self.trip_info_card.get_trip_info()
+            except Exception as e:
+                print(f"[ShutdownSummary] 讀取行程資訊失敗: {e}")
+
+        elapsed_time = trip_info.get("elapsed_time") or "--"
+        trip_distance = trip_info.get("trip_distance")
+        avg_fuel = trip_info.get("avg_fuel")
+
+        distance_text = f"{trip_distance:.1f} km" if trip_distance is not None and trip_distance > 0 else "-- km"
+        avg_fuel_text = f"{avg_fuel:.1f} L/100km" if avg_fuel is not None and avg_fuel > 0 else "-- L/100km"
+
+        self.shutdown_summary_time_label.setText(elapsed_time)
+        self.shutdown_summary_distance_label.setText(distance_text)
+        self.shutdown_summary_avg_fuel_label.setText(avg_fuel_text)
+
+    def _show_shutdown_summary_card(self):
+        """熄火對話框顯示時，臨時切到隱藏的行程總結卡片。"""
+        if not hasattr(self, "shutdown_summary_card"):
+            return
+
+        if not self._shutdown_summary_visible:
+            self._shutdown_summary_previous_index = self.left_card_stack.currentIndex()
+            self._shutdown_summary_visible = True
+
+        if self._in_detail_view:
+            self._in_detail_view = False
+            self._detail_gauge_index = -1
+            if hasattr(self, "quad_gauge_card"):
+                self.quad_gauge_card.clear_focus()
+
+        self._refresh_shutdown_summary_card()
+        self.left_card_stack.setCurrentWidget(self.shutdown_summary_card)
+        for indicator in self.left_indicators:
+            indicator.setVisible(False)
+        print("[ShutdownSummary] 顯示本次行程總結")
+
+    def _hide_shutdown_summary_card(self):
+        """關機對話框關閉時，隱藏行程總結並回到原本左側卡片。"""
+        if not getattr(self, "_shutdown_summary_visible", False):
+            return
+
+        self._shutdown_summary_visible = False
+        restore_index = self._shutdown_summary_previous_index
+        if restore_index not in (0, 2):
+            restore_index = 0
+
+        self.left_card_stack.setCurrentIndex(restore_index)
+        self.current_left_index = restore_index
+        for indicator in self.left_indicators:
+            indicator.setVisible(True)
+        self._update_left_indicators()
+        print("[ShutdownSummary] 隱藏本次行程總結")
+
+    def _build_shutdown_mqtt_event(self):
+        """建立熄火 MQTT event。"""
+        trip_info = {}
+        if hasattr(self, "trip_info_card") and hasattr(self.trip_info_card, "get_trip_info"):
+            try:
+                trip_info = self.trip_info_card.get_trip_info()
+            except Exception as e:
+                print(f"[ShutdownMQTT] 讀取行程資訊失敗: {e}")
+
+        return build_shutdown_event(
+            lat=self.gps_lat,
+            lon=self.gps_lon,
+            location_fixed=getattr(self, "is_gps_fixed", False),
+            elapsed_time=trip_info.get("elapsed_time"),
+            trip_distance=trip_info.get("trip_distance"),
+            avg_fuel=trip_info.get("avg_fuel"),
+        )
+
+    def _publish_shutdown_mqtt_event(self):
+        """熄火時送出 retained MQTT event；失敗會留在本地待下次補送。"""
+        if self._shutdown_mqtt_in_progress:
+            print("[ShutdownMQTT] 發送中，略過重複請求")
+            return
+
+        event = self._build_shutdown_mqtt_event()
+        upsert_pending_event(event)
+
+        config_file = get_mqtt_config_path()
+        if not os.path.exists(config_file):
+            print("[ShutdownMQTT] 未設定 MQTT，已先儲存熄火紀錄")
+            self.show_toast("MQTT 尚未設定，熄火紀錄已先儲存", "warning", 4500)
+            return
+
+        if not hasattr(self, "mqtt_client") or self.mqtt_client is None or not self._mqtt_connected:
+            print("[ShutdownMQTT] MQTT 尚未連線，已先儲存熄火紀錄")
+            self.show_toast("MQTT 尚未連線，熄火紀錄已先儲存", "warning", 4500)
+            return
+
+        self._shutdown_mqtt_in_progress = True
+
+        def _worker():
+            try:
+                with open(config_file, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                result = publish_pending_then_current(self.mqtt_client, config, event)
+                sent_count = result.get("sent_count", 0)
+                remaining_count = result.get("remaining_count", 0)
+
+                if result.get("current_sent"):
+                    if sent_count > 1:
+                        self.show_toast(f"已補送 {sent_count - 1} 筆紀錄，並送出本次熄火紀錄", "success", 4500)
+                    else:
+                        self.show_toast("本次熄火紀錄已送出", "success", 3500)
+                else:
+                    self.show_toast("MQTT 傳送失敗，熄火紀錄已先儲存", "warning", 4500)
+
+                if remaining_count:
+                    print(f"[ShutdownMQTT] 尚有 {remaining_count} 筆 pending 未送出")
+            except Exception as e:
+                print(f"[ShutdownMQTT] 發送錯誤: {e}")
+                self.show_toast("MQTT 傳送失敗，熄火紀錄已先儲存", "warning", 4500)
+            finally:
+                self._shutdown_mqtt_in_progress = False
+
+        import threading
+        threading.Thread(target=_worker, daemon=True).start()
+
     def show_toast(self, message: str, level: str = "info", duration_ms: int = 3000):
         """顯示右上角短暫通知，可安全地從背景執行緒呼叫。"""
         self.signal_show_toast.emit(str(message), str(level), int(duration_ms))
@@ -1164,6 +1364,7 @@ class Dashboard(QWidget):
         # 連接無電壓訊號超時信號（3 分鐘沒收到 OBD 電壓數據）
         self._shutdown_monitor.no_signal_timeout.connect(self._on_no_voltage_signal_timeout)
         self._shutdown_monitor.telegram_notification_finished.connect(self._on_telegram_notification_finished)
+        self._shutdown_monitor.shutdown_cancelled.connect(self._hide_shutdown_summary_card)
         
         # 連接轉速信號到關機監控器（用於判斷是否低於 300 RPM）
         self.signal_update_rpm.connect(lambda rpm: self._shutdown_monitor.update_rpm(rpm * 1000))
@@ -1183,6 +1384,8 @@ class Dashboard(QWidget):
     def _on_power_lost(self):
         """電源中斷時顯示關機對話框"""
         print("⚠️ 偵測到電源中斷，顯示關機對話框")
+        self._show_shutdown_summary_card()
+        self._publish_shutdown_mqtt_event()
         
         # 釋放 GPS 資源，讓 location_notifier 可以接手
         if hasattr(self, 'gps_monitor_thread') and self.gps_monitor_thread is not None:
@@ -1193,6 +1396,7 @@ class Dashboard(QWidget):
     def _on_power_restored(self):
         """電源恢復"""
         print("✅ 電源已恢復")
+        self._hide_shutdown_summary_card()
     
     def _on_no_voltage_signal_timeout(self):
         """無電壓訊號超時（3 分鐘沒收到 OBD 電壓數據）
@@ -1202,6 +1406,8 @@ class Dashboard(QWidget):
         """
         print("⚠️ 無電壓訊號超時（3 分鐘未收到 OBD 電壓數據）")
         print("   可能原因: 儀表開機但車輛從未發動，OBD 無回應")
+        self._show_shutdown_summary_card()
+        self._publish_shutdown_mqtt_event()
         
         # 釋放 GPS 資源
         if hasattr(self, 'gps_monitor_thread') and self.gps_monitor_thread is not None:
@@ -1294,6 +1500,7 @@ class Dashboard(QWidget):
         self._spotify_integration = None  # Spotify 整合實例引用
         self._mqtt_connected = False
         self._mqtt_reconnect_timer = None
+        self._shutdown_mqtt_in_progress = False
         
         # 引擎狀態追蹤 (用於 MQTT status)
         self._engine_status = False  # 引擎運轉狀態
@@ -3090,7 +3297,7 @@ class Dashboard(QWidget):
     def _switch_left_card_forward(self):
         """向前切換左側卡片（跳過詳細視圖）"""
         # 如果在詳細視圖中或動畫中，不處理
-        if self._in_detail_view or self._left_card_animating:
+        if self._shutdown_summary_visible or self._in_detail_view or self._left_card_animating:
             return
         
         current = self.left_card_stack.currentIndex()
@@ -3113,7 +3320,7 @@ class Dashboard(QWidget):
             direction: 1 為下一張，-1 為上一張
         """
         # 如果在詳細視圖中或動畫中，不處理
-        if self._in_detail_view or self._left_card_animating:
+        if self._shutdown_summary_visible or self._in_detail_view or self._left_card_animating:
             return
         
         # 清除四宮格焦點
@@ -3479,6 +3686,10 @@ class Dashboard(QWidget):
         - 可從 GPIO 按鈕回調呼叫此方法
         - 也可從鍵盤（F1 鍵）觸發
         """
+        if self._shutdown_summary_visible:
+            print("熄火總結顯示中，按鈕A不作用")
+            return
+
         # 如果在詳細視圖中，不處理
         if self._in_detail_view:
             print("在詳細視圖中，按鈕A不作用")
@@ -3514,6 +3725,10 @@ class Dashboard(QWidget):
         - 可從 GPIO 按鈕長按回調呼叫此方法
         - 也可從鍵盤（Shift+F1）觸發
         """
+        if self._shutdown_summary_visible:
+            print("熄火總結顯示中，按鈕A長按不作用")
+            return
+
         # 如果在詳細視圖中，長按返回
         if self._in_detail_view:
             self._hide_gauge_detail()
