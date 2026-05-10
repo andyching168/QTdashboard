@@ -52,7 +52,7 @@ from ui.mqtt_settings import MQTTSettingsSignals, MQTTSettingsDialog
 from ui.telegram_settings import TelegramSettingsDialog
 from ui.analog_gauge import AnalogGauge
 from ui.gauge_card import DigitalGaugeCard, QuadGaugeCard, QuadGaugeDetailView
-from ui.common import GaugeStyle, RadarOverlay, ClickableLabel, MarqueeLabel
+from ui.common import GaugeStyle, RadarOverlay, ClickableLabel, MarqueeLabel, ToastManager
 from ui.splash_screen import SplashScreen
 from ui.door_card import DoorStatusCard
 from ui.trip_card import OdometerCard, OdometerCardWide, TripCard, TripCardWide, TripInfoCardWide
@@ -117,6 +117,9 @@ class Dashboard(QWidget):
     
     # MQTT telemetry Signal (用於跨執行緒啟動 timer)
     signal_start_mqtt_telemetry = pyqtSignal()
+    
+    # Toast notification Signal (可從背景執行緒安全觸發)
+    signal_show_toast = pyqtSignal(str, str, int)
 
     def __init__(self, skip_gps=False):
         super().__init__()
@@ -181,6 +184,9 @@ class Dashboard(QWidget):
         
         # 連接 MQTT telemetry Signal
         self.signal_start_mqtt_telemetry.connect(self._start_mqtt_telemetry_timer)
+        
+        # 連接 Toast Signal
+        self.signal_show_toast.connect(self._slot_show_toast)
         
         # 適配 1920x480 螢幕
         self.setFixedSize(1920, 480)
@@ -1130,6 +1136,22 @@ class Dashboard(QWidget):
         main_layout.addStretch(1)  # 所有彈性空間都在左邊
         main_layout.addWidget(center_section)
         main_layout.addWidget(right_section)
+
+        # === 右上角 Toast 通知層 ===
+        self.toast_manager = ToastManager(self)
+        self.toast_manager.raise_()
+
+    def show_toast(self, message: str, level: str = "info", duration_ms: int = 3000):
+        """顯示右上角短暫通知，可安全地從背景執行緒呼叫。"""
+        self.signal_show_toast.emit(str(message), str(level), int(duration_ms))
+
+    @pyqtSlot(str, str, int)
+    def _slot_show_toast(self, message: str, level: str = "info", duration_ms: int = 3000):
+        """在主執行緒建立 toast 通知。"""
+        if not hasattr(self, "toast_manager") or self.toast_manager is None:
+            return
+        self.toast_manager.show_toast(message, level=level, duration_ms=duration_ms)
+        self.toast_manager.raise_()
     
     def _init_shutdown_monitor(self):
         """初始化關機監控器"""
@@ -1207,6 +1229,8 @@ class Dashboard(QWidget):
             self.brightness_overlay.setStyleSheet(f"background: rgba(0, 0, 0, {alpha});")
             self.brightness_overlay.show()
             self.brightness_overlay.raise_()
+            if hasattr(self, "toast_manager"):
+                self.toast_manager.raise_()
             print(f"[亮度] 設定為 {100 - level * 25}%")
     
     def cycle_brightness(self):
@@ -1743,8 +1767,10 @@ class Dashboard(QWidget):
         if self.is_offline != was_offline:
             if self.is_offline:
                 print("[網路] ⚠️ 網路已斷線")
+                self.show_toast("網路已斷線", "warning", 3500)
             else:
                 print("[網路] ✅ 網路已恢復連線")
+                self.show_toast("網路已恢復連線", "success", 3000)
                 # 網路恢復時嘗試重新連接服務
                 self._on_network_restored()
         

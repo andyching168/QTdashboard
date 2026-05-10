@@ -1,7 +1,10 @@
 from PyQt6.QtWidgets import QWidget, QLabel
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QRectF
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QRectF, QRect, QEvent
 from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QFont, QPixmap
 import weakref
+import time
+
+from ui.theme import T
 
 
 class GaugeStyle:
@@ -291,3 +294,153 @@ class MarqueeLabel(QLabel):
                 self._timer.deleteLater()
         except RuntimeError:
             pass
+
+
+class ToastManager(QWidget):
+    """用 paintEvent 繪製的 toast 覆蓋層，避免浮動 child widget 疊層問題。"""
+
+    COLORS = {
+        "info": ("#1d4ed8", "i"),
+        "success": ("#16a34a", "✓"),
+        "warning": ("#d97706", "!"),
+        "error": ("#dc2626", "×"),
+    }
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent;")
+        self._toasts = []
+        self._toast_rects = []
+        self._timer = QTimer(self)
+        self._timer.setInterval(33)
+        self._timer.timeout.connect(self._tick)
+        if parent is not None:
+            parent.installEventFilter(self)
+            self.update_position()
+            self.show()
+
+    def eventFilter(self, obj, event):
+        if obj is self.parent() and event.type() in (QEvent.Type.Resize, QEvent.Type.Show):
+            self.update_position()
+        return super().eventFilter(obj, event)
+
+    def update_position(self):
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        self.setGeometry(0, 0, parent.width(), parent.height())
+        self.raise_()
+        self.update()
+
+    def show_toast(self, message, level="info", duration_ms=3000):
+        if not self.isVisible():
+            self.show()
+        now = time.monotonic()
+        self._toasts.append({
+            "message": str(message),
+            "level": level if level in self.COLORS else "info",
+            "duration": max(800, int(duration_ms)) / 1000.0,
+            "created_at": now,
+        })
+        self.update_position()
+        if not self._timer.isActive():
+            self._timer.start()
+        print(f"[Toast] 顯示通知: {message} ({level}, {duration_ms}ms)")
+        return True
+
+    def _tick(self):
+        now = time.monotonic()
+        before = len(self._toasts)
+        self._toasts = [
+            toast for toast in self._toasts
+            if now - toast["created_at"] < toast["duration"] + 0.25
+        ]
+        if self._toasts:
+            self.update()
+        else:
+            self._timer.stop()
+            if before:
+                self.update()
+
+    def paintEvent(self, event):
+        if not self._toasts:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        now = time.monotonic()
+        margin = 18
+        spacing = 10
+        width = 360
+        x = self.width() - width - margin
+        y = margin
+        self._toast_rects = []
+
+        for toast in self._toasts:
+            message = toast["message"]
+            elapsed = now - toast["created_at"]
+            duration = toast["duration"]
+            if elapsed < 0.18:
+                opacity = elapsed / 0.18
+            elif elapsed > duration:
+                opacity = max(0.0, 1.0 - (elapsed - duration) / 0.25)
+            else:
+                opacity = 1.0
+
+            color_hex, icon_text = self.COLORS[toast["level"]]
+            accent = QColor(color_hex)
+            bg = QColor(20, 22, 30, int(238 * opacity))
+            border = QColor(accent)
+            border.setAlpha(int(255 * opacity))
+            text_color = QColor(T('TEXT_PRIMARY'))
+            text_color.setAlpha(int(255 * opacity))
+
+            font = QFont("Arial", 18)
+            font.setBold(True)
+            painter.setFont(font)
+            fm = painter.fontMetrics()
+            text_rect = fm.boundingRect(
+                QRect(0, 0, width - 72, 200),
+                Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignLeft,
+                message,
+            )
+            height = max(54, text_rect.height() + 24)
+            rect = QRect(x, y, width, height)
+            self._toast_rects.append(rect)
+
+            path = QPainterPath()
+            path.addRoundedRect(QRectF(rect), 8, 8)
+            painter.fillPath(path, bg)
+
+            painter.setPen(QPen(border, 1))
+            painter.drawPath(path)
+            painter.fillRect(rect.x(), rect.y() + 1, 5, rect.height() - 2, border)
+
+            painter.setPen(text_color)
+            icon_font = QFont("Arial", 22)
+            icon_font.setBold(True)
+            painter.setFont(icon_font)
+            painter.drawText(QRect(rect.x() + 14, rect.y() + 12, 28, 28), Qt.AlignmentFlag.AlignCenter, icon_text)
+
+            painter.setFont(font)
+            painter.drawText(
+                QRect(rect.x() + 52, rect.y() + 12, width - 72, height - 24),
+                Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                message,
+            )
+
+            y += height + spacing
+
+        painter.end()
+
+    def mousePressEvent(self, event):
+        for index, rect in enumerate(self._toast_rects):
+            if rect.contains(event.pos()):
+                if index < len(self._toasts):
+                    self._toasts.pop(index)
+                    self.update()
+                return
+        super().mousePressEvent(event)

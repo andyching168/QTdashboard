@@ -1217,9 +1217,9 @@ class ControlPanel(QWidget):
         
         scale = min(parent_width / 1920, parent_height / 480)
         
-        dialog_width = int(1400 * scale)
+        dialog_width = int(1600 * scale)
         dialog_height = int(260 * scale)
-        btn_width = int(280 * scale)
+        btn_width = int(250 * scale)
         btn_height = int(80 * scale)
         title_font_size = max(12, int(28 * scale))
         btn_font_size = max(10, int(18 * scale))
@@ -1314,6 +1314,19 @@ class ControlPanel(QWidget):
 
             dialog.accept()
             QTimer.singleShot(0, _show_theme_dialog)
+
+        # Toast 通知測試
+        def test_toast():
+            parent = self.parent()
+
+            def _show_test_toast():
+                if parent and hasattr(parent, 'show_toast'):
+                    if hasattr(parent, 'hide_control_panel'):
+                        parent.hide_control_panel()
+                    parent.show_toast("這是一則通知測試", "info", 3000)
+
+            dialog.accept()
+            QTimer.singleShot(120, _show_test_toast)
         
         options_layout = QHBoxLayout()
         options_layout.setSpacing(int(20 * scale))
@@ -1322,6 +1335,7 @@ class ControlPanel(QWidget):
         options_layout.addWidget(create_settings_btn("Spotify 設定", "🎵", "設定 Spotify 音樂播放", open_spotify))
         options_layout.addWidget(create_settings_btn("Telegram 設定", "✈", "設定 Telegram 通知", open_telegram))
         options_layout.addWidget(create_settings_btn("主題強調色設定", "🎨", "自訂 UI 強調色", open_theme))
+        options_layout.addWidget(create_settings_btn("通知測試", "🔔", "測試右上角 toast 通知", test_toast))
         options_layout.addStretch()
         layout.addLayout(options_layout)
 
@@ -1794,6 +1808,4 @@ class ControlPanel(QWidget):
         parent = self.parent()
         if parent and hasattr(parent, 'hide_control_panel'):
             parent.hide_control_panel()  # type: ignore
-
-
 
