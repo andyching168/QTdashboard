@@ -49,3 +49,6 @@ gps_debug.log
 mqtt_config.json
 telegram_config.json
 shutdown_mqtt_pending.json
+shutdown_mqtt_pending.json.migrated
+data/dashboard_history.db
+data/dashboard_history.db-*

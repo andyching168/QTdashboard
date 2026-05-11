@@ -1,12 +1,16 @@
 import json
 import os
 import re
+import sqlite3
 import uuid
 from datetime import datetime
 
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+DB_PATH = os.path.join(DATA_DIR, "dashboard_history.db")
+LEGACY_PENDING_FILE = os.path.join(PROJECT_ROOT, "shutdown_mqtt_pending.json")
 DEFAULT_SHUTDOWN_TOPIC_BASE = "car/shutdown"
-PENDING_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shutdown_mqtt_pending.json")
 
 
 def now_iso():
@@ -19,45 +23,202 @@ def make_event_id(event_time=None):
     return f"engine-off-{safe_time}-{uuid.uuid4().hex[:8]}"
 
 
-def load_pending_events(path=PENDING_FILE):
-    if not os.path.exists(path):
-        return []
+def _connect(db_path=DB_PATH):
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db(db_path=DB_PATH):
+    with _connect(db_path) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS shutdown_events (
+                event_id TEXT PRIMARY KEY,
+                event_time TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                source TEXT,
+                lat REAL,
+                lon REAL,
+                location_fixed INTEGER NOT NULL DEFAULT 0,
+                elapsed_time TEXT,
+                distance_km REAL,
+                avg_fuel_l_100km REAL,
+                payload_json TEXT NOT NULL,
+                mqtt_sent INTEGER NOT NULL DEFAULT 0,
+                mqtt_sent_at TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_shutdown_events_mqtt_sent
+            ON shutdown_events (mqtt_sent, event_time)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_shutdown_events_avg_fuel
+            ON shutdown_events (avg_fuel_l_100km)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_shutdown_events_distance
+            ON shutdown_events (distance_km)
+        """)
+
+
+def _event_to_row(event):
+    location = event.get("location") or {}
+    trip = event.get("trip") or {}
+    return {
+        "event_id": event.get("event_id"),
+        "event_time": event.get("event_time") or now_iso(),
+        "updated_at": event.get("updated_at") or now_iso(),
+        "source": event.get("source"),
+        "lat": location.get("lat"),
+        "lon": location.get("lon"),
+        "location_fixed": 1 if location.get("fixed") else 0,
+        "elapsed_time": trip.get("elapsed_time"),
+        "distance_km": trip.get("distance_km"),
+        "avg_fuel_l_100km": trip.get("avg_fuel_l_100km"),
+        "payload_json": json.dumps(event, ensure_ascii=False, separators=(",", ":")),
+        "created_at": now_iso(),
+    }
+
+
+def _row_to_event(row):
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        event = json.loads(row["payload_json"])
+    except Exception:
+        event = {}
+
+    event["event_id"] = row["event_id"]
+    event["event_time"] = row["event_time"]
+    event["updated_at"] = row["updated_at"]
+    event["source"] = row["source"]
+    event["location"] = {
+        "lat": row["lat"],
+        "lon": row["lon"],
+        "fixed": bool(row["location_fixed"]),
+    }
+    event["trip"] = {
+        "elapsed_time": row["elapsed_time"],
+        "distance_km": row["distance_km"],
+        "avg_fuel_l_100km": row["avg_fuel_l_100km"],
+    }
+    return event
+
+
+def save_shutdown_event(event, db_path=DB_PATH):
+    init_db(db_path)
+    row = _event_to_row(event)
+    with _connect(db_path) as conn:
+        conn.execute("""
+            INSERT INTO shutdown_events (
+                event_id, event_time, updated_at, source, lat, lon, location_fixed,
+                elapsed_time, distance_km, avg_fuel_l_100km, payload_json,
+                mqtt_sent, mqtt_sent_at, created_at
+            )
+            VALUES (
+                :event_id, :event_time, :updated_at, :source, :lat, :lon, :location_fixed,
+                :elapsed_time, :distance_km, :avg_fuel_l_100km, :payload_json,
+                0, NULL, :created_at
+            )
+            ON CONFLICT(event_id) DO UPDATE SET
+                updated_at=excluded.updated_at,
+                source=excluded.source,
+                lat=excluded.lat,
+                lon=excluded.lon,
+                location_fixed=excluded.location_fixed,
+                elapsed_time=excluded.elapsed_time,
+                distance_km=excluded.distance_km,
+                avg_fuel_l_100km=excluded.avg_fuel_l_100km,
+                payload_json=excluded.payload_json
+        """, row)
+
+
+def upsert_pending_event(event, db_path=DB_PATH):
+    save_shutdown_event(event, db_path)
+    return get_unsent_events(db_path)
+
+
+def get_unsent_events(db_path=DB_PATH, limit=100):
+    init_db(db_path)
+    with _connect(db_path) as conn:
+        rows = conn.execute("""
+            SELECT * FROM shutdown_events
+            WHERE mqtt_sent = 0
+            ORDER BY event_time ASC
+            LIMIT ?
+        """, (limit,)).fetchall()
+    return [_row_to_event(row) for row in rows]
+
+
+def mark_events_sent(event_ids, db_path=DB_PATH):
+    event_ids = [event_id for event_id in event_ids if event_id]
+    if not event_ids:
+        return
+    init_db(db_path)
+    sent_at = now_iso()
+    placeholders = ",".join("?" for _ in event_ids)
+    with _connect(db_path) as conn:
+        conn.execute(
+            f"""
+            UPDATE shutdown_events
+            SET mqtt_sent = 1, mqtt_sent_at = ?
+            WHERE event_id IN ({placeholders})
+            """,
+            [sent_at, *event_ids],
+        )
+
+
+def count_unsent_events(db_path=DB_PATH):
+    init_db(db_path)
+    with _connect(db_path) as conn:
+        row = conn.execute("SELECT COUNT(*) AS count FROM shutdown_events WHERE mqtt_sent = 0").fetchone()
+    return int(row["count"]) if row else 0
+
+
+def get_best_fuel_events(db_path=DB_PATH, min_distance_km=3.0, limit=10):
+    init_db(db_path)
+    with _connect(db_path) as conn:
+        rows = conn.execute("""
+            SELECT * FROM shutdown_events
+            WHERE distance_km >= ?
+              AND avg_fuel_l_100km IS NOT NULL
+              AND avg_fuel_l_100km > 0
+            ORDER BY avg_fuel_l_100km ASC, distance_km DESC
+            LIMIT ?
+        """, (min_distance_km, limit)).fetchall()
+    return [_row_to_event(row) for row in rows]
+
+
+def migrate_legacy_pending(db_path=DB_PATH, legacy_path=LEGACY_PENDING_FILE):
+    if not os.path.exists(legacy_path):
+        return 0
+
+    try:
+        with open(legacy_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        if isinstance(data, list):
-            return [event for event in data if isinstance(event, dict)]
     except Exception as e:
-        print(f"[ShutdownMQTT] 讀取 pending 失敗: {e}")
-    return []
+        print(f"[ShutdownMQTT] 舊 pending 讀取失敗: {e}")
+        return 0
 
+    if not isinstance(data, list):
+        return 0
 
-def save_pending_events(events, path=PENDING_FILE):
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(events, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"[ShutdownMQTT] 儲存 pending 失敗: {e}")
+    migrated = 0
+    for event in data:
+        if isinstance(event, dict) and event.get("event_id"):
+            save_shutdown_event(event, db_path)
+            migrated += 1
 
+    if migrated:
+        backup_path = f"{legacy_path}.migrated"
+        try:
+            os.replace(legacy_path, backup_path)
+            print(f"[ShutdownMQTT] 已匯入 {migrated} 筆舊 pending，原檔移到 {backup_path}")
+        except Exception as e:
+            print(f"[ShutdownMQTT] 舊 pending 匯入完成，但移動原檔失敗: {e}")
 
-def upsert_pending_event(event, path=PENDING_FILE):
-    pending = load_pending_events(path)
-    event_id = event.get("event_id")
-    if event_id:
-        pending = [item for item in pending if item.get("event_id") != event_id]
-    pending.append(event)
-    save_pending_events(pending, path)
-    return pending
-
-
-def remove_pending_events(sent_event_ids, path=PENDING_FILE):
-    sent_event_ids = set(sent_event_ids)
-    pending = [
-        event for event in load_pending_events(path)
-        if event.get("event_id") not in sent_event_ids
-    ]
-    save_pending_events(pending, path)
-    return pending
+    return migrated
 
 
 def get_shutdown_topic_base(config):
@@ -120,9 +281,12 @@ def _publish_one(client, config, event, timeout=5):
     return True
 
 
-def publish_pending_then_current(client, config, current_event, path=PENDING_FILE):
-    pending = upsert_pending_event(current_event, path)
+def publish_pending_then_current(client, config, current_event, db_path=DB_PATH):
+    migrate_legacy_pending(db_path)
+    save_shutdown_event(current_event, db_path)
+
     sent_ids = []
+    pending = get_unsent_events(db_path)
 
     for event in pending:
         if _publish_one(client, config, event):
@@ -130,11 +294,13 @@ def publish_pending_then_current(client, config, current_event, path=PENDING_FIL
         else:
             break
 
-    remaining = remove_pending_events(sent_ids, path)
+    mark_events_sent(sent_ids, db_path)
+    remaining_count = count_unsent_events(db_path)
     current_sent = current_event.get("event_id") in sent_ids
+
     return {
-        "success": current_sent and not remaining,
+        "success": current_sent and remaining_count == 0,
         "sent_count": len(sent_ids),
-        "remaining_count": len(remaining),
+        "remaining_count": remaining_count,
         "current_sent": current_sent,
     }
