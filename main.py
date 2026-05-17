@@ -1406,8 +1406,7 @@ class Dashboard(QWidget):
         """
         print("⚠️ 無電壓訊號超時（3 分鐘未收到 OBD 電壓數據）")
         print("   可能原因: 儀表開機但車輛從未發動，OBD 無回應")
-        self._show_shutdown_summary_card()
-        self._publish_shutdown_mqtt_event()
+        print("   全程未發動，不記錄行程、不發送熄火 MQTT")
         
         # 釋放 GPS 資源
         if hasattr(self, 'gps_monitor_thread') and self.gps_monitor_thread is not None:
