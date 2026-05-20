@@ -478,6 +478,11 @@ class GPSMonitorThread(QThread):
             self._external_gps_timestamp = None
             self.gps_source_changed.emit(True, True)  # True = internal, True = fresh
             logger.info("[GPS] Reverted to internal GPS")
+        elif self._using_external_gps:
+            # 外部 MQTT GPS 使用中時，內部 GPS 的 searching 狀態不覆蓋外部定位。
+            # 否則內部 NMEA 未定位與 MQTT 注入會來回切換，造成 UI 圖示閃爍。
+            logger.debug("[GPS] Ignoring internal SEARCHING while external GPS is active")
+            return
         
         # 只在 fix 狀態改變時發射信號
         if is_fixed != self._last_fix_status:
@@ -715,5 +720,4 @@ class RadarMonitorThread(QThread):
     def stop(self):
         self.running = False
         self.wait()
-
 
