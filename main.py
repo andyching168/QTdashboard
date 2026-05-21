@@ -475,6 +475,32 @@ class Dashboard(QWidget):
         left_container.setFixedWidth(480)  # 1920 * 0.25 = 480 (1/4 螢幕寬)
         left_container.setStyleSheet("background: transparent;")
         
+        # 方向燈 style 常數（預先建立，避免重複字串建構）
+        self._style_turn_active = """
+            QLabel {
+                color: #00FF00;
+                font-size: 28px;
+                font-weight: bold;
+                background: transparent;
+                border: 2px solid #000000;
+                border-radius: 8px;
+            }
+        """
+        self._style_turn_inactive = """
+            QLabel {
+                color: #2a2a2a;
+                font-size: 28px;
+                font-weight: bold;
+                background: transparent;
+                border: 2px solid #2a2a2a;
+                border-radius: 8px;
+            }
+        """
+
+        # 方向燈 style 狀態快取（避免重複 setStyleSheet）
+        self._left_indicator_active = None
+        self._right_indicator_active = None
+        
         # 漸層條使用 QPainter 實作的 TurnSignalBar
         self.left_gradient_bar = TurnSignalBar("left", left_container)
         self.left_gradient_bar.setGeometry(0, 5, 480, 40)  # 整個左側 1/4 區域
@@ -673,48 +699,23 @@ class Dashboard(QWidget):
         #     self.update_turn_signal_style()
     
     def update_turn_signal_style(self):
-        """更新方向燈的視覺樣式 - 使用 QPainter 實作，避免 CSS 效能瓶頸"""
-        # 方向燈圖標樣式（圖標仍使用 CSS，因為只在狀態改變時更新一次）
-        indicator_inactive = """
-            QLabel {
-                color: #2a2a2a;
-                font-size: 28px;
-                font-weight: bold;
-                background: transparent;
-                border: 2px solid #2a2a2a;
-                border-radius: 8px;
-            }
-        """
+        """更新方向燈的視覺樣式 - 使用狀態快取避免重複 setStyleSheet"""
+        # === 左燈：只在狀態改變時更新 ===
+        left_should_be_active = self.left_turn_on
+        if self._left_indicator_active != left_should_be_active:
+            self._left_indicator_active = left_should_be_active
+            style = self._style_turn_active if left_should_be_active else self._style_turn_inactive
+            self.left_turn_indicator.setStyleSheet(style)
         
-        indicator_active = """
-            QLabel {
-                color: #00FF00;
-                font-size: 28px;
-                font-weight: bold;
-                background: transparent;
-                border: 2px solid #000000;
-                border-radius: 8px;
-            }
-        """
+        # === 右燈：只在狀態改變時更新 ===
+        right_should_be_active = self.right_turn_on
+        if self._right_indicator_active != right_should_be_active:
+            self._right_indicator_active = right_should_be_active
+            style = self._style_turn_active if right_should_be_active else self._style_turn_inactive
+            self.right_turn_indicator.setStyleSheet(style)
         
-        # === 左轉燈 ===
-        # 圖標的亮滅只看 left_turn_on，不受動畫影響
-        if self.left_turn_on:
-            self.left_turn_indicator.setStyleSheet(indicator_active)
-        else:
-            self.left_turn_indicator.setStyleSheet(indicator_inactive)
-        
-        # 漸層條使用 QPainter 繪製，直接設定 gradient_pos
+        # 漸層條（TurnSignalBar 已有內部快取，保持不變）
         self.left_gradient_bar.set_gradient_pos(self.left_gradient_pos)
-        
-        # === 右轉燈 ===
-        # 圖標的亮滅只看 right_turn_on，不受動畫影響
-        if self.right_turn_on:
-            self.right_turn_indicator.setStyleSheet(indicator_active)
-        else:
-            self.right_turn_indicator.setStyleSheet(indicator_inactive)
-        
-        # 漸層條使用 QPainter 繪製，直接設定 gradient_pos
         self.right_gradient_bar.set_gradient_pos(self.right_gradient_pos)
 
     def init_ui(self):
@@ -1554,7 +1555,7 @@ class Dashboard(QWidget):
         self.time_timer.start(1000)
         
         # 啟動方向燈動畫 Timer
-        self.animation_timer.start(16)  # 約 60 FPS
+        # self.animation_timer.start(16)  # 已改為事件驅動，不再需要 60FPS timer
         
         # 啟動速限閃爍 Timer
         self.speed_limit_timer = QTimer()
@@ -2919,50 +2920,38 @@ class Dashboard(QWidget):
         
         RPI4 優化：收到 CAN 訊號時立即更新 UI，不等待 animation_timer
         """
-        # 方向燈剛啟動時收起控制面板（狀態從 off 變成 on）
-        # 注意：雙閃燈 (both_on) 不收起控制面板，因為通常是停車時使用
         prev_left = self.left_turn_on
         prev_right = self.right_turn_on
         
+        # 方向燈啟動時收起控制面板
+        # 注意：雙閃燈 (both_on) 不收起控制面板，因為通常是停車時使用
         if state == "left_on" and not prev_left and self.panel_visible:
             self.hide_control_panel()
         elif state == "right_on" and not prev_right and self.panel_visible:
             self.hide_control_panel()
-        # 雙閃燈 (both_on) 不收起控制面板
         
+        # 更新狀態
         if state == "left_on":
             self.left_turn_on = True
             self.right_turn_on = False
-            # RPI4 優化：立即更新漸層位置和樣式
-            self.left_gradient_pos = 1.0
-            self.update_turn_signal_style()
         elif state == "left_off":
             self.left_turn_on = False
-            # 熄滅動畫由 animation_timer 處理
         elif state == "right_on":
             self.right_turn_on = True
             self.left_turn_on = False
-            # RPI4 優化：立即更新漸層位置和樣式
-            self.right_gradient_pos = 1.0
-            self.update_turn_signal_style()
         elif state == "right_off":
             self.right_turn_on = False
-            # 熄滅動畫由 animation_timer 處理
         elif state == "both_on":
             self.left_turn_on = True
             self.right_turn_on = True
-            # RPI4 優化：立即更新漸層位置和樣式
-            self.left_gradient_pos = 1.0
-            self.right_gradient_pos = 1.0
-            self.update_turn_signal_style()
-        elif state == "both_off":
+        elif state in ("both_off", "off"):
             self.left_turn_on = False
             self.right_turn_on = False
-            # 熄滅動畫由 animation_timer 處理
-        elif state == "off":
-            self.left_turn_on = False
-            self.right_turn_on = False
-            # 熄滅動畫由 animation_timer 處理
+        
+        # 立即更新 gradient pos 和 style（不再依賴 animation_timer）
+        self.left_gradient_pos = 1.0 if self.left_turn_on else 0.0
+        self.right_gradient_pos = 1.0 if self.right_turn_on else 0.0
+        self.update_turn_signal_style()
 
     # === Spotify Slots ===
     @pyqtSlot(str, str, str)

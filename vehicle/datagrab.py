@@ -527,6 +527,9 @@ def unified_receiver(bus, db, signals):
     
     # === RPI4 優化：狀態緩存，只在變化時 emit ===
     last_turn_signal_state = None  # 方向燈狀態緩存
+    last_body_data = None  # 0x420 raw data 快取，跳過不變的 frame
+    TURN_DEBOUNCE_S = 0.05  # 50ms 最小間隔，過濾 CAN 雜訊
+    last_turn_emit_time = 0
     last_door_states = {  # 門狀態緩存
         "FL": None, "FR": None, "RL": None, "RR": None, "BK": None
     }
@@ -884,38 +887,42 @@ def unified_receiver(bus, db, signals):
             # 5. 處理方向燈和門狀態 BODY_ECU_STATUS (ID 0x420 / 1056)
             elif msg.arbitration_id == 0x420:
                 try:
-                    decoded = db.decode_message(msg.arbitration_id, msg.data)
+                    # 快速 byte 比對：內容沒變就直接跳過
+                    body_data = bytes(msg.data)
+                    if body_data == last_body_data:
+                        continue
+                    last_body_data = body_data
+
+                    data = msg.data
+                    if len(data) < 2:
+                        continue
                     
-                    # === 方向燈狀態 ===
-                    left_signal = decoded.get('LEFT_SIGNAL_STATUS', 0)
-                    right_signal = decoded.get('RIGHT_SIGNAL_STATUS', 0)
-                    
-                    # 轉換為 int (如果是 NamedSignalValue)
-                    if hasattr(left_signal, 'value'):
-                        left_signal = int(left_signal.value)
-                    else:
-                        left_signal = int(left_signal)
-                    
-                    if hasattr(right_signal, 'value'):
-                        right_signal = int(right_signal.value)
-                    else:
-                        right_signal = int(right_signal)
+                    # 手動 bit parse 方向燈（避免 DBC decode 開銷）
+                    # DBC: RIGHT_SIGNAL_STATUS = bit 9, LEFT_SIGNAL_STATUS = bit 10
+                    b1 = data[1]
+                    right_signal = (b1 >> 1) & 1
+                    left_signal = (b1 >> 2) & 1
                     
                     # 判斷方向燈狀態
-                    if left_signal == 1 and right_signal == 1:
+                    if left_signal and right_signal:
                         turn_state = "both_on"
-                    elif left_signal == 1 and right_signal == 0:
+                    elif left_signal:
                         turn_state = "left_on"
-                    elif left_signal == 0 and right_signal == 1:
+                    elif right_signal:
                         turn_state = "right_on"
                     else:
                         turn_state = "off"
                     
                     # RPI4 優化：只在狀態真正改變時才 emit signal
                     if turn_state != last_turn_signal_state:
-                        signals.update_turn_signal.emit(turn_state)
-                        last_turn_signal_state = turn_state
+                        now = time.time()
+                        if now - last_turn_emit_time >= TURN_DEBOUNCE_S:
+                            signals.update_turn_signal.emit(turn_state)
+                            last_turn_signal_state = turn_state
+                            last_turn_emit_time = now
                     
+                    # TODO: 手動 parse 門狀態（目前仍用 DBC decode）
+                    decoded = db.decode_message(msg.arbitration_id, msg.data)
                     # === 門狀態 ===
                     # 根據 DBC: 0=關閉, 1=打開
                     door_fl = decoded.get('DOOR_FL_STATUS', 0)
