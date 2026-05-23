@@ -620,10 +620,6 @@ class Dashboard(QWidget):
         # Timer 啟動延遲到 start_dashboard() 調用時
         # self.animation_timer.start(16)  # 約 60 FPS
         
-        # 方向燈 watchdog timer：每 1 秒檢查是否超過 3 秒沒收到 CAN 訊號
-        self.turn_signal_watchdog_timer = QTimer()
-        self.turn_signal_watchdog_timer.timeout.connect(self._check_turn_signal_watchdog)
-        
         return status_bar
     
     def update_time_display(self):
@@ -631,6 +627,8 @@ class Dashboard(QWidget):
         from datetime import datetime
         current_time = datetime.now().strftime("%H:%M")
         self.time_label.setText(current_time)
+        # 方向燈 watchdog：複用既有 1 秒 timer，零額外開銷
+        self._check_turn_signal_watchdog()
     
     def update_gradient_animation(self):
         """更新漸層動畫效果（優化：只在需要時更新樣式）"""
@@ -1564,9 +1562,6 @@ class Dashboard(QWidget):
         
         # 啟動方向燈動畫 Timer
         # self.animation_timer.start(16)  # 已改為事件驅動，不再需要 60FPS timer
-        
-        # 啟動方向燈 watchdog timer（每 1 秒檢查一次，防止 UI 卡住）
-        self.turn_signal_watchdog_timer.start(1000)
         
         # 啟動速限閃爍 Timer
         self.speed_limit_timer = QTimer()
