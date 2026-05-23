@@ -606,6 +606,10 @@ class Dashboard(QWidget):
         self.left_turn_on = False   # 左轉燈當前是否為亮
         self.right_turn_on = False  # 右轉燈當前是否為亮
         
+        # 方向燈 watchdog：記錄最後一次收到 CAN 方向燈訊號的時間
+        # 若方向燈亮著但超過 N 秒沒收到任何新訊號 → CAN 中斷 → 強制清除
+        self._last_turn_signal_frame_time = 0
+        
         # 漸層動畫位置 (0.0 到 1.0)
         self.left_gradient_pos = 0.0
         self.right_gradient_pos = 0.0
@@ -615,6 +619,10 @@ class Dashboard(QWidget):
         self.animation_timer.timeout.connect(self.update_gradient_animation)
         # Timer 啟動延遲到 start_dashboard() 調用時
         # self.animation_timer.start(16)  # 約 60 FPS
+        
+        # 方向燈 watchdog timer：每 1 秒檢查是否超過 3 秒沒收到 CAN 訊號
+        self.turn_signal_watchdog_timer = QTimer()
+        self.turn_signal_watchdog_timer.timeout.connect(self._check_turn_signal_watchdog)
         
         return status_bar
     
@@ -1556,6 +1564,9 @@ class Dashboard(QWidget):
         
         # 啟動方向燈動畫 Timer
         # self.animation_timer.start(16)  # 已改為事件驅動，不再需要 60FPS timer
+        
+        # 啟動方向燈 watchdog timer（每 1 秒檢查一次，防止 UI 卡住）
+        self.turn_signal_watchdog_timer.start(1000)
         
         # 啟動速限閃爍 Timer
         self.speed_limit_timer = QTimer()
@@ -2930,7 +2941,9 @@ class Dashboard(QWidget):
         elif state == "right_on" and not prev_right and self.panel_visible:
             self.hide_control_panel()
         
-        # 更新狀態
+        # 更新狀態 + 記錄最後收到訊號時間（供 watchdog 用）
+        self._last_turn_signal_frame_time = time.time()
+        
         if state == "left_on":
             self.left_turn_on = True
             self.right_turn_on = False
@@ -2952,6 +2965,38 @@ class Dashboard(QWidget):
         self.left_gradient_pos = 1.0 if self.left_turn_on else 0.0
         self.right_gradient_pos = 1.0 if self.right_turn_on else 0.0
         self.update_turn_signal_style()
+
+    def _check_turn_signal_watchdog(self):
+        """方向燈 watchdog：若方向燈在 ON 狀態，但超過 N 秒沒有收到任何 CAN 訊號，
+        代表 CAN 通訊已中斷，強制清除 UI 狀態。
+        
+        設計理念：方向燈的 left_on/right_on 是「真實亮滅瞬間狀態」，
+        正常閃爍時 (~85BPM) 每 350ms 就會收到一次 off/on 交替訊號。
+        若燈亮著但 > 3 秒沒收到新訊號 → CAN 已中斷。
+        
+        both_on（雙閃/hazard）除外，因為雙閃可能長時間保持。
+        """
+        try:
+            # 沒有方向燈亮著 → 不需要 watchdog
+            if not self.left_turn_on and not self.right_turn_on:
+                return
+            
+            # 雙閃 (both_on) 可能是 hazard，不觸發 watchdog
+            if self.left_turn_on and self.right_turn_on:
+                return
+            
+            now = time.time()
+            TURN_SIGNAL_MAX_SILENCE_SEC = 3  # 3 秒內沒收到任何方向燈訊號 → 異常
+            
+            if now - self._last_turn_signal_frame_time > TURN_SIGNAL_MAX_SILENCE_SEC:
+                print(f"[Turn Signal Watchdog] ⚠ 方向燈 ON 但 {TURN_SIGNAL_MAX_SILENCE_SEC}s 無 CAN 訊號，強制關閉")
+                self.left_turn_on = False
+                self.right_turn_on = False
+                self.left_gradient_pos = 0.0
+                self.right_gradient_pos = 0.0
+                self.update_turn_signal_style()
+        except Exception:
+            pass  # watchdog 不能影響主流程
 
     # === Spotify Slots ===
     @pyqtSlot(str, str, str)

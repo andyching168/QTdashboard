@@ -527,7 +527,8 @@ def unified_receiver(bus, db, signals):
     
     # === RPI4 優化：狀態緩存，只在變化時 emit ===
     last_turn_signal_state = None  # 方向燈狀態緩存
-    last_body_data = None  # 0x420 raw data 快取，跳過不變的 frame
+    last_turn_bits = None  # 0x420 turn bits 快取（byte 1 bits 1-2），跳過不變的 frame
+    last_body_frame_time = 0  # 最後一次收到 0x420 的時間，供 watchdog 用
     TURN_DEBOUNCE_S = 0.05  # 50ms 最小間隔，過濾 CAN 雜訊
     last_turn_emit_time = 0
     last_door_states = {  # 門狀態緩存
@@ -887,11 +888,8 @@ def unified_receiver(bus, db, signals):
             # 5. 處理方向燈和門狀態 BODY_ECU_STATUS (ID 0x420 / 1056)
             elif msg.arbitration_id == 0x420:
                 try:
-                    # 快速 byte 比對：內容沒變就直接跳過
-                    body_data = bytes(msg.data)
-                    if body_data == last_body_data:
-                        continue
-                    last_body_data = body_data
+                    # 記錄最後一次收到 0x420 的時間（供 watchdog 用）
+                    last_body_frame_time = time.time()
 
                     data = msg.data
                     if len(data) < 2:
@@ -903,6 +901,12 @@ def unified_receiver(bus, db, signals):
                     right_signal = (b1 >> 1) & 1
                     left_signal = (b1 >> 2) & 1
                     
+                    # 用 turn bits（byte 1 bits 1-2）做精準去重，而非整包 payload
+                    turn_bits = (b1 >> 1) & 0b11
+                    if turn_bits == last_turn_bits:
+                        continue
+                    last_turn_bits = turn_bits
+
                     # 判斷方向燈狀態
                     if left_signal and right_signal:
                         turn_state = "both_on"
@@ -916,10 +920,14 @@ def unified_receiver(bus, db, signals):
                     # RPI4 優化：只在狀態真正改變時才 emit signal
                     if turn_state != last_turn_signal_state:
                         now = time.time()
-                        if now - last_turn_emit_time >= TURN_DEBOUNCE_S:
+                        # "off" 和 "both_on" 不 debounce（off 是安全關鍵，both_on 是雙閃）
+                        # 只有 left_on / right_on 做 debounce 避免 CAN 雜訊
+                        skip_debounce = (turn_state in ("off", "both_on"))
+                        if skip_debounce or (now - last_turn_emit_time >= TURN_DEBOUNCE_S):
                             signals.update_turn_signal.emit(turn_state)
-                            last_turn_signal_state = turn_state
                             last_turn_emit_time = now
+                        # 總是更新 last_turn_signal_state，避免被 debounce 擋下的 transition 永遠遺失
+                        last_turn_signal_state = turn_state
                     
                     # TODO: 手動 parse 門狀態（目前仍用 DBC decode）
                     decoded = db.decode_message(msg.arbitration_id, msg.data)
