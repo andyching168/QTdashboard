@@ -78,12 +78,18 @@ from core.utils import (
     OdometerStorage,
     is_raspberry_pi,
     is_production_environment,
+    system_resource_snapshot,
 )
 
 from core.shutdown_monitor import get_shutdown_monitor
 from core.max_value_logger import get_max_value_logger
 from core.startup_progress import StartupProgressWindow
-from core.shutdown_mqtt import build_shutdown_event, publish_pending_then_current, upsert_pending_event
+from core.shutdown_mqtt import (
+    build_shutdown_event,
+    build_performance_event,
+    publish_pending_then_current,
+    upsert_pending_event,
+)
 
 
 class Dashboard(QWidget):
@@ -124,6 +130,7 @@ class Dashboard(QWidget):
 
     def __init__(self, skip_gps=False):
         super().__init__()
+        self._dashboard_started_at = time.time()
 
         # === 初始化主題系統（載入強調色設定）===
         _ = get_theme_manager()
@@ -1301,6 +1308,25 @@ class Dashboard(QWidget):
             avg_fuel=trip_info.get("avg_fuel"),
         )
 
+    def _build_performance_mqtt_event(self, shutdown_event):
+        """建立熄火當下的效能 MQTT event，並保留對應 shutdown event_id。"""
+        system_snapshot = system_resource_snapshot()
+        system_snapshot["uptime_sec"] = round(time.time() - self._dashboard_started_at, 1)
+
+        perf_snapshot = PerformanceMonitor().snapshot()
+        jank_detector = getattr(self, "jank_detector", None)
+        if jank_detector is not None:
+            jank_snapshot = jank_detector.snapshot()
+        else:
+            jank_snapshot = {"enabled": False, "count": 0, "recent": []}
+
+        return build_performance_event(
+            shutdown_event,
+            system_snapshot=system_snapshot,
+            performance_snapshot=perf_snapshot,
+            jank_snapshot=jank_snapshot,
+        )
+
     def _publish_shutdown_mqtt_event(self):
         """熄火時送出 retained MQTT event；失敗會留在本地待下次補送。"""
         if self._shutdown_mqtt_in_progress:
@@ -1308,7 +1334,9 @@ class Dashboard(QWidget):
             return
 
         event = self._build_shutdown_mqtt_event()
+        performance_event = self._build_performance_mqtt_event(event)
         upsert_pending_event(event)
+        upsert_pending_event(performance_event)
 
         config_file = get_mqtt_config_path()
         if not os.path.exists(config_file):
@@ -1330,6 +1358,8 @@ class Dashboard(QWidget):
                 result = publish_pending_then_current(self.mqtt_client, config, event)
                 sent_count = result.get("sent_count", 0)
                 remaining_count = result.get("remaining_count", 0)
+                sent_ids = result.get("sent_ids") or []
+                performance_sent = performance_event.get("event_id") in sent_ids
 
                 if result.get("current_sent"):
                     if sent_count > 1:
@@ -1341,6 +1371,8 @@ class Dashboard(QWidget):
 
                 if remaining_count:
                     print(f"[ShutdownMQTT] 尚有 {remaining_count} 筆 pending 未送出")
+                if not performance_sent:
+                    print("[ShutdownMQTT] 效能快照尚未送出，已保留 pending")
             except Exception as e:
                 print(f"[ShutdownMQTT] 發送錯誤: {e}")
                 self.show_toast("MQTT 傳送失敗，熄火紀錄已先儲存", "warning", 4500)

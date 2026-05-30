@@ -3,6 +3,7 @@ import time
 import gc
 import json
 import platform
+import resource
 from collections import deque
 from functools import wraps
 from pathlib import Path
@@ -136,6 +137,41 @@ class PerformanceMonitor:
                 print(f"  - {call['func']}: {call['duration_ms']:.1f}ms")
         print()
 
+    def snapshot(self, limit=10):
+        """Return compact in-memory performance stats for telemetry."""
+        sorted_stats = sorted(
+            self.stats.items(),
+            key=lambda item: (item[1].get('slow_count', 0), item[1].get('max_ms', 0)),
+            reverse=True,
+        )
+        top_stats = []
+        for func_name, stat in sorted_stats[:limit]:
+            count = int(stat.get('count', 0))
+            total_ms = float(stat.get('total_ms', 0))
+            top_stats.append({
+                'func': func_name,
+                'count': count,
+                'slow_count': int(stat.get('slow_count', 0)),
+                'avg_ms': round(total_ms / count, 2) if count else 0,
+                'max_ms': round(float(stat.get('max_ms', 0)), 2),
+            })
+
+        now = time.time()
+        recent_slow = []
+        for call in list(self.slow_calls)[-limit:]:
+            recent_slow.append({
+                'func': call.get('func'),
+                'duration_ms': round(float(call.get('duration_ms', 0)), 2),
+                'age_sec': round(max(0, now - float(call.get('time', now))), 1),
+            })
+
+        return {
+            'enabled': bool(self.enabled),
+            'slow_call_count': len(self.slow_calls),
+            'top_slow_calls': top_stats,
+            'recent_slow_calls': recent_slow,
+        }
+
 
 class JankDetector:
     """卡頓偵測器 - 使用 QTimer 偵測主執行緒阻塞"""
@@ -196,6 +232,75 @@ class JankDetector:
                         intervals.append(interval)
                     avg_interval = sum(intervals) / len(intervals)
                     print(f"[JankDetector] 平均卡頓間隔: {avg_interval:.1f} 秒")
+
+    def snapshot(self, limit=10):
+        return {
+            'enabled': bool(self.enabled),
+            'count': int(self.jank_count),
+            'recent': list(self.jank_log[-limit:]),
+        }
+
+
+def system_resource_snapshot():
+    """Collect low-cost CPU/RAM/process stats without external dependencies."""
+    snapshot = {
+        'platform': platform.platform(),
+        'cpu_load_1m': None,
+        'cpu_load_5m': None,
+        'cpu_load_15m': None,
+        'memory_total_mb': None,
+        'memory_available_mb': None,
+        'memory_used_percent': None,
+        'process_rss_mb': None,
+    }
+
+    try:
+        load1, load5, load15 = os.getloadavg()
+        snapshot.update({
+            'cpu_load_1m': round(load1, 2),
+            'cpu_load_5m': round(load5, 2),
+            'cpu_load_15m': round(load15, 2),
+        })
+    except Exception:
+        pass
+
+    try:
+        meminfo = {}
+        with open('/proc/meminfo', 'r', encoding='utf-8') as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    meminfo[parts[0].rstrip(':')] = int(parts[1])
+        total_kb = meminfo.get('MemTotal')
+        available_kb = meminfo.get('MemAvailable')
+        if total_kb:
+            snapshot['memory_total_mb'] = round(total_kb / 1024, 1)
+        if available_kb:
+            snapshot['memory_available_mb'] = round(available_kb / 1024, 1)
+        if total_kb and available_kb:
+            used_ratio = 1 - (available_kb / total_kb)
+            snapshot['memory_used_percent'] = round(used_ratio * 100, 1)
+    except Exception:
+        pass
+
+    try:
+        rss_kb = None
+        with open('/proc/self/status', 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.startswith('VmRSS:'):
+                    rss_kb = int(line.split()[1])
+                    break
+        if rss_kb is not None:
+            snapshot['process_rss_mb'] = round(rss_kb / 1024, 1)
+    except Exception:
+        try:
+            rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            divisor = 1024 if platform.system() != 'Darwin' else 1024 * 1024
+            snapshot['process_rss_mb'] = round(rss / divisor, 1)
+        except Exception:
+            pass
+
+    return snapshot
 
 
 def perf_track(func):

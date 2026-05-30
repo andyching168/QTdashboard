@@ -11,6 +11,7 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 DB_PATH = os.path.join(DATA_DIR, "dashboard_history.db")
 LEGACY_PENDING_FILE = os.path.join(PROJECT_ROOT, "shutdown_mqtt_pending.json")
 DEFAULT_SHUTDOWN_TOPIC_BASE = "car/shutdown"
+DEFAULT_PERFORMANCE_TOPIC_BASE = "car/performance"
 
 
 def now_iso():
@@ -225,12 +226,31 @@ def get_shutdown_topic_base(config):
     return str(config.get("shutdown_topic") or DEFAULT_SHUTDOWN_TOPIC_BASE).strip().rstrip("/")
 
 
+def get_performance_topic_base(config):
+    return str(config.get("performance_topic") or DEFAULT_PERFORMANCE_TOPIC_BASE).strip().rstrip("/")
+
+
 def event_topics(config, event_id):
     base = get_shutdown_topic_base(config)
     return [
         f"{base}/events/{event_id}",
         f"{base}/latest",
     ]
+
+
+def performance_event_topics(config, event_id):
+    base = get_performance_topic_base(config)
+    return [
+        f"{base}/events/{event_id}",
+        f"{base}/latest",
+    ]
+
+
+def _topics_for_event(config, event):
+    event_id = event.get("event_id")
+    if event.get("type") == "performance_snapshot":
+        return performance_event_topics(config, event.get("shutdown_event_id") or event_id)
+    return event_topics(config, event_id)
 
 
 def build_shutdown_event(
@@ -264,12 +284,37 @@ def build_shutdown_event(
     }
 
 
+def build_performance_event(
+    shutdown_event,
+    system_snapshot=None,
+    performance_snapshot=None,
+    jank_snapshot=None,
+    source="dashboard",
+):
+    event_time = shutdown_event.get("event_time") or now_iso()
+    shutdown_event_id = shutdown_event.get("event_id") or make_event_id(event_time)
+
+    return {
+        "event_id": f"{shutdown_event_id}-perf",
+        "type": "performance_snapshot",
+        "event_time": event_time,
+        "updated_at": event_time,
+        "source": source,
+        "shutdown_event_id": shutdown_event_id,
+        "system": system_snapshot or {},
+        "performance": performance_snapshot or {},
+        "jank": jank_snapshot or {},
+        "location": shutdown_event.get("location") or {},
+        "trip": shutdown_event.get("trip") or {},
+    }
+
+
 def _publish_one(client, config, event, timeout=5):
     payload_event = dict(event)
     payload_event["updated_at"] = now_iso()
     payload = json.dumps(payload_event, ensure_ascii=False, separators=(",", ":"))
 
-    for topic in event_topics(config, payload_event["event_id"]):
+    for topic in _topics_for_event(config, payload_event):
         info = client.publish(topic, payload, qos=1, retain=True)
         if hasattr(info, "wait_for_publish"):
             info.wait_for_publish(timeout=timeout)
@@ -301,6 +346,7 @@ def publish_pending_then_current(client, config, current_event, db_path=DB_PATH)
     return {
         "success": current_sent and remaining_count == 0,
         "sent_count": len(sent_ids),
+        "sent_ids": sent_ids,
         "remaining_count": remaining_count,
         "current_sent": current_sent,
     }
