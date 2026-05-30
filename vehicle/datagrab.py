@@ -528,6 +528,7 @@ def unified_receiver(bus, db, signals):
     # === RPI4 優化：狀態緩存，只在變化時 emit ===
     last_turn_signal_state = None  # 方向燈狀態緩存
     last_turn_bits = None  # 0x420 turn bits 快取（byte 1 bits 1-2），跳過不變的 frame
+    last_body_status_key = None  # 方向燈 + 門狀態 raw bytes 快取，避免重複 DBC decode
     last_body_frame_time = 0  # 最後一次收到 0x420 的時間，供 watchdog 用
     TURN_DEBOUNCE_S = 0.05  # 50ms 最小間隔，過濾 CAN 雜訊
     last_turn_emit_time = 0
@@ -903,9 +904,12 @@ def unified_receiver(bus, db, signals):
                     
                     # 用 turn bits（byte 1 bits 1-2）做精準去重，而非整包 payload
                     turn_bits = (b1 >> 1) & 0b11
-                    if turn_bits == last_turn_bits:
+                    # 門狀態也集中在 0x420 的前幾個 bytes；只有 raw 狀態改變才需要 DBC decode。
+                    body_status_key = bytes(data[1:4])
+                    if turn_bits == last_turn_bits and body_status_key == last_body_status_key:
                         continue
                     last_turn_bits = turn_bits
+                    last_body_status_key = body_status_key
 
                     # 判斷方向燈狀態
                     if left_signal and right_signal:
@@ -1342,4 +1346,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -124,7 +124,7 @@ class Dashboard(QWidget):
 
     def __init__(self, skip_gps=False):
         super().__init__()
-        
+
         # === 初始化主題系統（載入強調色設定）===
         _ = get_theme_manager()
         
@@ -247,6 +247,10 @@ class Dashboard(QWidget):
         
         # 創建亮度覆蓋層（必須在 init_ui 之後，確保在最上層）
         self._create_brightness_overlay()
+
+    def _perf_logging_enabled(self):
+        """True when verbose runtime diagnostics are explicitly enabled."""
+        return os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes')
     
     def _update_gps_status(self, is_fixed):
         """更新 GPS 狀態圖示"""
@@ -1509,6 +1513,11 @@ class Dashboard(QWidget):
         # 引擎狀態追蹤 (用於 MQTT status)
         self._engine_status = False  # 引擎運轉狀態
         self._last_battery_for_status = 0.0  # 追蹤上一次電壓用於判斷熄火
+        self._last_navigation_ui_key = None
+        self._last_external_gps_key = None
+        self._last_temp_display = None
+        self._last_fuel_display = None
+        self._last_battery_display = None
 
         # 速度校正狀態
         import vehicle.datagrab as datagrab
@@ -2304,8 +2313,10 @@ class Dashboard(QWidget):
     @pyqtSlot(dict)
     def _slot_update_navigation(self, data: dict):
         """處理導航訊息（Slot - 在主執行緒執行）"""
-        print(f"[Navigation] _slot_update_navigation 被呼叫")
-        print(f"[Navigation] 資料: direction={data.get('direction')}, distance={data.get('totalDistance')}")
+        perf_log = self._perf_logging_enabled()
+        if perf_log:
+            print(f"[Navigation] _slot_update_navigation 被呼叫")
+            print(f"[Navigation] 資料: direction={data.get('direction')}, distance={data.get('totalDistance')}")
 
         # 先取出 GPS 相關欄位（即使導航訊息過時也可用於外部 GPS 備援）
         lat = data.get('latitude')
@@ -2332,7 +2343,10 @@ class Dashboard(QWidget):
         if lat is not None and lon is not None and self.gps_monitor_thread is not None:
             keep_external = (not self.is_gps_fixed) or self.gps_monitor_thread.is_using_external_gps()
             if keep_external:
-                print(f"[Navigation] 使用 MQTT GPS 備援: lat={lat}, lon={lon}, speed={speed}")
+                external_gps_key = (round(lat, 6), round(lon, 6), round(speed or 0, 1), round(bearing, 1))
+                if perf_log and external_gps_key != self._last_external_gps_key:
+                    print(f"[Navigation] 使用 MQTT GPS 備援: lat={lat}, lon={lon}, speed={speed}")
+                self._last_external_gps_key = external_gps_key
                 self.gps_monitor_thread.inject_external_gps(lat, lon, speed or 0, bearing, data.get('timestamp', ''))
 
             # 更新 GPS 位置（速限由計時器每 5 秒查詢一次）
@@ -2349,23 +2363,41 @@ class Dashboard(QWidget):
                 current_time = datetime.now(timezone.utc)
                 time_diff = abs((current_time - msg_time).total_seconds())
                 
-                print(f"[Navigation] 訊息時間: {timestamp_str}, 時間差: {time_diff:.1f}秒")
+                if perf_log:
+                    print(f"[Navigation] 訊息時間: {timestamp_str}, 時間差: {time_diff:.1f}秒")
                 
                 if time_diff > 15:
-                    print(f"[Navigation] ⚠️ 訊息過時 (相差 {time_diff:.1f}秒)，僅更新 GPS 備援並顯示無導航畫面")
+                    if perf_log:
+                        print(f"[Navigation] ⚠️ 訊息過時 (相差 {time_diff:.1f}秒)，僅更新 GPS 備援並顯示無導航畫面")
                     # 訊息過時，顯示無導航資訊畫面
-                    if hasattr(self, 'nav_card'):
+                    stale_key = ("stale",)
+                    if hasattr(self, 'nav_card') and self._last_navigation_ui_key != stale_key:
                         self.nav_card.show_no_nav_ui()
+                        self._last_navigation_ui_key = stale_key
                     return
                     
             except Exception as e:
-                print(f"[Navigation] ⚠️ 解析 timestamp 失敗: {e}，仍繼續處理")
-        else:
+                if perf_log:
+                    print(f"[Navigation] ⚠️ 解析 timestamp 失敗: {e}，仍繼續處理")
+        elif perf_log:
             print("[Navigation] ⚠️ 訊息無 timestamp，仍繼續處理")
         
         if hasattr(self, 'nav_card'):
+            nav_key = (
+                data.get('direction', ''),
+                data.get('totalDistance', ''),
+                data.get('turnDistance', ''),
+                data.get('turnDirection', ''),
+                data.get('duration', ''),
+                data.get('eta', ''),
+                hash(data.get('iconBase64') or ''),
+            )
+            if nav_key == self._last_navigation_ui_key:
+                return
+            self._last_navigation_ui_key = nav_key
             self.nav_card.update_navigation(data)
-            print(f"[Navigation] 已更新導航資訊: {data.get('direction', '')}")
+            if perf_log:
+                print(f"[Navigation] 已更新導航資訊: {data.get('direction', '')}")
         else:
             print("[Navigation] 錯誤：nav_card 不存在")
 
@@ -2752,7 +2784,8 @@ class Dashboard(QWidget):
         datagrab.set_speed_correction(new_value)
         self.speed_correction = new_value
         self._last_speed_cali_ts = now
-        print(f"[速度校正] GPS 已鎖定，係數 {prev:.3f} -> {new_value:.3f} (比例 {ratio:.3f}，差 {diff:.1f} km/h)")
+        if self._perf_logging_enabled():
+            print(f"[速度校正] GPS 已鎖定，係數 {prev:.3f} -> {new_value:.3f} (比例 {ratio:.3f}，差 {diff:.1f} km/h)")
     
     def _physics_tick(self):
         """物理心跳：每 100ms 根據當前速度累積里程 (梯形積分法)"""
@@ -2813,8 +2846,9 @@ class Dashboard(QWidget):
             # 平滑插值：越接近目標越慢
             self.rpm = self.rpm * (1 - self.rpm_animation_alpha) + target * self.rpm_animation_alpha
         
-        # 只在轉速變化明顯時才更新 UI（降低重繪頻率）
-        if abs(self.rpm - old_rpm) > 0.02:  # 變化超過 0.02 千轉
+        rpm_display = int((self.rpm * 1000) // 20)
+        if getattr(self, "_last_rpm_display", None) != rpm_display:
+            self._last_rpm_display = rpm_display
             self.update_display()
         
         # 若引擎狀態從 on 掉到 off，立即上傳一次 MQTT
@@ -2823,20 +2857,33 @@ class Dashboard(QWidget):
     @pyqtSlot(float)
     def _slot_set_temperature(self, temp):
         """Slot: 在主執行緒中更新水溫顯示"""
-        self.temp = max(0, min(100, temp))
+        new_temp = max(0, min(100, temp))
         
         # 追蹤最大水溫 (轉換為攝氏度)
         # temp 是百分比 (0-100)，轉換為 40-120°C
-        temp_celsius = 40 + (self.temp / 100) * 80
+        temp_celsius = 40 + (new_temp / 100) * 80
         get_max_value_logger().update_coolant(temp_celsius)
+
+        temp_display = int(round(temp_celsius))
+        if self._last_temp_display == temp_display:
+            self.temp = new_temp
+            return
+        self.temp = new_temp
+        self._last_temp_display = temp_display
         self.update_display()
     
     @pyqtSlot(float)
     def _slot_set_fuel(self, fuel):
         """Slot: 在主執行緒中更新油量顯示"""
-        self.fuel = max(0, min(100, fuel))
+        new_fuel = max(0, min(100, fuel))
         # Update ShutdownMonitor
-        get_shutdown_monitor().update_fuel_level(self.fuel)
+        get_shutdown_monitor().update_fuel_level(new_fuel)
+        fuel_display = int(round(new_fuel))
+        if self._last_fuel_display == fuel_display:
+            self.fuel = new_fuel
+            return
+        self.fuel = new_fuel
+        self._last_fuel_display = fuel_display
         self.update_display()
     
     @pyqtSlot(str)
@@ -3267,7 +3314,8 @@ class Dashboard(QWidget):
         
         # 顯示提示
         row_names = ["第一列 (音樂/門)", "第二列 (Trip/ODO)"]
-        print(f"切換到: {row_names[new_row_index]}")
+        if self._perf_logging_enabled():
+            print(f"切換到: {row_names[new_row_index]}")
     
     @perf_track
     def switch_card(self, direction):
@@ -3288,7 +3336,8 @@ class Dashboard(QWidget):
         
         # 安全檢查：確保 current_card_index 在有效範圍內
         if self.current_card_index >= current_row_cards:
-            print(f"⚠️ 修正卡片索引: {self.current_card_index} -> 0 (max: {current_row_cards-1})")
+            if self._perf_logging_enabled():
+                print(f"⚠️ 修正卡片索引: {self.current_card_index} -> 0 (max: {current_row_cards-1})")
             self.current_card_index = 0
             self.rows[self.current_row_index].setCurrentIndex(0)
             self.update_indicators()
@@ -3308,7 +3357,8 @@ class Dashboard(QWidget):
         all_card_names = [row1_card_names, row2_card_names]
         
         card_name = all_card_names[self.current_row_index][new_card_index]
-        print(f"切換到: {card_name}")
+        if self._perf_logging_enabled():
+            print(f"切換到: {card_name}")
     
     def _switch_left_card_forward(self):
         """向前切換左側卡片（跳過詳細視圖）"""
@@ -3327,7 +3377,8 @@ class Dashboard(QWidget):
         self._animate_left_card_switch(current, next_index, direction=1)
         
         left_card_names = {0: "引擎監控", 2: "油量"}
-        print(f"左側切換到: {left_card_names.get(next_index, '未知')}")
+        if self._perf_logging_enabled():
+            print(f"左側切換到: {left_card_names.get(next_index, '未知')}")
     
     @perf_track
     def switch_left_card(self, direction):
@@ -3358,7 +3409,8 @@ class Dashboard(QWidget):
         self._animate_left_card_switch(current, next_index, direction)
         
         left_card_names = {0: "引擎監控", 2: "油量"}
-        print(f"左側切換到: {left_card_names.get(next_index, '未知')}")
+        if self._perf_logging_enabled():
+            print(f"左側切換到: {left_card_names.get(next_index, '未知')}")
     
     def _animate_left_card_switch(self, from_index, to_index, direction):
         """動畫切換左側卡片
@@ -3632,7 +3684,8 @@ class Dashboard(QWidget):
         # _in_detail_view 狀態會阻止左側區域的滑動切換
         
         gauge_names = ["轉速", "水溫", "渦輪負壓", "電瓶電壓"]
-        print(f"進入 {gauge_names[gauge_index]} 詳細視圖")
+        if self._perf_logging_enabled():
+            print(f"進入 {gauge_names[gauge_index]} 詳細視圖")
     
     def _hide_gauge_detail(self):
         """隱藏詳細視圖，返回四宮格（帶滑出動畫）"""
@@ -3669,7 +3722,8 @@ class Dashboard(QWidget):
         
         # 注意：不再需要恢復滑動，因為進入時沒有禁用
         
-        print("返回四宮格視圖")
+        if self._perf_logging_enabled():
+            print("返回四宮格視圖")
     
     def _update_left_indicators(self):
         """更新左側卡片指示器"""
@@ -3703,12 +3757,14 @@ class Dashboard(QWidget):
         - 也可從鍵盤（F1 鍵）觸發
         """
         if self._shutdown_summary_visible:
-            print("熄火總結顯示中，按鈕A不作用")
+            if self._perf_logging_enabled():
+                print("熄火總結顯示中，按鈕A不作用")
             return
 
         # 如果在詳細視圖中，不處理
         if self._in_detail_view:
-            print("在詳細視圖中，按鈕A不作用")
+            if self._perf_logging_enabled():
+                print("在詳細視圖中，按鈕A不作用")
             return
         
         # 檢查是否在四宮格卡片上（左側卡片的 index 0）
@@ -3718,7 +3774,8 @@ class Dashboard(QWidget):
                 # 還在四宮格卡片內
                 gauge_names = ["", "轉速", "水溫", "渦輪負壓", "電瓶電壓"]
                 focus = self.quad_gauge_card.get_focus()
-                print(f"按鈕A切換焦點到: {gauge_names[focus]}")
+                if self._perf_logging_enabled():
+                    print(f"按鈕A切換焦點到: {gauge_names[focus]}")
                 return
             # 焦點循環完畢，切換到下一張卡片
         
@@ -3742,7 +3799,8 @@ class Dashboard(QWidget):
         - 也可從鍵盤（Shift+F1）觸發
         """
         if self._shutdown_summary_visible:
-            print("熄火總結顯示中，按鈕A長按不作用")
+            if self._perf_logging_enabled():
+                print("熄火總結顯示中，按鈕A長按不作用")
             return
 
         # 如果在詳細視圖中，長按返回
@@ -3756,7 +3814,8 @@ class Dashboard(QWidget):
                 self.quad_gauge_card.enter_detail_view()
                 return
         
-        print("長按按鈕A: 不在四宮格焦點狀態，忽略")
+        if self._perf_logging_enabled():
+            print("長按按鈕A: 不在四宮格焦點狀態，忽略")
     
     def on_button_b_pressed(self):
         """
@@ -3788,7 +3847,8 @@ class Dashboard(QWidget):
             if self.trip_card.next_focus():
                 # 還在 Trip 卡片內（Trip 1 或 Trip 2）
                 focus_names = ["", "Trip 1", "Trip 2"]
-                print(f"按鈕B切換焦點到: {focus_names[self.trip_card.get_focus()]}")
+                if self._perf_logging_enabled():
+                    print(f"按鈕B切換焦點到: {focus_names[self.trip_card.get_focus()]}")
                 return
             # 否則繼續到下一張卡片
         
@@ -3821,7 +3881,8 @@ class Dashboard(QWidget):
             card_name = all_card_names[next_row][0]
         else:
             card_name = all_card_names[self.current_row_index][next_card_index]
-        print(f"按鈕B切換到: {card_name}")
+        if self._perf_logging_enabled():
+            print(f"按鈕B切換到: {card_name}")
     
     def on_button_b_long_pressed(self):
         """
@@ -3847,10 +3908,12 @@ class Dashboard(QWidget):
             focus = self.trip_card.get_focus()
             
             if self.trip_card.reset_focused_trip():
-                print(f"長按按鈕B: 已重置 {focus_names[focus]}")
+                if self._perf_logging_enabled():
+                    print(f"長按按鈕B: 已重置 {focus_names[focus]}")
             return
         
-        print("長按按鈕B: 不在 Trip 焦點狀態，忽略")
+        if self._perf_logging_enabled():
+            print("長按按鈕B: 不在 Trip 焦點狀態，忽略")
     
     def keyPressEvent(self, a0):  # type: ignore
         """鍵盤模擬控制"""
@@ -4098,6 +4161,12 @@ class Dashboard(QWidget):
             self._last_battery_ui_update = 0
         
         if now - self._last_battery_ui_update >= 0.5:
+            battery_display = round(voltage, 1)
+            if self._last_battery_display == battery_display:
+                self._last_battery_ui_update = now
+                self._maybe_publish_engine_off()
+                return
+            self._last_battery_display = battery_display
             # 更新四宮格卡片
             if hasattr(self, 'quad_gauge_card'):
                 self.quad_gauge_card.set_battery(voltage)

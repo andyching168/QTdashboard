@@ -313,9 +313,12 @@ class MusicCard(QWidget):
     
     def set_progress(self, current_seconds, total_seconds, is_playing=True):
         """設置播放進度"""
+        progress = 0
         if total_seconds > 0:
             progress = int((current_seconds / total_seconds) * 100)
-            self.progress_bar.setValue(progress)
+            if getattr(self, '_last_progress_value', None) != progress:
+                self.progress_bar.setValue(progress)
+                self._last_progress_value = progress
         
         # 只在播放狀態改變時才更新 stylesheet（避免頻繁重繪）
         if not hasattr(self, '_last_is_playing') or self._last_is_playing != is_playing:
@@ -349,8 +352,12 @@ class MusicCard(QWidget):
                 """)
         
         # 格式化時間
-        self.current_time.setText(f"{int(current_seconds//60)}:{int(current_seconds%60):02d}")
-        self.total_time.setText(f"{int(total_seconds//60)}:{int(total_seconds%60):02d}")
+        current_text = f"{int(current_seconds//60)}:{int(current_seconds%60):02d}"
+        total_text = f"{int(total_seconds//60)}:{int(total_seconds%60):02d}"
+        if self.current_time.text() != current_text:
+            self.current_time.setText(current_text)
+        if self.total_time.text() != total_text:
+            self.total_time.setText(total_text)
     
     def update_from_spotify(self, track_info):
         """
@@ -742,9 +749,12 @@ class MusicCardWide(QWidget):
     
     def set_progress(self, current_seconds, total_seconds, is_playing=True):
         """設置播放進度"""
+        progress = 0
         if total_seconds > 0:
             progress = int((current_seconds / total_seconds) * 100)
-            self.progress_bar.setValue(progress)
+            if getattr(self, '_last_progress_value', None) != progress:
+                self.progress_bar.setValue(progress)
+                self._last_progress_value = progress
         
         # 只在播放狀態改變時才更新 stylesheet（避免頻繁重繪）
         if not hasattr(self, '_last_is_playing') or self._last_is_playing != is_playing:
@@ -775,8 +785,12 @@ class MusicCardWide(QWidget):
                     }
                 """)
         
-        self.current_time.setText(f"{int(current_seconds//60)}:{int(current_seconds%60):02d}")
-        self.total_time.setText(f"{int(total_seconds//60)}:{int(total_seconds%60):02d}")
+        current_text = f"{int(current_seconds//60)}:{int(current_seconds%60):02d}"
+        total_text = f"{int(total_seconds//60)}:{int(total_seconds%60):02d}"
+        if self.current_time.text() != current_text:
+            self.current_time.setText(current_text)
+        if self.total_time.text() != total_text:
+            self.total_time.setText(total_text)
     
     @perf_track
     def set_album_art_from_pil(self, pil_image):
@@ -806,6 +820,5 @@ class MusicCardWide(QWidget):
             if 'T(' in ss and 'PRIMARY' in ss:
                 widget.setStyleSheet("")
                 widget.setStyleSheet(ss)
-
 
 

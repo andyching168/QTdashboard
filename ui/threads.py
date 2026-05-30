@@ -627,9 +627,15 @@ class RadarMonitorThread(QThread):
         self.running = True
         self.baud_rate = 115200
         self._current_port = None
+        self._last_payload = None
+        self._last_scan_notice = None
+
+    def _perf_logging_enabled(self):
+        return os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes')
         
     def run(self):
-        print("[Radar] Starting monitor thread...")
+        if self._perf_logging_enabled():
+            print("[Radar] Starting monitor thread...")
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
             if not self._current_port:
@@ -640,10 +646,14 @@ class RadarMonitorThread(QThread):
                 
                 # 判斷是否要跳過掃描：開關關閉，或只有一個 port
                 if not RADAR_ENABLED or len(ports) <= 1:
+                    notice = None
                     if not RADAR_ENABLED:
-                        print("[Radar] RADAR_ENABLED=False，雷達功能已停用")
+                        notice = "[Radar] RADAR_ENABLED=False，雷達功能已停用"
                     elif len(ports) <= 1:
-                        print(f"[Radar] 只找到 {len(ports)} 個 port，跳過掃描")
+                        notice = f"[Radar] 只找到 {len(ports)} 個 port，跳過掃描"
+                    if self._perf_logging_enabled() and notice != self._last_scan_notice:
+                        print(notice)
+                    self._last_scan_notice = notice
                     time.sleep(2)
                     continue
                 
@@ -661,7 +671,8 @@ class RadarMonitorThread(QThread):
                 # 2. 已鎖定 port，持續讀取
                 if not self._read_loop():
                     # 讀取失敗（斷線），重置 port
-                    print(f"[Radar] Connection lost on {self._current_port}")
+                    if self._perf_logging_enabled():
+                        print(f"[Radar] Connection lost on {self._current_port}")
                     self._current_port = None
                     time.sleep(1)
                     
@@ -681,8 +692,9 @@ class RadarMonitorThread(QThread):
                                 return False  # 這是 GPS port
                             # 檢查特徵：包含 'LR:' 和 'RR:' 和 'LF:' 和 'RF:'
                             if 'LR:' in line_str and 'RR:' in line_str and 'LF:' in line_str and 'RF:' in line_str:
-                                print(f"[Radar] Found Radar on {port} @ {self.baud_rate}")
-                                print(f"[Radar] Sample data: {line_str}")
+                                if self._perf_logging_enabled():
+                                    print(f"[Radar] Found Radar on {port} @ {self.baud_rate}")
+                                    print(f"[Radar] Sample data: {line_str}")
                                 return True
                         except:
                             pass
@@ -704,15 +716,21 @@ class RadarMonitorThread(QThread):
                         line_str = line.decode('ascii', errors='ignore').strip()
                         # 檢查是否包含雷達數據（支援有括號或無括號格式）
                         if 'LR:' in line_str and 'RR:' in line_str and 'LF:' in line_str and 'RF:' in line_str:
-                            print(f"[Radar] Data: {line_str}")  # Debug 用
+                            if line_str == self._last_payload:
+                                continue
+                            self._last_payload = line_str
+                            if self._perf_logging_enabled():
+                                print(f"[Radar] Data: {line_str}")  # Debug 用
                             self.radar_message_received.emit(line_str)
                     except ValueError:
                         pass
         except serial.SerialException as e:
-            print(f"[Radar] Serial error: {e}")
+            if self._perf_logging_enabled():
+                print(f"[Radar] Serial error: {e}")
             return False # 斷線
         except Exception as e:
-            print(f"[Radar] Error: {e}")
+            if self._perf_logging_enabled():
+                print(f"[Radar] Error: {e}")
             return False
             
         return True
@@ -720,4 +738,3 @@ class RadarMonitorThread(QThread):
     def stop(self):
         self.running = False
         self.wait()
-
