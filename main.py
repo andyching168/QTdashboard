@@ -446,13 +446,11 @@ class Dashboard(QWidget):
         """速限閃爍計時器 callback"""
         if not self._speed_limit_flashing:
             return
-        
-        self._speed_limit_timer += 1
-        if self._speed_limit_timer % 10 == 0:  # 每 10 ticks 切換一次 (0.5 秒)
-            if self.speed_limit_container.isVisible():
-                self.speed_limit_container.hide()
-            else:
-                self.speed_limit_container.show()
+
+        if self.speed_limit_container.isVisible():
+            self.speed_limit_container.hide()
+        else:
+            self.speed_limit_container.show()
     
     def create_status_bar(self):
         """創建頂部狀態欄，包含方向燈指示"""
@@ -1560,13 +1558,13 @@ class Dashboard(QWidget):
         # 啟動時間更新 Timer
         self.time_timer.start(1000)
         
-        # 啟動方向燈動畫 Timer
-        # self.animation_timer.start(16)  # 已改為事件驅動，不再需要 60FPS timer
+        # 方向燈目前是靜態開關顯示，收到 CAN 狀態時會立即更新。
+        # 不啟動 60 FPS 空轉 timer，避免主執行緒每秒被喚醒 60 次。
         
         # 啟動速限閃爍 Timer
         self.speed_limit_timer = QTimer()
         self.speed_limit_timer.timeout.connect(self._update_speed_limit_flash)
-        self.speed_limit_timer.start(50)  # 50ms = 約 20 FPS
+        self.speed_limit_timer.start(500)  # 閃爍節奏 0.5 秒，避免 20 FPS 空轉
         
         # 啟動速限查詢 Timer（每 5 秒查詢一次）
         self.speed_limit_query_timer = QTimer()
@@ -2768,17 +2766,6 @@ class Dashboard(QWidget):
             
         self.last_physics_time = current_time
         
-        # === 低頻率垃圾回收 ===
-        # 每 5 分鐘執行一次 GC，清理累積的記憶體
-        # 使用低頻率避免影響正常運作的流暢度
-        if not hasattr(self, '_last_gc_time'):
-            self._last_gc_time = current_time
-        
-        if current_time - self._last_gc_time >= 300:  # 300 秒 = 5 分鐘
-            gc.collect()
-            self._last_gc_time = current_time
-            print(f"[GC] 執行定期垃圾回收 @ {time.strftime('%H:%M:%S')}")
-        
         # 取得當前速度 (來自 _slot_set_speed 的最新 raw 值)
         # 如果還沒初始化過，就預設為 0
         current_speed = getattr(self, "calc_speed_source", 0.0)
@@ -2996,7 +2983,8 @@ class Dashboard(QWidget):
     # === Spotify Slots ===
     @pyqtSlot(str, str, str)
     def _slot_update_spotify_track(self, title, artist, album):
-        print(f"DEBUG: UI Received - Title: {title}, Artist: {artist}, Album: '{album}'")
+        if os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes'):
+            print(f"DEBUG: UI Received - Title: {title}, Artist: {artist}, Album: '{album}'")
         if hasattr(self, 'music_card'):
             self.music_card.set_song(title, artist, album)
 
@@ -4140,10 +4128,11 @@ class Dashboard(QWidget):
         # 更新關機監控器的行程資訊
         if hasattr(self, '_shutdown_monitor') and hasattr(self, 'trip_info_card'):
             trip_info = self.trip_info_card.get_trip_info()
-            print(f"[DEBUG] get_trip_info result: {trip_info}")
-            print(f"[DEBUG] trip_info_card.start_time: {self.trip_info_card.start_time}")
-            print(f"[DEBUG] trip_info_card.trip_distance: {self.trip_info_card.trip_distance}")
-            print(f"[DEBUG] trip_info_card.avg_fuel: {self.trip_info_card.avg_fuel}")
+            if os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes'):
+                print(f"[DEBUG] get_trip_info result: {trip_info}")
+                print(f"[DEBUG] trip_info_card.start_time: {self.trip_info_card.start_time}")
+                print(f"[DEBUG] trip_info_card.trip_distance: {self.trip_info_card.trip_distance}")
+                print(f"[DEBUG] trip_info_card.avg_fuel: {self.trip_info_card.avg_fuel}")
             if trip_info:
                 self._shutdown_monitor.update_trip_info(trip_info['elapsed_time'], trip_info['trip_distance'], trip_info['avg_fuel'])
     
@@ -4258,7 +4247,8 @@ class Dashboard(QWidget):
 
     def _slot_update_parking_brake(self, is_engaged: bool):
         """Slot: 更新手煞車狀態（從 GPIO 訊號）"""
-        print(f"[Dashboard] 收到手煞車信號: {is_engaged}")
+        if os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes'):
+            print(f"[Dashboard] 收到手煞車信號: {is_engaged}")
         self.parking_brake = is_engaged
         self.update_parking_brake_display()
 
@@ -4271,7 +4261,8 @@ class Dashboard(QWidget):
         - 有任意雷達觸發（值 > 0）
         - 1 分鐘內只自動切換一次
         """
-        print(f"[Dashboard] Received radar data: {radar_str}")  # Debug 用
+        if os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes'):
+            print(f"[Dashboard] Received radar data: {radar_str}")  # Debug 用
         if hasattr(self, 'door_card'):
             self.door_card.set_radar_status(radar_str)
         
@@ -4362,7 +4353,8 @@ class Dashboard(QWidget):
     
     def set_parking_brake(self, is_engaged: bool):
         """設定手煞車狀態 - 供外部呼叫"""
-        print(f"[Dashboard] 設定手煞車: {is_engaged}")
+        if os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes'):
+            print(f"[Dashboard] 設定手煞車: {is_engaged}")
         self.parking_brake = is_engaged
         self.update_parking_brake_display()
 
@@ -4390,7 +4382,9 @@ class Dashboard(QWidget):
         
         self.fuel_gauge.set_value(self.fuel)
         if hasattr(self, "fuel_percent_label"):
-            self.fuel_percent_label.setText(f"{self.fuel:.0f}%")
+            fuel_text = f"{self.fuel:.0f}%"
+            if self.fuel_percent_label.text() != fuel_text:
+                self.fuel_percent_label.setText(fuel_text)
         
         # 決定顯示哪個速度
         import vehicle.datagrab as datagrab
@@ -4402,10 +4396,12 @@ class Dashboard(QWidget):
                    
         if use_gps:
             # 使用 GPS 速度
-            self.speed_label.setText(str(int(self.current_gps_speed)))
+            speed_text = str(int(self.current_gps_speed))
         else:
             # 使用 CAN/Sim 速度 (施密特觸發器處理後的穩定值)
-            self.speed_label.setText(str(self._displayed_speed_int))
+            speed_text = str(self._displayed_speed_int)
+        if self.speed_label.text() != speed_text:
+            self.speed_label.setText(speed_text)
         
         # 更新檔位顯示顏色
         gear_colors = {
@@ -4422,16 +4418,19 @@ class Dashboard(QWidget):
             "L": "#ff6",   # 黃色
         }
         color = gear_colors.get(self.gear, "#6af")
-        self.gear_label.setStyleSheet(f"""
-            color: {color};
-            font-size: 120px;
-            font-weight: bold;
-            font-family: Arial;
-            background: rgba(30, 30, 40, 0.8);
-            border: 4px solid #456;
-            border-radius: 20px;
-        """)
-        self.gear_label.setText(self.gear)
+        if getattr(self, "_last_gear_color", None) != color:
+            self.gear_label.setStyleSheet(f"""
+                color: {color};
+                font-size: 120px;
+                font-weight: bold;
+                font-family: Arial;
+                background: rgba(30, 30, 40, 0.8);
+                border: 4px solid #456;
+                border-radius: 20px;
+            """)
+            self._last_gear_color = color
+        if self.gear_label.text() != self.gear:
+            self.gear_label.setText(self.gear)
 
 def run_dashboard(
     on_dashboard_ready=None,

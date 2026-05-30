@@ -241,6 +241,10 @@ class QuadGaugeCard(QWidget):
         self._flash_timers = [None] * 4
         self._flash_state = [False] * 4
         self._danger_latched = [False] * 4
+        self._last_label_styles = [None] * 4
+        self._last_value_texts = [None] * 4
+        self._last_progress_values = [None] * 4
+        self._last_bar_colors = [None] * 4
         
         self._init_ui()
     
@@ -380,12 +384,15 @@ class QuadGaugeCard(QWidget):
         return "#6af"
 
     def _set_label_style(self, index, color):
+        if self._last_label_styles[index] == color:
+            return
         self.value_labels[index].setStyleSheet(f"""
             color: {color};
             font-size: 54px;
             font-weight: bold;
             background: transparent;
         """)
+        self._last_label_styles[index] = color
 
     def _update_flash(self, index, is_danger, danger_color):
         timer = self._flash_timers[index]
@@ -450,7 +457,10 @@ class QuadGaugeCard(QWidget):
         self.gauge_data[index]["value"] = value
         
         data = self.gauge_data[index]
-        self.value_labels[index].setText(self._format_value(value, data["decimals"]))
+        value_text = self._format_value(value, data["decimals"])
+        if self._last_value_texts[index] != value_text:
+            self.value_labels[index].setText(value_text)
+            self._last_value_texts[index] = value_text
         
         color = self._get_value_color(index)
         is_danger = False
@@ -478,7 +488,9 @@ class QuadGaugeCard(QWidget):
         
         cell = self.gauge_cells[index]
         progress = self._calc_progress(index)
-        cell.progress_bar.setValue(progress)
+        if self._last_progress_values[index] != progress:
+            cell.progress_bar.setValue(progress)
+            self._last_progress_values[index] = progress
         
         if color == "#f44":
             bar_color = "stop:0 #f44, stop:1 #f66"
@@ -487,18 +499,20 @@ class QuadGaugeCard(QWidget):
         else:
             bar_color = "stop:0 #4a9eff, stop:1 #6af"
         
-        cell.progress_bar.setStyleSheet(f"""
-            QProgressBar {{
-                background: #2a2a35;
-                border-radius: 3px;
-                border: none;
-            }}
-            QProgressBar::chunk {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    {bar_color});
-                border-radius: 3px;
-            }}
-        """)
+        if self._last_bar_colors[index] != bar_color:
+            cell.progress_bar.setStyleSheet(f"""
+                QProgressBar {{
+                    background: #2a2a35;
+                    border-radius: 3px;
+                    border: none;
+                }}
+                QProgressBar::chunk {{
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        {bar_color});
+                    border-radius: 3px;
+                }}
+            """)
+            self._last_bar_colors[index] = bar_color
     
     def get_focus(self):
         return self.focus_index
