@@ -30,6 +30,8 @@ class NavigationCard(QWidget):
         self.duration = ""
         self.eta = ""
         self.icon_base64 = ""
+        self._icon_pixmap_cache = {}
+        self._last_direction_style_mode = None
         
         # 主佈局使用 StackedWidget 切換無導航/有導航模式
         self.main_layout = QVBoxLayout(self)
@@ -289,10 +291,10 @@ class NavigationCard(QWidget):
         
         # 更新顯示
         self._update_direction_label(self.direction if self.direction else "--")
-        self.turn_distance_value.setText(self.turn_distance if self.turn_distance else "--")
-        self.distance_value.setText(self.total_distance if self.total_distance else "--")
-        self.duration_value.setText(self.duration if self.duration else "--")
-        self.eta_value.setText(self.eta if self.eta else "--")
+        self._set_label_text(self.turn_distance_value, self.turn_distance if self.turn_distance else "--")
+        self._set_label_text(self.distance_value, self.total_distance if self.total_distance else "--")
+        self._set_label_text(self.duration_value, self.duration if self.duration else "--")
+        self._set_label_text(self.eta_value, self.eta if self.eta else "--")
         
         # 更新圖標
         if self.icon_base64:
@@ -302,6 +304,10 @@ class NavigationCard(QWidget):
         
         # 切換到導航頁面
         self.show_nav_ui()
+
+    def _set_label_text(self, label, text):
+        if label.text() != text:
+            label.setText(text)
     
     def _set_icon_from_base64(self, base64_data: str):
         """從 base64 編碼設置方向圖標"""
@@ -310,6 +316,14 @@ class NavigationCard(QWidget):
             
             # 移除可能的換行符和空白
             base64_data = base64_data.replace('\n', '').replace(' ', '')
+
+            cache_key = hash(base64_data)
+            cached_pixmap = self._icon_pixmap_cache.get(cache_key)
+            if cached_pixmap is not None:
+                self.direction_icon.setPixmap(cached_pixmap)
+                self.direction_icon.setStyleSheet("background: transparent; border: none;")
+                self.default_icon.hide()
+                return
             
             # 解碼 base64
             image_data = base64.b64decode(base64_data)
@@ -356,6 +370,10 @@ class NavigationCard(QWidget):
                 painter.end()
                 
                 self.direction_icon.setPixmap(rounded_pixmap)
+                self._icon_pixmap_cache[cache_key] = rounded_pixmap
+                if len(self._icon_pixmap_cache) > 16:
+                    oldest_key = next(iter(self._icon_pixmap_cache))
+                    self._icon_pixmap_cache.pop(oldest_key, None)
                 self.direction_icon.setStyleSheet("background: transparent; border: none;")
                 self.default_icon.hide()
             else:
@@ -391,13 +409,15 @@ class NavigationCard(QWidget):
         
         if display_len <= 10:
             # 短文字：單行大字
-            self.direction_label.setStyleSheet("""
-                color: white;
-                font-size: 36px;
-                font-weight: bold;
-                background: transparent;
-            """)
-            self.direction_label.setText(text)
+            if self._last_direction_style_mode != "short":
+                self.direction_label.setStyleSheet("""
+                    color: white;
+                    font-size: 36px;
+                    font-weight: bold;
+                    background: transparent;
+                """)
+                self._last_direction_style_mode = "short"
+            self._set_label_text(self.direction_label, text)
         else:
             # 長文字：縮小字體，允許換行
             wrapped_text = text
@@ -417,14 +437,16 @@ class NavigationCard(QWidget):
                 best_slash = min(slashes, key=lambda x: abs(x - mid))
                 wrapped_text = text[:best_slash + 1] + "\n" + text[best_slash + 1:]
             
-            self.direction_label.setStyleSheet("""
-                color: white;
-                font-size: 22px;
-                font-weight: bold;
-                background: transparent;
-                line-height: 1.1;
-            """)
-            self.direction_label.setText(wrapped_text)
+            if self._last_direction_style_mode != "long":
+                self.direction_label.setStyleSheet("""
+                    color: white;
+                    font-size: 22px;
+                    font-weight: bold;
+                    background: transparent;
+                    line-height: 1.1;
+                """)
+                self._last_direction_style_mode = "long"
+            self._set_label_text(self.direction_label, wrapped_text)
     
     def clear_navigation(self):
         """清除導航資訊，回到無導航狀態"""
@@ -445,6 +467,5 @@ class NavigationCard(QWidget):
             if 'T(' in ss and 'PRIMARY' in ss:
                 widget.setStyleSheet("")
                 widget.setStyleSheet(ss)
-
 
 

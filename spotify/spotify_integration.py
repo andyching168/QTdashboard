@@ -119,6 +119,13 @@ class SpotifyIntegration:
             self.listener.set_update_interval(interval)
         else:
             logger.warning("Spotify listener 未初始化，無法設定更新間隔")
+
+    def set_progress_active(self, active: bool):
+        """設定播放進度補間是否使用可見狀態的更新頻率。"""
+        if self.listener:
+            self.listener.set_progress_active(active)
+        else:
+            logger.warning("Spotify listener 未初始化，無法設定進度更新狀態")
     
     def force_update_now(self):
         """強制立即更新一次 Spotify 資訊（用於進入音樂卡片時）"""

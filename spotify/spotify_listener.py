@@ -48,6 +48,10 @@ class SpotifyListener:
         self.local_duration_ms = 0
         self.local_is_playing = False
         self.last_sync_time = 0  # 上次同步的時間戳
+        self.progress_active = False
+        self.progress_active_interval = 0.5
+        self.progress_inactive_interval = 2.0
+        self._last_progress_emit_second = None
         
         # 錯誤處理
         self.consecutive_errors = 0
@@ -91,6 +95,11 @@ class SpotifyListener:
         old_interval = self.update_interval
         self.update_interval = interval
         logger.info(f"Spotify 更新間隔已變更: {old_interval}秒 -> {interval}秒")
+
+    def set_progress_active(self, active: bool):
+        """切換進度補間更新頻率；音樂卡不可見時顯著降頻。"""
+        self.progress_active = bool(active)
+        self._last_progress_emit_second = None
     
     def force_update_now(self):
         """強制立即更新一次（用於進入音樂卡片時的即時更新）"""
@@ -133,6 +142,7 @@ class SpotifyListener:
         """本地進度補間循環（不呼叫 API，只更新進度條）"""
         while self.running:
             try:
+                sleep_interval = self.progress_active_interval if self.progress_active else self.progress_inactive_interval
                 if self.local_is_playing and self.local_duration_ms > 0:
                     # 計算經過的時間
                     elapsed = (time.time() - self.last_sync_time) * 1000
@@ -142,7 +152,9 @@ class SpotifyListener:
                     )
                     
                     # 透過回調更新進度
-                    if self.callbacks['on_progress_update']:
+                    progress_second = int(interpolated_progress // 1000)
+                    if self.callbacks['on_progress_update'] and progress_second != self._last_progress_emit_second:
+                        self._last_progress_emit_second = progress_second
                         progress_data = {
                             'progress_ms': interpolated_progress,
                             'duration_ms': self.local_duration_ms,
@@ -150,7 +162,7 @@ class SpotifyListener:
                         }
                         self.callbacks['on_progress_update'](progress_data)
                 
-                time.sleep(0.2)  # 每 200ms 更新一次，足夠流暢
+                time.sleep(sleep_interval)
                 
             except Exception as e:
                 logger.debug(f"進度補間錯誤: {e}")

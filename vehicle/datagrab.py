@@ -58,6 +58,7 @@ class WorkerSignals(QObject):
     update_turbo = pyqtSignal(float)  # 發送渦輪增壓 (bar)
     update_battery = pyqtSignal(float)  # 發送電瓶電壓 (V)
     update_fuel_consumption = pyqtSignal(float, float)  # 發送油耗 (瞬時 L/100km, 平均 L/100km)
+    update_obd_batch = pyqtSignal(dict)  # 批次發送高頻 OBD UI 資料，降低 queued signal 數量
     # update_nav_icon = pyqtSignal(str) # 預留給導航圖片
 
 # --- 全局變數 ---
@@ -551,6 +552,17 @@ def unified_receiver(bus, db, signals):
     last_temp_value = 0.0
     last_turbo_value = 0.0
     last_battery_value = 0.0
+    pending_obd_ui = {}
+    last_obd_batch_emit = 0.0
+
+    def emit_obd_batch_if_due(now, force=False):
+        nonlocal pending_obd_ui, last_obd_batch_emit
+        if not pending_obd_ui:
+            return
+        if force or now - last_obd_batch_emit >= UI_UPDATE_INTERVAL:
+            signals.update_obd_batch.emit(dict(pending_obd_ui))
+            pending_obd_ui.clear()
+            last_obd_batch_emit = now
     
     logger.info("CAN 訊息接收執行緒已啟動")
     
@@ -607,7 +619,8 @@ def unified_receiver(bus, db, signals):
                         last_rpm_value = current_rpm_smoothed / 1000.0
                         now = time.time()
                         if now - last_rpm_ui_update >= UI_UPDATE_INTERVAL:
-                            signals.update_rpm.emit(last_rpm_value)
+                            pending_obd_ui["rpm"] = last_rpm_value
+                            emit_obd_batch_if_due(now)
                             last_rpm_ui_update = now
                     
                     # PID 0D (Vehicle Speed) - 格式: [03, 41, 0D, Speed, ...]
@@ -658,7 +671,8 @@ def unified_receiver(bus, db, signals):
                         last_temp_value = temp_normalized
                         now = time.time()
                         if now - last_temp_ui_update >= UI_UPDATE_INTERVAL:
-                            signals.update_temp.emit(last_temp_value)
+                            pending_obd_ui["temp"] = last_temp_value
+                            emit_obd_batch_if_due(now)
                             last_temp_ui_update = now
                     
                     # PID 0B (MAP / Turbo Pressure) - 格式: [03, 41, 0B, MAP, ...]
@@ -675,7 +689,8 @@ def unified_receiver(bus, db, signals):
                         last_turbo_value = turbo_bar
                         now = time.time()
                         if now - last_turbo_ui_update >= UI_UPDATE_INTERVAL:
-                            signals.update_turbo.emit(last_turbo_value)
+                            pending_obd_ui["turbo"] = last_turbo_value
+                            emit_obd_batch_if_due(now)
                             last_turbo_ui_update = now
                     
                     # PID 42 (Control Module Voltage / Battery) - 格式: [04, 41, 42, A, B, ...]
@@ -1259,6 +1274,7 @@ def main():
             state.signals.update_rpm.connect(dashboard.set_rpm)
             state.signals.update_speed.connect(dashboard.set_speed)
             state.signals.update_temp.connect(dashboard.set_temperature)
+            state.signals.update_obd_batch.connect(dashboard.set_obd_batch)
             state.signals.update_fuel.connect(dashboard.set_fuel)
             state.signals.update_gear.connect(dashboard.set_gear)
             state.signals.update_turn_signal.connect(dashboard.set_turn_signal)

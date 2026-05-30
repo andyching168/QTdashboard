@@ -1682,6 +1682,7 @@ class Dashboard(QWidget):
                 if result:
                     self._spotify_connected = True
                     self._spotify_integration = result  # 儲存整合實例引用
+                    self._set_spotify_progress_active(self._is_music_card_visible())
                     self._spotify_init_attempts = 0
                     print("Spotify 初始化成功")
                 else:
@@ -1713,6 +1714,7 @@ class Dashboard(QWidget):
             if result:
                 self._spotify_connected = True
                 self._spotify_integration = result  # 儲存整合實例引用
+                self._set_spotify_progress_active(self._is_music_card_visible())
                 self._spotify_init_attempts = 0
                 print("[Spotify] ✅ 重試成功")
             else:
@@ -1740,12 +1742,14 @@ class Dashboard(QWidget):
         
         if is_entering_music:
             print("進入音樂卡片，強制立即更新 Spotify")
+            self._set_spotify_progress_active(True)
             # 進入音樂卡片時立即更新
             self._spotify_integration.force_update_now()
             # 保持高頻更新（設定為2秒以獲得良好體驗）
             self._spotify_integration.set_update_interval(2.0)
         elif is_leaving_music:
             print("離開音樂卡片，恢復10秒更新間隔")
+            self._set_spotify_progress_active(False)
             # 離開音樂卡片時恢復10秒更新間隔
             self._spotify_integration.set_update_interval(10.0)
     
@@ -1757,11 +1761,13 @@ class Dashboard(QWidget):
         # 音樂卡片在第一列，切換到非第一列時要恢復10秒更新
         if self.current_row_index == 0 and new_row_index != 0:
             print("離開音樂卡片所在列，恢復10秒更新間隔")
+            self._set_spotify_progress_active(False)
             self._spotify_integration.set_update_interval(10.0)
         # 切換到第一列時，檢查是否在音樂卡片上
         elif self.current_row_index != 0 and new_row_index == 0:
-            if self.current_left_index == 0:  # 目前在音樂卡片上
+            if self.current_card_index == 0:  # 目前在音樂卡片上
                 print("進入音樂卡片所在列且在音樂卡片上，設定2秒更新")
+                self._set_spotify_progress_active(True)
                 self._spotify_integration.force_update_now()
                 self._spotify_integration.set_update_interval(2.0)
     
@@ -1805,6 +1811,8 @@ class Dashboard(QWidget):
                     result = setup_spotify(self)
                     if result:
                         self._spotify_connected = True
+                        self._spotify_integration = result
+                        self._set_spotify_progress_active(self._is_music_card_visible())
                         self._spotify_init_attempts = 0
                         print("[Spotify] ✅ 初始化成功")
                     else:
@@ -2516,6 +2524,15 @@ class Dashboard(QWidget):
         執行緒安全：透過 Signal 發送，由主執行緒執行
         """
         self.signal_update_temperature.emit(float(temp))
+
+    def set_obd_batch(self, values: dict):
+        """外部數據接口：批次更新高頻 OBD 資料，降低跨執行緒 signal 數量。"""
+        if "rpm" in values:
+            self.signal_update_rpm.emit(float(values["rpm"]))
+        if "temp" in values:
+            self.signal_update_temperature.emit(float(values["temp"]))
+        if "turbo" in values:
+            self.set_turbo(float(values["turbo"]))
     
     def set_fuel(self, fuel):
         """外部數據接口：設置油量 (0-100)
@@ -2654,6 +2671,13 @@ class Dashboard(QWidget):
         """更新 Spotify 專輯封面 (執行緒安全)"""
         self.signal_update_spotify_art.emit(pil_image)
 
+    def _is_music_card_visible(self):
+        return self.current_row_index == 0 and self.current_card_index == 0
+
+    def _set_spotify_progress_active(self, active: bool):
+        if self._spotify_integration:
+            self._spotify_integration.set_progress_active(active)
+
     # === 實際執行 UI 更新的 Slot 方法 (在主執行緒中執行) ===
     @pyqtSlot(float)
     @perf_track
@@ -2750,7 +2774,7 @@ class Dashboard(QWidget):
         
         if new_displayed != current_displayed:
             self._displayed_speed_int = new_displayed
-            self.update_display()
+            self._update_speed_display()
 
     def _maybe_update_speed_correction(self, obd_speed):
         """根據 GPS 與 OBD 速度差逐步修正校正係數"""
@@ -2849,7 +2873,7 @@ class Dashboard(QWidget):
         rpm_display = int((self.rpm * 1000) // 20)
         if getattr(self, "_last_rpm_display", None) != rpm_display:
             self._last_rpm_display = rpm_display
-            self.update_display()
+            self._update_quad_gauge_display(update_rpm=True)
         
         # 若引擎狀態從 on 掉到 off，立即上傳一次 MQTT
         self._maybe_publish_engine_off()
@@ -2870,7 +2894,7 @@ class Dashboard(QWidget):
             return
         self.temp = new_temp
         self._last_temp_display = temp_display
-        self.update_display()
+        self._update_quad_gauge_display(update_temp=True)
     
     @pyqtSlot(float)
     def _slot_set_fuel(self, fuel):
@@ -2884,7 +2908,7 @@ class Dashboard(QWidget):
             return
         self.fuel = new_fuel
         self._last_fuel_display = fuel_display
-        self.update_display()
+        self._update_fuel_display()
     
     @pyqtSlot(str)
     def _slot_set_gear(self, gear):
@@ -2906,7 +2930,7 @@ class Dashboard(QWidget):
 
         # 先更新狀態與畫面，再發布 MQTT，避免送出舊檔位
         self.gear = display_gear
-        self.update_display()
+        self._update_gear_display()
 
         # 檔位變更時立即上傳 MQTT 數據
         if gear_changed and self._mqtt_connected:
@@ -4428,51 +4452,51 @@ class Dashboard(QWidget):
         self.update_parking_brake_display()
 
     def update_display(self):
-        """更新所有儀表顯示"""
-        # 更新四宮格卡片
-        # rpm 是以「千轉」為單位 (0-8)，轉換為實際轉速
-        self.quad_gauge_card.set_rpm(self.rpm * 1000)
-        
-        # temp 是百分比 (0-100)，轉換為大約的攝氏溫度
-        # 假設 0% = 40°C, 100% = 120°C
-        # 如果 temp 為 None（OBD 未回應），則傳入 None
+        """更新所有儀表顯示。保留給鍵盤模擬與全量刷新使用。"""
+        self._update_quad_gauge_display(update_rpm=True, update_temp=True)
+        self._update_fuel_display()
+        self._update_speed_display()
+        self._update_gear_display()
+
+    def _update_quad_gauge_display(self, update_rpm=False, update_temp=False):
+        """局部更新四宮格，避免單一資料變化時重刷整個 dashboard。"""
+        if update_rpm:
+            self.quad_gauge_card.set_rpm(self.rpm * 1000)
+            if self._in_detail_view and self._detail_gauge_index == 0:
+                self.quad_gauge_detail.update_value(self.rpm * 1000)
+
+        if not update_temp:
+            return
+
         if self.temp is not None:
             temp_celsius = 40 + (self.temp / 100) * 80
         else:
             temp_celsius = None
         self.quad_gauge_card.set_coolant_temp(temp_celsius)
-        
-        # 如果在詳細視圖中，同步更新
-        if self._in_detail_view:
-            if self._detail_gauge_index == 0:  # RPM
-                self.quad_gauge_detail.update_value(self.rpm * 1000)
-            elif self._detail_gauge_index == 1:  # 水溫
-                self.quad_gauge_detail.update_value(temp_celsius)
-        
+        if self._in_detail_view and self._detail_gauge_index == 1:
+            self.quad_gauge_detail.update_value(temp_celsius)
+
+    def _update_fuel_display(self):
+        """局部更新油量區。"""
         self.fuel_gauge.set_value(self.fuel)
         if hasattr(self, "fuel_percent_label"):
             fuel_text = f"{self.fuel:.0f}%"
             if self.fuel_percent_label.text() != fuel_text:
                 self.fuel_percent_label.setText(fuel_text)
-        
-        # 決定顯示哪個速度
+
+    def _update_speed_display(self):
+        """局部更新中心速度數字。"""
         import vehicle.datagrab as datagrab
-        # 邏輯: 僅當 (速度同步開啟 AND GPS定位完成 AND OBD速度 >= 20) 時使用 GPS 速度
-        # 這是為了避免低速時的 GPS 漂移
-        use_gps = (datagrab.gps_speed_mode and 
-                   self.is_gps_fixed and 
-                   self.speed >= 20.0)
-                   
+        use_gps = datagrab.gps_speed_mode and self.is_gps_fixed and self.speed >= 20.0
         if use_gps:
-            # 使用 GPS 速度
             speed_text = str(int(self.current_gps_speed))
         else:
-            # 使用 CAN/Sim 速度 (施密特觸發器處理後的穩定值)
             speed_text = str(self._displayed_speed_int)
         if self.speed_label.text() != speed_text:
             self.speed_label.setText(speed_text)
-        
-        # 更新檔位顯示顏色
+
+    def _update_gear_display(self):
+        """局部更新檔位文字與顏色。"""
         gear_colors = {
             "P": "#6af",   # 藍色
             "R": "#f66",   # 紅色
@@ -4816,6 +4840,7 @@ def main():
         signals.update_rpm.connect(dashboard.set_rpm)
         signals.update_speed.connect(dashboard.set_speed)
         signals.update_temp.connect(dashboard.set_temperature)
+        signals.update_obd_batch.connect(dashboard.set_obd_batch)
         signals.update_fuel.connect(dashboard.set_fuel)
         signals.update_gear.connect(dashboard.set_gear)
         signals.update_turn_signal.connect(dashboard.set_turn_signal)
