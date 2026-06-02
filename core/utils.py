@@ -9,6 +9,13 @@ from functools import wraps
 from pathlib import Path
 
 
+def _env_enabled(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in ('1', 'true', 'yes', 'on')
+
+
 def is_raspberry_pi():
     """檢測是否在樹莓派上運行"""
     try:
@@ -60,7 +67,8 @@ class PerformanceMonitor:
         if getattr(self, '_initialized', False):
             return
         self._initialized = True
-        self.enabled = os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes')
+        self.log_enabled = _env_enabled('PERF_MONITOR')
+        self.enabled = self.log_enabled or _env_enabled('PERF_TELEMETRY', default=True)
         self.slow_calls = deque(maxlen=100)
         self.stats = {}
         self._report_timer = None
@@ -79,12 +87,13 @@ class PerformanceMonitor:
         self._frame_times.append(duration_ms)
         
         if duration_ms > self.SLOW_THRESHOLD_MS:
-            print(f"⚠️ [PERF] 幀延遲: {duration_ms:.1f}ms {context}")
             self.slow_calls.append({
                 'func': f"Frame: {context}" if context else "Frame",
                 'duration_ms': duration_ms,
                 'time': time.time()
             })
+            if self.log_enabled:
+                print(f"⚠️ [PERF] 幀延遲: {duration_ms:.1f}ms {context}")
     
     def track(self, func_name: str, duration_ms: float):
         if not self.enabled:
@@ -105,7 +114,8 @@ class PerformanceMonitor:
                 'duration_ms': duration_ms,
                 'time': time.time()
             })
-            print(f"⚠️ [PERF] 慢呼叫: {func_name} 耗時 {duration_ms:.1f}ms")
+            if self.log_enabled:
+                print(f"⚠️ [PERF] 慢呼叫: {func_name} 耗時 {duration_ms:.1f}ms")
     
     def report(self):
         if not self.stats:
@@ -167,6 +177,7 @@ class PerformanceMonitor:
 
         return {
             'enabled': bool(self.enabled),
+            'log_enabled': bool(self.log_enabled),
             'slow_call_count': len(self.slow_calls),
             'top_slow_calls': top_stats,
             'recent_slow_calls': recent_slow,
@@ -176,10 +187,12 @@ class PerformanceMonitor:
 class JankDetector:
     """卡頓偵測器 - 使用 QTimer 偵測主執行緒阻塞"""
     
-    def __init__(self, threshold_ms=50):
+    def __init__(self, threshold_ms=50, interval_ms=50):
         self.threshold_ms = threshold_ms
+        self.interval_ms = interval_ms
         self.last_tick = None
-        self.enabled = os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes')
+        self.log_enabled = _env_enabled('PERF_MONITOR')
+        self.enabled = self.log_enabled or _env_enabled('PERF_TELEMETRY', default=True)
         self.timer = None
         self.jank_count = 0
         self.start_time = None
@@ -192,31 +205,34 @@ class JankDetector:
         from PyQt6.QtCore import QTimer
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
-        self.timer.start(16)
+        self.timer.start(self.interval_ms)
         self.last_tick = time.perf_counter()
         self.start_time = time.perf_counter()
-        print("[JankDetector] 卡頓偵測器已啟動（閾值: 50ms）")
+        if self.log_enabled:
+            print(f"[JankDetector] 卡頓偵測器已啟動（閾值: {self.threshold_ms}ms）")
     
     def _tick(self):
         now = time.perf_counter()
         if self.last_tick is not None:
             elapsed_ms = (now - self.last_tick) * 1000
-            if elapsed_ms > self.threshold_ms:
+            delay_ms = max(0, elapsed_ms - self.interval_ms)
+            if delay_ms > self.threshold_ms:
                 self.jank_count += 1
                 time_since_start = now - self.start_time if self.start_time else 0
                 
                 gc_counts = gc.get_count()
-                gc_info = f" (GC: {gc_counts})"
-                
-                print(f"🔴 [JANK] 主執行緒阻塞 {elapsed_ms:.0f}ms{gc_info} (累計: {self.jank_count}, 啟動後 {time_since_start:.1f}s)")
                 
                 self.jank_log.append({
                     'time': time_since_start,
                     'duration_ms': elapsed_ms,
+                    'delay_ms': delay_ms,
                     'gc_counts': gc_counts
                 })
                 if len(self.jank_log) > 20:
                     self.jank_log.pop(0)
+                if self.log_enabled:
+                    gc_info = f" (GC: {gc_counts})"
+                    print(f"🔴 [JANK] 主執行緒阻塞 {delay_ms:.0f}ms{gc_info} (累計: {self.jank_count}, 啟動後 {time_since_start:.1f}s)")
         self.last_tick = now
     
     def stop(self):
@@ -236,6 +252,9 @@ class JankDetector:
     def snapshot(self, limit=10):
         return {
             'enabled': bool(self.enabled),
+            'log_enabled': bool(self.log_enabled),
+            'interval_ms': int(self.interval_ms),
+            'threshold_ms': int(self.threshold_ms),
             'count': int(self.jank_count),
             'recent': list(self.jank_log[-limit:]),
         }
