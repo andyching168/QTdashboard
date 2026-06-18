@@ -106,6 +106,7 @@ class Dashboard(QWidget):
     signal_update_spotify_track = pyqtSignal(str, str, str)
     signal_update_spotify_progress = pyqtSignal(float, float, bool)  # current, total, is_playing
     signal_update_spotify_art = pyqtSignal(object)  # 傳遞 PIL Image 物件
+    signal_spotify_reauth_required = pyqtSignal(str)
     
     # 導航相關 Signal
     signal_update_navigation = pyqtSignal(dict)  # 傳遞導航資料字典
@@ -167,6 +168,7 @@ class Dashboard(QWidget):
         self.signal_update_spotify_track.connect(self._slot_update_spotify_track)
         self.signal_update_spotify_progress.connect(self._slot_update_spotify_progress)
         self.signal_update_spotify_art.connect(self._slot_update_spotify_art)
+        self.signal_spotify_reauth_required.connect(self._slot_spotify_reauth_required)
         
         # 連接方向燈 Signal
         self.signal_update_turn_signal.connect(self._slot_update_turn_signal)
@@ -1538,6 +1540,7 @@ class Dashboard(QWidget):
         self._spotify_connected = False
         self._spotify_init_attempts = 0
         self._spotify_integration = None  # Spotify 整合實例引用
+        self._spotify_reauth_required = False
         self._mqtt_connected = False
         self._mqtt_reconnect_timer = None
         self._shutdown_mqtt_in_progress = False
@@ -1722,7 +1725,8 @@ class Dashboard(QWidget):
                     self._spotify_init_attempts += 1
                     print(f"Spotify 初始化失敗 (嘗試 {self._spotify_init_attempts})")
                     # 如果初始化失敗，30 秒後重試（最多 3 次）
-                    if self._spotify_init_attempts < 3 and not self.is_offline:
+                    token_cache_exists = os.path.exists(cache_path)
+                    if self._spotify_init_attempts < 3 and not self.is_offline and token_cache_exists:
                         print(f"[Spotify] 將在 30 秒後重試...")
                         QTimer.singleShot(30000, self._retry_spotify_init)
             threading.Thread(target=init_spotify, daemon=True).start()
@@ -1754,7 +1758,8 @@ class Dashboard(QWidget):
                 self._spotify_init_attempts += 1
                 print(f"[Spotify] ❌ 重試失敗 (嘗試 {self._spotify_init_attempts})")
                 # 繼續重試
-                if self._spotify_init_attempts < 3 and not self.is_offline:
+                token_cache_exists = os.path.exists(get_spotify_cache_path())
+                if self._spotify_init_attempts < 3 and not self.is_offline and token_cache_exists:
                     QTimer.singleShot(30000, self._retry_spotify_init)
         
         threading.Thread(target=init_spotify, daemon=True).start()
@@ -1832,10 +1837,35 @@ class Dashboard(QWidget):
             y = (screen_geometry.height() - dialog_geometry.height()) // 2
             self.auth_dialog.move(x, y)
 
+    def notify_spotify_reauth_required(self, reason=""):
+        """Thread-safe entry point used when Spotify rejects a refresh token."""
+        self.signal_spotify_reauth_required.emit(str(reason))
+
+    @pyqtSlot(str)
+    def _slot_spotify_reauth_required(self, reason=""):
+        """Stop automatic retries and return Spotify to the explicit sign-in flow."""
+        if self._spotify_reauth_required:
+            return
+        self._spotify_reauth_required = True
+        self._spotify_connected = False
+        self._spotify_init_attempts = 3
+
+        integration = self._spotify_integration
+        if integration:
+            integration.enabled = False
+            if integration.listener:
+                integration.listener.running = False
+
+        self.music_card.show_bind_ui()
+        self.show_toast("Spotify 授權已過期，請重新綁定", "warning", 6000)
+        print(f"[Spotify] refresh token 已失效，等待重新授權: {reason}")
+
     def on_auth_completed(self, success):
         """授權完成回調"""
         if success:
             print("Spotify 授權成功！")
+            self._spotify_reauth_required = False
+            self._spotify_init_attempts = 0
             self.music_card.show_player_ui()
             # 在背景執行緒初始化 Spotify，避免阻塞 UI
             def _init_spotify_async():

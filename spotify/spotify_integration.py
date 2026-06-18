@@ -30,7 +30,7 @@ class SpotifyIntegration:
             logger.info("正在初始化 Spotify 連線...")
             
             # 建立認證管理器
-            self.auth = SpotifyAuthManager()
+            self.auth = SpotifyAuthManager(on_reauth_required=self._on_reauth_required)
             
             # 執行認證
             if not self.auth.authenticate():
@@ -107,6 +107,15 @@ class SpotifyIntegration:
         # 網路相關錯誤已在 listener 層級處理，這裡只記錄非網路錯誤
         if 'timeout' not in error.lower() and 'connection' not in error.lower():
             logger.warning(f"Spotify 錯誤: {error}")
+
+    def _on_reauth_required(self, reason):
+        """Stop polling and hand expired-token recovery back to the dashboard."""
+        self.enabled = False
+        if self.listener:
+            self.listener.running = False
+        logger.warning("Spotify 授權已失效，停止輪詢並等待重新綁定")
+        if self.dashboard and hasattr(self.dashboard, "notify_spotify_reauth_required"):
+            self.dashboard.notify_spotify_reauth_required(reason)
     
     def set_update_interval(self, interval: float):
         """

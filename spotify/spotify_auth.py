@@ -12,9 +12,42 @@ from urllib.parse import urlparse, parse_qs
 import threading
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyOAuth
+from spotipy.exceptions import SpotifyOauthError
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def is_invalid_grant_error(error):
+    """Return True only for an OAuth invalid_grant refresh failure."""
+    oauth_error = getattr(error, "error", None)
+    if isinstance(oauth_error, str) and oauth_error.lower() == "invalid_grant":
+        return True
+    return "invalid_grant" in str(error).lower()
+
+
+class SpotifyReauthorizationRequired(RuntimeError):
+    """Raised after an expired refresh token has been discarded."""
+
+
+class DashboardSpotifyOAuth(SpotifyOAuth):
+    """SpotifyOAuth variant that stops refresh retries after invalid_grant."""
+
+    def __init__(self, *args, invalid_grant_callback=None, **kwargs):
+        self.invalid_grant_callback = invalid_grant_callback
+        super().__init__(*args, **kwargs)
+
+    def refresh_access_token(self, refresh_token):
+        try:
+            return super().refresh_access_token(refresh_token)
+        except SpotifyOauthError as error:
+            if not is_invalid_grant_error(error):
+                raise
+            if self.invalid_grant_callback:
+                self.invalid_grant_callback(error)
+            raise SpotifyReauthorizationRequired(
+                "Spotify refresh token 已失效，需要重新授權"
+            ) from error
 
 
 class SpotifyAuthManager:
@@ -32,7 +65,7 @@ class SpotifyAuthManager:
         "user-read-recently-played",    # 讀取最近播放
     ]
     
-    def __init__(self, config_path=None, cache_path=None):
+    def __init__(self, config_path=None, cache_path=None, on_reauth_required=None):
         """
         初始化認證管理器
         
@@ -48,6 +81,10 @@ class SpotifyAuthManager:
         self.cache_path = cache_path
         self.sp = None
         self.auth_manager = None
+        self.on_reauth_required = on_reauth_required
+        self.reauth_required = False
+        self._reauth_notified = False
+        self._reauth_lock = threading.Lock()
         
         # 載入配置
         self.config = self._load_config()
@@ -88,13 +125,14 @@ class SpotifyAuthManager:
             
         try:
             # 建立 Spotify OAuth 管理器
-            self.auth_manager = SpotifyOAuth(
+            self.auth_manager = DashboardSpotifyOAuth(
+                invalid_grant_callback=self._handle_invalid_grant,
                 client_id=self.config['client_id'],
                 client_secret=self.config['client_secret'],
                 redirect_uri=self.config['redirect_uri'],
                 scope=" ".join(self.SCOPES),
                 cache_path=self.cache_path,
-                open_browser=True  # 自動開啟瀏覽器
+                open_browser=True,
             )
             
             # 建立 Spotify 客戶端
@@ -106,6 +144,8 @@ class SpotifyAuthManager:
             
             return True
             
+        except SpotifyReauthorizationRequired:
+            return False
         except Exception as e:
             logger.error(f"Spotify 認證失敗: {e}")
             return False
@@ -130,6 +170,8 @@ class SpotifyAuthManager:
                 
             return self.sp
             
+        except SpotifyReauthorizationRequired:
+            return None
         except Exception as e:
             logger.error(f"取得 Spotify 客戶端失敗: {e}")
             return None
@@ -141,7 +183,30 @@ class SpotifyAuthManager:
         Returns:
             bool: 是否已認證
         """
-        return self.sp is not None
+        return self.sp is not None and not self.reauth_required
+
+    def _handle_invalid_grant(self, error):
+        """Discard an expired refresh token and notify the app exactly once."""
+        with self._reauth_lock:
+            if self._reauth_notified:
+                return
+            self._reauth_notified = True
+            self.reauth_required = True
+            self.sp = None
+
+        try:
+            if os.path.exists(self.cache_path):
+                os.remove(self.cache_path)
+                logger.info("已清除失效的 Spotify token 快取")
+        except OSError as cache_error:
+            logger.error(f"清除失效 Spotify token 失敗: {cache_error}")
+
+        logger.warning("Spotify refresh token 已失效，需要重新授權")
+        if self.on_reauth_required:
+            try:
+                self.on_reauth_required(str(error))
+            except Exception as callback_error:
+                logger.error(f"Spotify 重新授權通知失敗: {callback_error}")
     
     def logout(self):
         """登出並清除快取的 token"""
@@ -152,6 +217,9 @@ class SpotifyAuthManager:
                 
             self.sp = None
             self.auth_manager = None
+            with self._reauth_lock:
+                self.reauth_required = False
+                self._reauth_notified = False
             
         except Exception as e:
             logger.error(f"登出失敗: {e}")
