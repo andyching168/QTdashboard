@@ -1,12 +1,47 @@
 # Auto-extracted from main.py
 import time
+from datetime import datetime
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
+from PIL import ImageEnhance
+
 from core.utils import perf_track
 from ui.common import MarqueeLabel
 from ui.theme import T
+
+# 夜間專輯封面亮度調整設定
+EVENING_START_HOUR = 18   # 晚間開始時間（18:00）
+EVENING_END_HOUR = 6      # 晚間結束時間（06:00）
+BRIGHTNESS_THRESHOLD = 128  # 平均亮度超過此值視為「過亮」
+DIM_FACTOR = 0.5           # 降亮度倍率（0.5 = 50%）
+
+
+def _is_evening() -> bool:
+    """判斷當前是否為晚間時段 (18:00 ~ 06:00)"""
+    now = datetime.now()
+    return now.hour >= EVENING_START_HOUR or now.hour < EVENING_END_HOUR
+
+
+def _calc_brightness(pil_image) -> float:
+    """計算 PIL 圖片平均亮度 (0-255)，使用灰階轉換後平均"""
+    gray = pil_image.convert("L")
+    pixels = list(gray.getdata())
+    return sum(pixels) / len(pixels)
+
+
+def _should_dim(pil_image) -> bool:
+    """判斷是否需要降亮度：晚間 + 圖片過亮"""
+    if not _is_evening():
+        return False
+    return _calc_brightness(pil_image) > BRIGHTNESS_THRESHOLD
+
+
+def _apply_dim(pil_image):
+    """對 PIL 圖片套用降亮度 50%"""
+    enhancer = ImageEnhance.Brightness(pil_image)
+    return enhancer.enhance(DIM_FACTOR)
 
 
 class MusicCard(QWidget):
@@ -399,6 +434,10 @@ class MusicCard(QWidget):
             # 這比轉換大圖後再縮放效率高很多
             if pil_image.size[0] > 180 or pil_image.size[1] > 180:
                 pil_image = pil_image.resize((180, 180), resample=1)  # 1 = BILINEAR
+            
+            # 夜間亮度調整：晚間 + 圖片過亮 → 降亮度 50%
+            if _should_dim(pil_image):
+                pil_image = _apply_dim(pil_image)
             
             from PIL.ImageQt import ImageQt
             # 轉換 PIL Image 為 QPixmap
@@ -799,6 +838,10 @@ class MusicCardWide(QWidget):
             # 先縮小圖片到需要的大小 (300x300)，減少後續處理量
             if pil_image.size[0] > 300 or pil_image.size[1] > 300:
                 pil_image = pil_image.resize((300, 300), resample=1)  # 1 = BILINEAR
+            
+            # 夜間亮度調整：晚間 + 圖片過亮 → 降亮度 50%
+            if _should_dim(pil_image):
+                pil_image = _apply_dim(pil_image)
             
             from PIL.ImageQt import ImageQt
             qim = ImageQt(pil_image)
