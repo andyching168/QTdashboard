@@ -605,20 +605,9 @@ class TripInfoCardWide(QWidget):
         self.distance_label.setText(f"{self.trip_distance:.1f}")
     
     def update_from_speed(self, speed_kmh):
-        """根據車速更新行駛距離"""
-        current_time = time.monotonic()
-        delta_time = current_time - self.last_update_time
-        
-        # 合理的時間間隔內計算距離
-        if 0 < delta_time < 2:
-            # 使用平均速度計算距離
-            avg_speed = (self.last_speed + speed_kmh) / 2
-            distance = avg_speed * (delta_time / 3600)  # km
-            self.trip_distance += distance
-            self.distance_label.setText(f"{self.trip_distance:.1f}")
-        
+        """同步速度快取；里程由 Dashboard._physics_tick() 統一累積。"""
         self.last_speed = speed_kmh
-        self.last_update_time = current_time
+        self.last_update_time = time.monotonic()
     
     def update_rpm(self, rpm):
         """接收 RPM 更新並計算油耗"""
@@ -1844,6 +1833,5 @@ class TripCardWide(QWidget):
             if 'T(' in ss and 'PRIMARY' in ss:
                 widget.setStyleSheet("")
                 widget.setStyleSheet(ss)
-
 
 

@@ -2842,7 +2842,7 @@ class Dashboard(QWidget):
         self.trip_card.current_speed = new_speed
         self.odo_card.current_speed = new_speed
         
-        # 更新行程資訊卡片的行駛距離（根據車速累計）
+        # 同步行程資訊卡片的速度快取；距離由 _physics_tick() 統一累積
         if hasattr(self, 'trip_info_card'):
             self.trip_info_card.update_from_speed(new_speed)
         
