@@ -90,6 +90,11 @@ from core.shutdown_mqtt import (
     publish_pending_then_current,
     upsert_pending_event,
 )
+from core.brightness import (
+    clamp_brightness_percent,
+    effective_brightness_percent,
+    load_brightness_settings,
+)
 
 
 class Dashboard(QWidget):
@@ -222,6 +227,8 @@ class Dashboard(QWidget):
         
         # 亮度控制相關
         self.brightness_level = 0  # 0=100%, 1=75%, 2=50%
+        self.brightness_percent = 100
+        self.brightness_settings = load_brightness_settings()
         self.brightness_overlay = None
 
         self.init_ui()
@@ -256,6 +263,7 @@ class Dashboard(QWidget):
         
         # 創建亮度覆蓋層（必須在 init_ui 之後，確保在最上層）
         self._create_brightness_overlay()
+        self.apply_configured_brightness()
 
     def _perf_logging_enabled(self):
         """True when verbose runtime diagnostics are explicitly enabled."""
@@ -1466,32 +1474,59 @@ class Dashboard(QWidget):
         self.brightness_overlay.setStyleSheet("background: transparent;")
         self.brightness_overlay.hide()
         self.brightness_overlay.raise_()  # 確保在最上層
-    
-    def set_brightness(self, level):
+
+    def reload_brightness_settings(self):
+        """重新載入亮度設定並依目前日夜狀態套用。"""
+        self.brightness_settings = load_brightness_settings()
+        self.apply_configured_brightness()
+
+    def apply_configured_brightness(self):
+        """依亮度設定與台灣日出日落狀態套用亮度。"""
+        percent = effective_brightness_percent(self.brightness_settings)
+        self.set_brightness_percent(percent, persist_manual=False)
+
+    def set_brightness_percent(self, percent, persist_manual=True):
         """
-        設定亮度等級
-        level: 0=100% (全亮), 1=75%, 2=50%
+        設定亮度百分比。
+        percent: 10-100，100 表示全亮，數值越低 overlay 越暗。
         """
-        self.brightness_level = level
-        
-        if level == 0:
-            # 全亮 - 隱藏覆蓋層
+        percent = clamp_brightness_percent(percent)
+        self.brightness_percent = percent
+        self.brightness_level = int(round((100 - percent) / 25))
+
+        if not self.brightness_overlay:
+            return
+
+        if percent >= 100:
             self.brightness_overlay.hide()
             print("[亮度] 設定為 100%")
         else:
-            # 計算透明度 (level 1 = 25% 黑, level 2 = 50% 黑)
-            opacity = level * 0.25  # 0.25 或 0.50
+            opacity = (100 - percent) / 100.0
             alpha = int(opacity * 255)
             self.brightness_overlay.setStyleSheet(f"background: rgba(0, 0, 0, {alpha});")
             self.brightness_overlay.show()
             self.brightness_overlay.raise_()
             if hasattr(self, "toast_manager"):
                 self.toast_manager.raise_()
-            print(f"[亮度] 設定為 {100 - level * 25}%")
+            print(f"[亮度] 設定為 {percent}%")
+    
+    def set_brightness(self, level):
+        """
+        設定亮度等級
+        level: 0=100% (全亮), 1=75%, 2=50%
+        """
+        level = max(0, min(2, int(level)))
+        self.brightness_level = level
+        self.set_brightness_percent(100 - level * 25)
     
     def cycle_brightness(self):
         """循環切換亮度等級 100% -> 75% -> 50% -> 100%"""
-        next_level = (self.brightness_level + 1) % 3
+        if self.brightness_percent >= 100:
+            next_level = 1
+        elif self.brightness_percent >= 75:
+            next_level = 2
+        else:
+            next_level = 0
         self.set_brightness(next_level)
         return next_level
     
@@ -1501,7 +1536,7 @@ class Dashboard(QWidget):
     
     def get_brightness_percent(self):
         """取得當前亮度百分比"""
-        return 100 - self.brightness_level * 25
+        return self.brightness_percent
 
     def init_data(self):
         """初始化儀表數據，可以從外部數據源更新"""
@@ -1614,6 +1649,12 @@ class Dashboard(QWidget):
         self.speed_limit_query_timer = QTimer()
         self.speed_limit_query_timer.timeout.connect(self._update_speed_limit)
         self.speed_limit_query_timer.start(5000)  # 5000ms = 5 秒
+
+        # 啟動自動夜間亮度檢查（固定台灣座標計算日出日落）
+        self.brightness_timer = QTimer()
+        self.brightness_timer.timeout.connect(self.apply_configured_brightness)
+        self.brightness_timer.start(60000)  # 每分鐘檢查一次白天/夜間切換
+        self.apply_configured_brightness()
         
         # 啟動物理心跳 Timer（里程累積）
         self.last_physics_time = time.time()  # 重設時間基準
@@ -1974,6 +2015,16 @@ class Dashboard(QWidget):
             x = (screen_geometry.width() - dialog_geometry.width()) // 2
             y = (screen_geometry.height() - dialog_geometry.height()) // 2
             self.telegram_dialog.move(x, y)
+
+    def show_brightness_settings(self, parent=None):
+        """顯示亮度設定對話框"""
+        print("開啟亮度設定對話框...")
+
+        if self.panel_visible:
+            self.hide_control_panel()
+
+        from ui.brightness_settings import show_brightness_settings_popup
+        show_brightness_settings_popup(parent=parent or self.window(), dashboard=self)
     
     def on_mqtt_settings_saved(self, success):
         """MQTT 設定儲存完成回調"""

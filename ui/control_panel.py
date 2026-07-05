@@ -1219,7 +1219,7 @@ class ControlPanel(QWidget):
         
         dialog_width = int(1600 * scale)
         dialog_height = int(260 * scale)
-        btn_width = int(250 * scale)
+        btn_width = int(220 * scale)
         btn_height = int(80 * scale)
         title_font_size = max(12, int(28 * scale))
         btn_font_size = max(10, int(18 * scale))
@@ -1301,6 +1301,18 @@ class ControlPanel(QWidget):
             parent = self.parent()
             if parent and hasattr(parent, 'show_telegram_settings'):
                 parent.show_telegram_settings()
+
+        # 亮度設定
+        def open_brightness():
+            brightness_parent = dialog_parent
+            dashboard_parent = self.parent()
+
+            def _show_brightness_dialog():
+                if dashboard_parent and hasattr(dashboard_parent, 'show_brightness_settings'):
+                    dashboard_parent.show_brightness_settings(parent=brightness_parent)
+
+            dialog.accept()
+            QTimer.singleShot(0, _show_brightness_dialog)
         
         # 主題設定
         def open_theme():
@@ -1334,6 +1346,7 @@ class ControlPanel(QWidget):
         options_layout.addWidget(create_settings_btn("MQTT 設定", "📡", "設定 MQTT 伺服器連線", open_mqtt))
         options_layout.addWidget(create_settings_btn("Spotify 設定", "🎵", "設定 Spotify 音樂播放", open_spotify))
         options_layout.addWidget(create_settings_btn("Telegram 設定", "✈", "設定 Telegram 通知", open_telegram))
+        options_layout.addWidget(create_settings_btn("亮度設定", "☀", "設定預設與夜間亮度", open_brightness))
         options_layout.addWidget(create_settings_btn("主題強調色設定", "🎨", "自訂 UI 強調色", open_theme))
         options_layout.addWidget(create_settings_btn("通知測試", "🔔", "測試右上角 toast 通知", test_toast))
         options_layout.addStretch()
@@ -1808,4 +1821,3 @@ class ControlPanel(QWidget):
         parent = self.parent()
         if parent and hasattr(parent, 'hide_control_panel'):
             parent.hide_control_panel()  # type: ignore
-
