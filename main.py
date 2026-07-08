@@ -81,6 +81,7 @@ from core.utils import (
     system_resource_snapshot,
 )
 
+from core.mqtt_telemetry import MqttTelemetryController
 from core.shutdown_monitor import get_shutdown_monitor
 from core.max_value_logger import get_max_value_logger
 from core.startup_progress import StartupProgressWindow
@@ -122,9 +123,6 @@ class Dashboard(QWidget):
     
     # 油耗 Signal
     signal_update_fuel_consumption = pyqtSignal(float, float)  # 傳遞油耗 (瞬時 L/100km, 平均 L/100km)
-    
-    # MQTT telemetry Signal (用於跨執行緒啟動 timer)
-    signal_start_mqtt_telemetry = pyqtSignal()
     
     # Toast notification Signal (可從背景執行緒安全觸發)
     signal_show_toast = pyqtSignal(str, str, int)
@@ -191,9 +189,6 @@ class Dashboard(QWidget):
         
         # 注意：油耗由 trip_info_card 直接從 RPM/Speed/Turbo 信號計算，
         # 不需要從 datagrab.py 接收油號 signal
-        
-        # 連接 MQTT telemetry Signal
-        self.signal_start_mqtt_telemetry.connect(self._start_mqtt_telemetry_timer)
         
         # 連接 Toast Signal
         self.signal_show_toast.connect(self._slot_show_toast)
@@ -1346,7 +1341,7 @@ class Dashboard(QWidget):
             self.show_toast("MQTT 尚未設定，熄火紀錄已先儲存", "warning", 4500)
             return
 
-        if not hasattr(self, "mqtt_client") or self.mqtt_client is None or not self._mqtt_connected:
+        if self.mqtt_controller.client is None or not self.mqtt_controller.connected:
             print("[ShutdownMQTT] MQTT 尚未連線，已先儲存熄火紀錄")
             self.show_toast("MQTT 尚未連線，熄火紀錄已先儲存", "warning", 4500)
             return
@@ -1357,7 +1352,7 @@ class Dashboard(QWidget):
             try:
                 with open(config_file, "r", encoding="utf-8") as f:
                     config = json.load(f)
-                result = publish_pending_then_current(self.mqtt_client, config, event)
+                result = publish_pending_then_current(self.mqtt_controller.client, config, event)
                 sent_count = result.get("sent_count", 0)
                 remaining_count = result.get("remaining_count", 0)
                 sent_ids = result.get("sent_ids") or []
@@ -1541,9 +1536,12 @@ class Dashboard(QWidget):
         self._spotify_init_attempts = 0
         self._spotify_integration = None  # Spotify 整合實例引用
         self._spotify_reauth_required = False
-        self._mqtt_connected = False
-        self._mqtt_reconnect_timer = None
         self._shutdown_mqtt_in_progress = False
+
+        # MQTT 遙測控制器（連線 / 遙測上傳 / 導航訊息轉發）
+        self.mqtt_controller = MqttTelemetryController(self, get_mqtt_config_path(), parent=self)
+        # 導航訊息透過 Dashboard 的 signal 鏈轉發到主執行緒 slot
+        self.mqtt_controller.signal_navigation_message.connect(self.signal_update_navigation)
         
         # 引擎狀態追蹤 (用於 MQTT status)
         self._engine_status = False  # 引擎運轉狀態
@@ -2105,7 +2103,7 @@ class Dashboard(QWidget):
         # 2. 重連 MQTT（如果有設定檔但客戶端未連線）
         config_file = get_mqtt_config_path()
         if os.path.exists(config_file):
-            if not hasattr(self, 'mqtt_client') or self.mqtt_client is None or not self._mqtt_connected:
+            if self.mqtt_controller.client is None or not self.mqtt_controller.connected:
                 print("[重連] 嘗試重新連接 MQTT...")
                 self._reconnect_mqtt()
     
@@ -2129,19 +2127,8 @@ class Dashboard(QWidget):
         threading.Thread(target=_init_spotify_async, daemon=True).start()
     
     def _reconnect_mqtt(self):
-        """重新連接 MQTT"""
-        # 先清理舊的連線
-        if hasattr(self, 'mqtt_client') and self.mqtt_client is not None:
-            try:
-                self.mqtt_client.disconnect()
-                self.mqtt_client.loop_stop()
-            except Exception:
-                pass
-            self.mqtt_client = None
-            self._mqtt_connected = False
-        
-        # 重新初始化
-        self._init_mqtt_client()
+        """重新連接 MQTT（委派給 MqttTelemetryController）"""
+        self.mqtt_controller.reconnect()
     
     def _check_service_health(self):
         """定時檢查服務健康狀態，必要時重連"""
@@ -2160,117 +2147,17 @@ class Dashboard(QWidget):
         # 檢查 MQTT 狀態
         config_file = get_mqtt_config_path()
         if os.path.exists(config_file):
-            if not self._mqtt_connected:
+            if not self.mqtt_controller.connected:
                 print("[健康檢查] MQTT 未連線，嘗試重連...")
                 self._reconnect_mqtt()
     
     def _check_mqtt_config(self):
-        """檢查 MQTT 設定並自動連線"""
-        config_file = get_mqtt_config_path()
-        if os.path.exists(config_file):
-            print("[MQTT] 發現設定檔，嘗試自動連線...")
-            self._init_mqtt_client()
-        else:
-            print("[MQTT] 未發現設定檔，可從下拉面板進行設定")
-    
+        """檢查 MQTT 設定並自動連線（委派給 MqttTelemetryController）"""
+        self.mqtt_controller.check_config()
+
     def _init_mqtt_client(self):
-        """初始化 MQTT 客戶端（支援自動重連）"""
-        config_file = get_mqtt_config_path()
-        if not os.path.exists(config_file):
-            print("[MQTT] 設定檔不存在")
-            return
-        
-        try:
-            with open(config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-            
-            import paho.mqtt.client as mqtt
-            
-            dashboard = self  # 保存 dashboard 參考
-            mqtt_publish_topic = config.get('publish_topic', 'car/telemetry')  # 上傳用的主題
-            
-            def on_connect(client, userdata, flags, rc, properties=None):
-                if rc == 0:
-                    dashboard._mqtt_connected = True
-                    print(f"[MQTT] ✅ 已連接到 {config['broker']}:{config['port']}")
-                    # 訂閱主題
-                    topic = config.get('topic', 'car/#')
-                    client.subscribe(topic)
-                    print(f"[MQTT] 已訂閱主題: {topic}")
-                    print(f"[MQTT] 發布主題: {mqtt_publish_topic}")
-                    # 透過 Signal 在主執行緒啟動數據上傳計時器
-                    dashboard.signal_start_mqtt_telemetry.emit()
-                else:
-                    dashboard._mqtt_connected = False
-                    print(f"[MQTT] ❌ 連線失敗，錯誤碼: {rc}")
-            
-            def on_disconnect(client, userdata, rc, properties=None, reason_code=None):
-                dashboard._mqtt_connected = False
-                # 停止遙測上傳
-                if hasattr(dashboard, '_mqtt_telemetry_timer') and dashboard._mqtt_telemetry_timer:
-                    dashboard._mqtt_telemetry_timer.stop()
-                    print("[MQTT] 遙測上傳已暫停")
-                if rc != 0:
-                    print(f"[MQTT] ⚠️ 意外斷線 (rc={rc})，將自動重連...")
-                else:
-                    print("[MQTT] 已斷線")
-            
-            def on_message(client, userdata, msg):
-                try:
-                    payload = msg.payload.decode('utf-8')
-                    data = json.loads(payload)
-                    print(f"[MQTT] 收到訊息: {msg.topic} -> {payload[:100]}...")
-                    
-                    # 處理導航訊息 - 使用 Signal 確保在主執行緒更新 UI
-                    if 'navigation' in msg.topic or 'nav' in msg.topic:
-                        # 透過 Signal 傳遞資料到主執行緒
-                        dashboard.signal_update_navigation.emit(data)
-                    
-                except Exception as e:
-                    print(f"[MQTT] 處理訊息錯誤: {e}")
-            
-            self.mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-            self.mqtt_client.on_connect = on_connect
-            self.mqtt_client.on_disconnect = on_disconnect
-            self.mqtt_client.on_message = on_message
-            
-            # 啟用自動重連，指數退避（1秒起，最大 5 秒）
-            self.mqtt_client.reconnect_delay_set(min_delay=1, max_delay=5)
-            
-            # 設定認證
-            username = config.get('username', '').strip()
-            password = config.get('password', '').strip()
-            if username:
-                self.mqtt_client.username_pw_set(username, password)
-            
-            # 在背景執行緒中連線
-            import threading
-            def connect_mqtt():
-                try:
-                    self.mqtt_client.connect(config['broker'], config['port'], keepalive=60)
-                    # 使用 loop_forever 會自動處理重連
-                    self.mqtt_client.loop_forever(retry_first_connection=True)
-                except Exception as e:
-                    print(f"[MQTT] 連線錯誤: {e}")
-                    dashboard._mqtt_connected = False
-            
-            mqtt_thread = threading.Thread(target=connect_mqtt, daemon=True)
-            mqtt_thread.start()
-            
-        except ImportError:
-            print("[MQTT] paho-mqtt 未安裝")
-        except Exception as e:
-            print(f"[MQTT] 初始化失敗: {e}")
-    
-    def _start_mqtt_telemetry_timer(self):
-        """啟動 MQTT 車輛數據上傳計時器"""
-        if hasattr(self, '_mqtt_telemetry_timer') and self._mqtt_telemetry_timer is not None:
-            self._mqtt_telemetry_timer.stop()
-        
-        self._mqtt_telemetry_timer = QTimer()
-        self._mqtt_telemetry_timer.timeout.connect(self._publish_telemetry)
-        self._mqtt_telemetry_timer.start(30000)  # 每 30 秒上傳一次
-        print("[MQTT] 車輛數據上傳已啟動 (每 30 秒)")
+        """初始化 MQTT 客戶端（委派給 MqttTelemetryController）"""
+        self.mqtt_controller.init_client()
 
     def _update_engine_status(self):
         """根據 RPM 與電壓更新引擎狀態，回傳是否從 on 掉到 off"""
@@ -2301,85 +2188,9 @@ class Dashboard(QWidget):
     def _maybe_publish_engine_off(self):
         """引擎狀態從 on 掉到 off 時立即上傳一次"""
         status_fell, _ = self._update_engine_status()
-        if status_fell and self._mqtt_connected:
-            self._publish_telemetry()
-    
-    def _publish_telemetry(self):
-        """發布車輛遙測數據到 MQTT"""
-        if not self._mqtt_connected or not hasattr(self, 'mqtt_client') or self.mqtt_client is None:
-            return
-        
-        try:
-            # 取得 ODO 和 Trip 資料
-            storage = OdometerStorage()
-            odo_total = storage.get_odo()
-            trip1_distance, _ = storage.get_trip1()
-            trip2_distance, _ = storage.get_trip2()
-            
-            # 取得門狀態 (開門 = "on", 關門 = "off")
-            door_status = {}
-            if hasattr(self, 'door_card'):
-                door_status = {
-                    'FL': 'off' if self.door_card.door_fl_closed else 'on',
-                    'FR': 'off' if self.door_card.door_fr_closed else 'on',
-                    'RL': 'off' if self.door_card.door_rl_closed else 'on',
-                    'RR': 'off' if self.door_card.door_rr_closed else 'on',
-                    'BK': 'off' if self.door_card.door_bk_closed else 'on'
-                }
-            
-            # 水溫轉換：self.temp 是百分比 (0-100)，轉換為攝氏度 (40-120°C)
-            coolant_celsius = 40 + (self.temp / 100) * 80 if self.temp is not None else None
-            
-            # 計算引擎狀態 (status)
-            # 電壓從 10 以上掉到 0 時，status 優先變成 false（熄火）
-            # RPM > 100 時，status 變成 true（引擎運轉）
-            status_fell, current_rpm = self._update_engine_status()
-            
-            # 組裝數據
-            telemetry = {
-                'timestamp': time.time(),
-                'status': self._engine_status,
-                'speed': int(self.speed),  # 與儀表顯示一致，使用整數
-                'rpm': current_rpm,  # 使用已計算的整數 RPM
-                'coolant_temp': coolant_celsius,
-                'fuel': self.fuel,
-                'gear': self.gear,
-                'turbo': self.turbo,
-                'battery': self.battery,
-                'odo': odo_total,
-                'trip_a': trip1_distance,
-                'trip_b': trip2_distance,
-                'gps': {
-                    'lat': self.gps_lat,
-                    'lon': self.gps_lon,
-                    'fixed': getattr(self, 'is_gps_fixed', False)
-                },
-                'doors': door_status,
-                'cruise': {
-                    'switch': self.cruise_switch,
-                    'engaged': self.cruise_engaged
-                },
-                'parking_brake': self.parking_brake
-            }
-            
-            # 讀取發布主題
-            config_file = get_mqtt_config_path()
-            publish_topic = "car/telemetry"
-            if os.path.exists(config_file):
-                try:
-                    with open(config_file, 'r', encoding='utf-8') as f:
-                        config = json.load(f)
-                        publish_topic = config.get('publish_topic', 'car/telemetry')
-                except:
-                    pass
-            
-            # 發布數據 (retain=True 讓新訂閱者能收到最後一筆訊息)
-            payload = json.dumps(telemetry, ensure_ascii=False)
-            self.mqtt_client.publish(publish_topic, payload, qos=0, retain=True)
-            
-        except Exception as e:
-            print(f"[MQTT] 發布遙測數據錯誤: {e}")
-    
+        if status_fell and self.mqtt_controller.connected:
+            self.mqtt_controller.publish_telemetry()
+
     @pyqtSlot(dict)
     def _slot_update_navigation(self, data: dict):
         """處理導航訊息（Slot - 在主執行緒執行）"""
@@ -2995,8 +2806,8 @@ class Dashboard(QWidget):
         self._update_gear_display()
 
         # 檔位變更時立即上傳 MQTT 數據
-        if gear_changed and self._mqtt_connected:
-            self._publish_telemetry()
+        if gear_changed and self.mqtt_controller.connected:
+            self.mqtt_controller.publish_telemetry()
         
         # === D→N 換檔時觸發 GPS 軟重啟（UBX Hot Start）===
         # 利用停車/暫停的自然時機刷新 GPS 模組狀態
