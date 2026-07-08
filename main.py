@@ -82,6 +82,7 @@ from core.utils import (
 )
 
 from core.mqtt_telemetry import MqttTelemetryController
+from core.network_monitor import NetworkMonitor
 from core.shutdown_monitor import get_shutdown_monitor
 from core.max_value_logger import get_max_value_logger
 from core.startup_progress import StartupProgressWindow
@@ -111,9 +112,6 @@ class Dashboard(QWidget):
     
     # 導航相關 Signal
     signal_update_navigation = pyqtSignal(dict)  # 傳遞導航資料字典
-    
-    # 網路狀態 Signal
-    signal_update_network = pyqtSignal(bool)  # 傳遞網路狀態 (is_connected)
     
     # 手煞車 Signal
     signal_update_parking_brake = pyqtSignal(bool)  # 傳遞手煞車狀態 (is_engaged)
@@ -173,9 +171,6 @@ class Dashboard(QWidget):
         
         # 連接導航 Signal
         self.signal_update_navigation.connect(self._slot_update_navigation)
-        
-        # 連接網路狀態 Signal
-        self.signal_update_network.connect(self._update_network_status)
         
         # 連接手煞車 Signal
         self.signal_update_parking_brake.connect(self._slot_update_parking_brake)
@@ -1527,10 +1522,16 @@ class Dashboard(QWidget):
         self.gps_lat = None
         self.gps_lon = None
         
-        # 網路狀態
-        self.is_offline = False  # 是否斷線
-        self._was_offline = True  # 記錄上次網路狀態（初始假設離線，連上後觸發初始化）
-        
+        # 網路狀態監控器（常駐 worker thread，狀態透過 Signal 回主執行緒）
+        self.network_monitor = NetworkMonitor(
+            self,
+            get_spotify_config_path(),
+            get_spotify_cache_path(),
+            get_mqtt_config_path(),
+            parent=self,
+        )
+        self.network_monitor.signal_status_updated.connect(self._update_network_status)
+
         # 服務連線狀態追蹤
         self._spotify_connected = False
         self._spotify_init_attempts = 0
@@ -1633,17 +1634,9 @@ class Dashboard(QWidget):
         # 初始化 MQTT（如果有設定檔）
         self._check_mqtt_config()
         
-        # 啟動網路狀態檢測（每 5 秒檢查一次）
-        self.network_check_timer = QTimer()
-        self.network_check_timer.timeout.connect(self._check_network_status)
-        self.network_check_timer.start(5000)  # 5 秒
-        # 立即檢查一次
-        QTimer.singleShot(2000, self._check_network_status)
-        
-        # 啟動服務健康檢查（每 60 秒檢查一次）
-        self.service_health_timer = QTimer()
-        self.service_health_timer.timeout.connect(self._check_service_health)
-        self.service_health_timer.start(60000)  # 60 秒
+        # 啟動網路狀態監控（常駐 worker thread，每 5 秒檢查一次；
+        # 內含每 60 秒的服務健康檢查 Timer）
+        self.network_monitor.start()
         
         # === 初始化 GPIO 按鈕（樹莓派實體按鈕）===
         # GPIO19: 按鈕 A (短按=切換左卡片, 長按=詳細視圖)
@@ -2019,94 +2012,22 @@ class Dashboard(QWidget):
         except Exception as e:
             print(f"[Telegram] 讀取設定失敗: {e}")
     
-    def _check_network_status(self):
-        """檢查網路連線狀態"""
-        import socket
-        import subprocess
-        import platform
-        
-        def check_connection():
-            # 方法 1: 嘗試 socket 連接 Google DNS
-            try:
-                sock = socket.create_connection(("8.8.8.8", 53), timeout=3)
-                sock.close()
-                return True
-            except Exception:
-                pass
-            
-            # 方法 2: 嘗試 socket 連接 Cloudflare DNS
-            try:
-                sock = socket.create_connection(("1.1.1.1", 53), timeout=3)
-                sock.close()
-                return True
-            except Exception:
-                pass
-            
-            # 都失敗了
-            return False
-        
-        # 在背景執行緒檢查，避免卡住 UI
-        import threading
-        
-        def check_and_update():
-            is_connected = check_connection()
-            # 使用 Signal 回到主執行緒更新 UI
-            self.signal_update_network.emit(is_connected)
-        
-        threading.Thread(target=check_and_update, daemon=True).start()
-    
+    @property
+    def is_offline(self):
+        """網路是否斷線（委派給 NetworkMonitor，外部如 control_panel 會讀取）"""
+        return self.network_monitor.is_offline
+
+    @pyqtSlot(bool)
     def _update_network_status(self, is_connected):
-        """更新網路狀態顯示（主執行緒）"""
-        was_offline = self.is_offline
-        self.is_offline = not is_connected
-        
-        if self.is_offline != was_offline:
-            if self.is_offline:
-                print("[網路] ⚠️ 網路已斷線")
-                self.show_toast("網路已斷線", "warning", 3500)
-            else:
-                print("[網路] ✅ 網路已恢復連線")
-                self.show_toast("網路已恢復連線", "success", 3000)
-                # 網路恢復時嘗試重新連接服務
-                self._on_network_restored()
-        
+        """網路狀態更新後刷新相關 UI（主執行緒，由 NetworkMonitor 觸發）"""
         # 更新音樂卡片和導航卡片的離線狀態
         self.music_card.set_offline(self.is_offline)
         self.nav_card.set_offline(self.is_offline)
-        
+
         # 更新下拉面板的「更新」按鈕狀態
         if self.control_panel:
             self.control_panel.set_update_button_enabled(is_connected)
-    
-    def _on_network_restored(self):
-        """網路恢復時的重連邏輯"""
-        print("[重連] 網路已恢復，檢查服務狀態...")
-        
-        # 延遲 2 秒後重連，避免網路剛恢復就馬上連接
-        QTimer.singleShot(2000, self._attempt_reconnect_services)
-    
-    def _attempt_reconnect_services(self):
-        """嘗試重新連接各項服務"""
-        # 如果目前仍是離線狀態，取消重連
-        if self.is_offline:
-            print("[重連] 網路仍未恢復，取消重連")
-            return
-        
-        # 1. 重連 Spotify（如果尚未連線且有設定檔）
-        if not self._spotify_connected:
-            config_path = get_spotify_config_path()
-            cache_path = get_spotify_cache_path()
-            if os.path.exists(config_path) and os.path.exists(cache_path):
-                print("[重連] 嘗試重新連接 Spotify...")
-                self._reconnect_spotify()
-        
-        # 2. 重連 MQTT（如果有設定檔但客戶端未連線）
-        config_file = get_mqtt_config_path()
-        if os.path.exists(config_file):
-            if self.mqtt_controller.client is None or not self.mqtt_controller.connected:
-                print("[重連] 嘗試重新連接 MQTT...")
-                self._reconnect_mqtt()
-    
+
     def _reconnect_spotify(self):
         """重新連接 Spotify"""
         def _init_spotify_async():
@@ -2129,27 +2050,6 @@ class Dashboard(QWidget):
     def _reconnect_mqtt(self):
         """重新連接 MQTT（委派給 MqttTelemetryController）"""
         self.mqtt_controller.reconnect()
-    
-    def _check_service_health(self):
-        """定時檢查服務健康狀態，必要時重連"""
-        # 如果離線，跳過檢查
-        if self.is_offline:
-            return
-        
-        # 檢查 Spotify 狀態
-        config_path = get_spotify_config_path()
-        cache_path = get_spotify_cache_path()
-        if os.path.exists(config_path) and os.path.exists(cache_path):
-            if not self._spotify_connected and self._spotify_init_attempts < 3:
-                print("[健康檢查] Spotify 未連線，嘗試重連...")
-                self._reconnect_spotify()
-        
-        # 檢查 MQTT 狀態
-        config_file = get_mqtt_config_path()
-        if os.path.exists(config_file):
-            if not self.mqtt_controller.connected:
-                print("[健康檢查] MQTT 未連線，嘗試重連...")
-                self._reconnect_mqtt()
     
     def _check_mqtt_config(self):
         """檢查 MQTT 設定並自動連線（委派給 MqttTelemetryController）"""
