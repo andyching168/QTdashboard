@@ -223,6 +223,105 @@ class WiFiScanner(QThread):
             self.scan_completed.emit([])
 
 
+class WiFiConnector(QThread):
+    """WiFi 連線執行緒
+
+    nmcli 連線流程的 subprocess 逾時最壞可累計約 90 秒，
+    必須在背景執行緒執行，否則會凍結整個 UI。
+    """
+    connect_finished = pyqtSignal(bool, str, str)  # success, ssid, error_msg
+
+    def __init__(self, ssid, password=None, test_mode=False, parent=None):
+        super().__init__(parent)
+        self.ssid = ssid
+        self.password = password
+        self.test_mode = test_mode
+
+    def run(self):
+        ssid = self.ssid
+        password = self.password
+        try:
+            if self.test_mode:
+                # 測試模式：模擬連線
+                print(f"測試模式：模擬連線到 {ssid}" + (f" (密碼: {password})" if password else ""))
+                import time
+                time.sleep(2)  # 模擬連線延遲
+
+                class MockResult:
+                    returncode = 0
+                    stderr = ''
+                result = MockResult()
+            else:
+                # 設置環境變數確保英文輸出
+                env = os.environ.copy()
+                env['LANG'] = 'C'
+                env['LC_ALL'] = 'C'
+
+                # 先檢查是否已有此網路的連線設定
+                check_result = subprocess.run(
+                    ['nmcli', '-t', '-f', 'NAME', 'con', 'show'],
+                    capture_output=True, text=True, timeout=5, env=env
+                )
+                existing_connections = check_result.stdout.strip().split('\n')
+
+                if ssid in existing_connections:
+                    # 已有連線設定，先刪除舊設定再重新連線（避免 key-mgmt 問題）
+                    print(f"找到現有連線設定: {ssid}，刪除舊設定...")
+                    subprocess.run(['nmcli', 'con', 'delete', ssid],
+                                  capture_output=True, timeout=10, env=env)
+
+                # 建立新連線
+                if password:
+                    # 方法 1：嘗試使用標準 wifi connect 命令
+                    cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password]
+                    print(f"嘗試連線: {' '.join(cmd[:5])} ****")
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=env)
+
+                    # 如果失敗，嘗試方法 2：手動建立連線設定
+                    if result.returncode != 0 and 'key-mgmt' in result.stderr.lower():
+                        print(f"標準連線失敗，嘗試手動建立連線設定...")
+
+                        # 刪除可能殘留的設定
+                        subprocess.run(['nmcli', 'con', 'delete', ssid],
+                                      capture_output=True, timeout=10, env=env)
+
+                        # 使用 nmcli connection add 建立連線，明確指定 key-mgmt
+                        add_cmd = [
+                            'nmcli', 'con', 'add',
+                            'type', 'wifi',
+                            'con-name', ssid,
+                            'ssid', ssid,
+                            'wifi-sec.key-mgmt', 'wpa-psk',
+                            'wifi-sec.psk', password
+                        ]
+                        add_result = subprocess.run(add_cmd, capture_output=True, text=True, timeout=15, env=env)
+
+                        if add_result.returncode == 0:
+                            # 啟用連線
+                            result = subprocess.run(
+                                ['nmcli', 'con', 'up', ssid],
+                                capture_output=True, text=True, timeout=30, env=env
+                            )
+                        else:
+                            result = add_result
+                else:
+                    # 連線到開放網路
+                    cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=env)
+
+            if result.returncode == 0:
+                self.connect_finished.emit(True, ssid, '')
+            else:
+                error_msg = result.stderr or result.stdout or "連線失敗"
+                self.connect_finished.emit(False, ssid, error_msg)
+
+        except subprocess.TimeoutExpired:
+            self.connect_finished.emit(False, ssid, 'timeout: 連線逾時，請重試')
+
+        except Exception as e:
+            self.connect_finished.emit(False, ssid, f'exception: {str(e)}')
+
+
 class WiFiPasswordDialog(QDialog):
     """WiFi 密碼輸入對話框"""
     
@@ -404,6 +503,7 @@ class WiFiManagerWidget(QWidget):
         self.networks = []
         self.current_ssid = None
         self.scanner = None
+        self.connector = None
         self.test_mode = test_mode  # Mac 測試模式
         
         # 1920x480 儀表板尺寸
@@ -646,9 +746,9 @@ class WiFiManagerWidget(QWidget):
             else:
                 return
         
-        # 開始連線
+        # 開始連線（背景執行緒，UI 不阻塞）
         self.show_connecting_progress(ssid)
-        QTimer.singleShot(500, lambda: self.do_connect(ssid, password))
+        self.do_connect(ssid, password)
     
     def show_connecting_progress(self, ssid):
         """顯示連線進度"""
@@ -663,110 +763,40 @@ class WiFiManagerWidget(QWidget):
         self.connect_btn.setEnabled(True)
     
     def do_connect(self, ssid, password=None):
-        """執行連線"""
-        try:
-            if self.test_mode:
-                # 測試模式：模擬連線
-                print(f"測試模式：模擬連線到 {ssid}" + (f" (密碼: {password})" if password else ""))
-                import time
-                time.sleep(2)  # 模擬連線延遲
-                
-                class MockResult:
-                    returncode = 0
-                    stderr = ''
-                result = MockResult()
-            else:
-                # 設置環境變數確保英文輸出
-                env = os.environ.copy()
-                env['LANG'] = 'C'
-                env['LC_ALL'] = 'C'
-                
-                # 先檢查是否已有此網路的連線設定
-                check_result = subprocess.run(
-                    ['nmcli', '-t', '-f', 'NAME', 'con', 'show'],
-                    capture_output=True, text=True, timeout=5, env=env
-                )
-                existing_connections = check_result.stdout.strip().split('\n')
-                
-                if ssid in existing_connections:
-                    # 已有連線設定，先刪除舊設定再重新連線（避免 key-mgmt 問題）
-                    print(f"找到現有連線設定: {ssid}，刪除舊設定...")
-                    subprocess.run(['nmcli', 'con', 'delete', ssid], 
-                                  capture_output=True, timeout=10, env=env)
-                
-                # 建立新連線
-                if password:
-                    # 方法 1：嘗試使用標準 wifi connect 命令
-                    cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password]
-                    print(f"嘗試連線: {' '.join(cmd[:5])} ****")
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=env)
-                    
-                    # 如果失敗，嘗試方法 2：手動建立連線設定
-                    if result.returncode != 0 and 'key-mgmt' in result.stderr.lower():
-                        print(f"標準連線失敗，嘗試手動建立連線設定...")
-                        
-                        # 刪除可能殘留的設定
-                        subprocess.run(['nmcli', 'con', 'delete', ssid], 
-                                      capture_output=True, timeout=10, env=env)
-                        
-                        # 使用 nmcli connection add 建立連線，明確指定 key-mgmt
-                        add_cmd = [
-                            'nmcli', 'con', 'add',
-                            'type', 'wifi',
-                            'con-name', ssid,
-                            'ssid', ssid,
-                            'wifi-sec.key-mgmt', 'wpa-psk',
-                            'wifi-sec.psk', password
-                        ]
-                        add_result = subprocess.run(add_cmd, capture_output=True, text=True, timeout=15, env=env)
-                        
-                        if add_result.returncode == 0:
-                            # 啟用連線
-                            result = subprocess.run(
-                                ['nmcli', 'con', 'up', ssid],
-                                capture_output=True, text=True, timeout=30, env=env
-                            )
-                        else:
-                            result = add_result
-                else:
-                    # 連線到開放網路
-                    cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid]
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=env)
-            
-            self.hide_connecting_progress()
-            
-            if result.returncode == 0:
-                self.status_label.setText(f"✅ 已連線到 {ssid}")
-                self.status_label.setStyleSheet("font-size: 14px; color: #6f6;")
-                self.current_ssid = ssid
-                self.connection_changed.emit(True, ssid)
-                
-                QMessageBox.information(self, "成功", f"已成功連線到 {ssid}")
-            else:
-                error_msg = result.stderr or result.stdout or "連線失敗"
-                self.status_label.setText(f"❌ 連線失敗")
-                self.status_label.setStyleSheet("font-size: 14px; color: #f66;")
-                
-                # 解析常見錯誤並提供更友善的訊息
-                friendly_msg = error_msg
-                if 'password' in error_msg.lower() or 'psk' in error_msg.lower():
-                    friendly_msg = "密碼錯誤，請重新輸入"
-                elif 'timeout' in error_msg.lower():
-                    friendly_msg = "連線逾時，請檢查網路是否在範圍內"
-                elif 'no network' in error_msg.lower():
-                    friendly_msg = "找不到此網路，請重新掃描"
-                
-                QMessageBox.warning(self, "連線失敗", f"無法連線到 {ssid}\n\n{friendly_msg}")
-        
-        except subprocess.TimeoutExpired:
-            self.hide_connecting_progress()
-            self.status_label.setText("❌ 連線逾時")
-            QMessageBox.warning(self, "連線失敗", "連線逾時，請重試")
-        
-        except Exception as e:
-            self.hide_connecting_progress()
-            self.status_label.setText("❌ 發生錯誤")
-            QMessageBox.critical(self, "錯誤", f"發生錯誤: {str(e)}")
+        """啟動背景連線執行緒（不可在 UI 執行緒跑 nmcli，會凍結畫面）"""
+        if self.connector is not None and self.connector.isRunning():
+            print("WiFi 連線進行中，忽略重複請求")
+            return
+
+        self.connector = WiFiConnector(ssid, password, test_mode=self.test_mode, parent=self)
+        self.connector.connect_finished.connect(self._on_connect_finished)
+        self.connector.start()
+
+    def _on_connect_finished(self, success, ssid, error_msg):
+        """連線結果（WiFiConnector 執行緒經 signal 回到主執行緒）"""
+        self.hide_connecting_progress()
+
+        if success:
+            self.status_label.setText(f"✅ 已連線到 {ssid}")
+            self.status_label.setStyleSheet("font-size: 14px; color: #6f6;")
+            self.current_ssid = ssid
+            self.connection_changed.emit(True, ssid)
+
+            QMessageBox.information(self, "成功", f"已成功連線到 {ssid}")
+        else:
+            self.status_label.setText(f"❌ 連線失敗")
+            self.status_label.setStyleSheet("font-size: 14px; color: #f66;")
+
+            # 解析常見錯誤並提供更友善的訊息
+            friendly_msg = error_msg
+            if 'password' in error_msg.lower() or 'psk' in error_msg.lower():
+                friendly_msg = "密碼錯誤，請重新輸入"
+            elif 'timeout' in error_msg.lower():
+                friendly_msg = "連線逾時，請檢查網路是否在範圍內"
+            elif 'no network' in error_msg.lower():
+                friendly_msg = "找不到此網路，請重新掃描"
+
+            QMessageBox.warning(self, "連線失敗", f"無法連線到 {ssid}\n\n{friendly_msg}")
     
     def update_connection_status(self):
         """更新連線狀態"""
