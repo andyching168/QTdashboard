@@ -1270,18 +1270,8 @@ def main():
                     logger.error("CAN Bus 未初始化，無法設定資料來源")
                     return None
             
-            # 連接信號到 Dashboard
-            state.signals.update_rpm.connect(dashboard.set_rpm)
-            state.signals.update_speed.connect(dashboard.set_speed)
-            state.signals.update_temp.connect(dashboard.set_temperature)
-            state.signals.update_obd_batch.connect(dashboard.set_obd_batch)
-            state.signals.update_fuel.connect(dashboard.set_fuel)
-            state.signals.update_gear.connect(dashboard.set_gear)
-            state.signals.update_turn_signal.connect(dashboard.set_turn_signal)
-            state.signals.update_door_status.connect(dashboard.set_door_status)
-            state.signals.update_turbo.connect(dashboard.set_turbo)
-            state.signals.update_battery.connect(dashboard.set_battery)
-            state.signals.update_fuel_consumption.connect(dashboard.set_fuel_consumption)
+            # 連接信號到 Dashboard（WorkerSignals 直接接到最終 slot / signal）
+            dashboard.connect_worker_signals(state.signals)
             
             # 啟動背景執行緒
             logger.info("正在啟動背景執行緒...")
