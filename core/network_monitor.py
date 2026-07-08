@@ -150,7 +150,7 @@ class NetworkMonitor(QObject):
         dashboard = self._dashboard
 
         # 1. 重連 Spotify（如果尚未連線且有設定檔）
-        if not dashboard._spotify_connected:
+        if not dashboard.spotify_controller.connected:
             if os.path.exists(self._spotify_config_path) and os.path.exists(self._spotify_cache_path):
                 print("[重連] 嘗試重新連接 Spotify...")
                 dashboard._reconnect_spotify()
@@ -171,7 +171,7 @@ class NetworkMonitor(QObject):
 
         # 檢查 Spotify 狀態
         if os.path.exists(self._spotify_config_path) and os.path.exists(self._spotify_cache_path):
-            if not dashboard._spotify_connected and dashboard._spotify_init_attempts < 3:
+            if not dashboard.spotify_controller.connected and dashboard.spotify_controller.init_attempts < 3:
                 print("[健康檢查] Spotify 未連線，嘗試重連...")
                 dashboard._reconnect_spotify()
 

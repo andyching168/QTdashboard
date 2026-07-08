@@ -65,7 +65,7 @@ from ui.theme import get_theme_manager, T, reapply_t_function
 
 from spotify.spotify_auth import SpotifyAuthManager
 from spotify.spotify_qr_auth import SpotifyQRAuthDialog
-from spotify.spotify_integration import setup_spotify
+from spotify.spotify_controller import SpotifyController
 
 from navigation.speed_limit import get_speed_limit_loader, query_speed_limit
 
@@ -1532,11 +1532,14 @@ class Dashboard(QWidget):
         )
         self.network_monitor.signal_status_updated.connect(self._update_network_status)
 
-        # 服務連線狀態追蹤
-        self._spotify_connected = False
-        self._spotify_init_attempts = 0
-        self._spotify_integration = None  # Spotify 整合實例引用
-        self._spotify_reauth_required = False
+        # Spotify 生命週期控制器（初始化 / 重試 / 重連 / 重新授權）
+        self.spotify_controller = SpotifyController(
+            self,
+            get_spotify_config_path(),
+            get_spotify_cache_path(),
+            parent=self,
+        )
+
         self._shutdown_mqtt_in_progress = False
 
         # MQTT 遙測控制器（連線 / 遙測上傳 / 導航訊息轉發）
@@ -1693,71 +1696,12 @@ class Dashboard(QWidget):
             threading.Thread(target=background_full_gc, daemon=True).start()
 
     def check_spotify_config(self):
-        """檢查 Spotify 設定並初始化"""
-        config_path = get_spotify_config_path()
-        cache_path = get_spotify_cache_path()
-        
-        # 只有當配置檔和快取都存在時才自動初始化
-        if os.path.exists(config_path) and os.path.exists(cache_path):
-            print("發現 Spotify 設定檔和快取，正在初始化...")
-            self.music_card.show_player_ui()
-            # 在背景執行緒初始化，避免卡住 UI
-            import threading
-            def init_spotify():
-                result = setup_spotify(self)
-                if result:
-                    self._spotify_connected = True
-                    self._spotify_integration = result  # 儲存整合實例引用
-                    self._set_spotify_progress_active(self._is_music_card_visible())
-                    self._spotify_init_attempts = 0
-                    print("Spotify 初始化成功")
-                else:
-                    self._spotify_connected = False
-                    self._spotify_init_attempts += 1
-                    print(f"Spotify 初始化失敗 (嘗試 {self._spotify_init_attempts})")
-                    # 如果初始化失敗，30 秒後重試（最多 3 次）
-                    token_cache_exists = os.path.exists(cache_path)
-                    if self._spotify_init_attempts < 3 and not self.is_offline and token_cache_exists:
-                        print(f"[Spotify] 將在 30 秒後重試...")
-                        QTimer.singleShot(30000, self._retry_spotify_init)
-            threading.Thread(target=init_spotify, daemon=True).start()
-        else:
-            if not os.path.exists(config_path):
-                print("未發現 Spotify 設定檔，顯示綁定介面")
-            else:
-                print("未發現授權快取，顯示綁定介面")
-            self.music_card.show_bind_ui()
-    
-    def _retry_spotify_init(self):
-        """重試 Spotify 初始化"""
-        if self._spotify_connected or self.is_offline:
-            return
-        
-        print(f"[Spotify] 重試初始化 (嘗試 {self._spotify_init_attempts + 1}/3)...")
-        
-        import threading
-        def init_spotify():
-            result = setup_spotify(self)
-            if result:
-                self._spotify_connected = True
-                self._spotify_integration = result  # 儲存整合實例引用
-                self._set_spotify_progress_active(self._is_music_card_visible())
-                self._spotify_init_attempts = 0
-                print("[Spotify] ✅ 重試成功")
-            else:
-                self._spotify_connected = False
-                self._spotify_init_attempts += 1
-                print(f"[Spotify] ❌ 重試失敗 (嘗試 {self._spotify_init_attempts})")
-                # 繼續重試
-                token_cache_exists = os.path.exists(get_spotify_cache_path())
-                if self._spotify_init_attempts < 3 and not self.is_offline and token_cache_exists:
-                    QTimer.singleShot(30000, self._retry_spotify_init)
-        
-        threading.Thread(target=init_spotify, daemon=True).start()
+        """檢查 Spotify 設定並初始化（委派給 SpotifyController）"""
+        self.spotify_controller.check_config()
 
     def _handle_spotify_update_on_card_change(self, old_index, new_index):
         """處理卡片切換時的 Spotify 更新邏輯"""
-        if not self._spotify_integration:
+        if not self.spotify_controller.integration:
             return
         
         # 只有在第一列（音樂卡片所在列）才處理
@@ -1772,32 +1716,32 @@ class Dashboard(QWidget):
             print("進入音樂卡片，強制立即更新 Spotify")
             self._set_spotify_progress_active(True)
             # 進入音樂卡片時立即更新
-            self._spotify_integration.force_update_now()
+            self.spotify_controller.integration.force_update_now()
             # 保持高頻更新（設定為2秒以獲得良好體驗）
-            self._spotify_integration.set_update_interval(2.0)
+            self.spotify_controller.integration.set_update_interval(2.0)
         elif is_leaving_music:
             print("離開音樂卡片，恢復10秒更新間隔")
             self._set_spotify_progress_active(False)
             # 離開音樂卡片時恢復10秒更新間隔
-            self._spotify_integration.set_update_interval(10.0)
+            self.spotify_controller.integration.set_update_interval(10.0)
     
     def _handle_spotify_update_on_row_change(self, new_row_index):
         """處理列切換時的 Spotify 更新邏輯"""
-        if not self._spotify_integration:
+        if not self.spotify_controller.integration:
             return
         
         # 音樂卡片在第一列，切換到非第一列時要恢復10秒更新
         if self.current_row_index == 0 and new_row_index != 0:
             print("離開音樂卡片所在列，恢復10秒更新間隔")
             self._set_spotify_progress_active(False)
-            self._spotify_integration.set_update_interval(10.0)
+            self.spotify_controller.integration.set_update_interval(10.0)
         # 切換到第一列時，檢查是否在音樂卡片上
         elif self.current_row_index != 0 and new_row_index == 0:
             if self.current_card_index == 0:  # 目前在音樂卡片上
                 print("進入音樂卡片所在列且在音樂卡片上，設定2秒更新")
                 self._set_spotify_progress_active(True)
-                self._spotify_integration.force_update_now()
-                self._spotify_integration.set_update_interval(2.0)
+                self.spotify_controller.integration.force_update_now()
+                self.spotify_controller.integration.set_update_interval(2.0)
     
     def start_spotify_auth(self):
         """啟動 Spotify 授權流程"""
@@ -1835,17 +1779,8 @@ class Dashboard(QWidget):
     @pyqtSlot(str)
     def _slot_spotify_reauth_required(self, reason=""):
         """Stop automatic retries and return Spotify to the explicit sign-in flow."""
-        if self._spotify_reauth_required:
+        if not self.spotify_controller.mark_reauth_required():
             return
-        self._spotify_reauth_required = True
-        self._spotify_connected = False
-        self._spotify_init_attempts = 3
-
-        integration = self._spotify_integration
-        if integration:
-            integration.enabled = False
-            if integration.listener:
-                integration.listener.running = False
 
         self.music_card.show_bind_ui()
         self.show_toast("Spotify 授權已過期，請重新綁定", "warning", 6000)
@@ -1855,33 +1790,13 @@ class Dashboard(QWidget):
         """授權完成回調"""
         if success:
             print("Spotify 授權成功！")
-            self._spotify_reauth_required = False
-            self._spotify_init_attempts = 0
             self.music_card.show_player_ui()
-            # 在背景執行緒初始化 Spotify，避免阻塞 UI
-            def _init_spotify_async():
-                try:
-                    result = setup_spotify(self)
-                    if result:
-                        self._spotify_connected = True
-                        self._spotify_integration = result
-                        self._set_spotify_progress_active(self._is_music_card_visible())
-                        self._spotify_init_attempts = 0
-                        print("[Spotify] ✅ 初始化成功")
-                    else:
-                        self._spotify_connected = False
-                        print("[Spotify] ❌ 初始化失敗")
-                except Exception as e:
-                    self._spotify_connected = False
-                    print(f"Spotify 初始化失敗: {e}")
-            
-            import threading
-            spotify_thread = threading.Thread(target=_init_spotify_async, daemon=True)
-            spotify_thread.start()
+            # 在背景執行緒初始化 Spotify，避免阻塞 UI（委派給 SpotifyController）
+            self.spotify_controller.init_after_auth()
         else:
             print("Spotify 授權失敗")
             self.music_card.show_bind_ui()
-        
+
         # 關閉對話框 (如果還沒關閉)
         if hasattr(self, 'auth_dialog'):
             self.auth_dialog.close()
@@ -2029,23 +1944,8 @@ class Dashboard(QWidget):
             self.control_panel.set_update_button_enabled(is_connected)
 
     def _reconnect_spotify(self):
-        """重新連接 Spotify"""
-        def _init_spotify_async():
-            try:
-                result = setup_spotify(self)
-                if result:
-                    self._spotify_connected = True
-                    self._spotify_init_attempts = 0
-                    print("[Spotify] ✅ 重新連接成功")
-                else:
-                    self._spotify_init_attempts += 1
-                    print(f"[Spotify] ❌ 重新連接失敗 (嘗試 {self._spotify_init_attempts})")
-            except Exception as e:
-                self._spotify_init_attempts += 1
-                print(f"[Spotify] ❌ 重新連接錯誤: {e}")
-        
-        import threading
-        threading.Thread(target=_init_spotify_async, daemon=True).start()
+        """重新連接 Spotify（委派給 SpotifyController）"""
+        self.spotify_controller.reconnect()
     
     def _reconnect_mqtt(self):
         """重新連接 MQTT（委派給 MqttTelemetryController）"""
@@ -2448,8 +2348,8 @@ class Dashboard(QWidget):
         return self.current_row_index == 0 and self.current_card_index == 0
 
     def _set_spotify_progress_active(self, active: bool):
-        if self._spotify_integration:
-            self._spotify_integration.set_progress_active(active)
+        if self.spotify_controller.integration:
+            self.spotify_controller.integration.set_progress_active(active)
 
     # === 實際執行 UI 更新的 Slot 方法 (在主執行緒中執行) ===
     @pyqtSlot(float)
