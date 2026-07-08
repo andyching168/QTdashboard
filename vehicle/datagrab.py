@@ -419,6 +419,95 @@ def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0):
     return None, None
 
 
+# 斷線判定門檻：receiver 連續 recv 錯誤 / obd_query 連續 send 錯誤達此數即重建連線
+MAX_CONSECUTIVE_RECV_ERRORS = 100
+MAX_CONSECUTIVE_SEND_ERRORS = 20
+
+
+class BusManager:
+    """CAN bus 持有者，負責執行期斷線後的重建。
+
+    receiver 與 obd_query 透過 get() 取得現行 bus；斷線（連續錯誤達上限）時
+    由偵測到的執行緒呼叫 reconnect()，期間 get() 回傳 None，另一條執行緒
+    會暫停等待新 bus。重連成功前每 RECONNECT_INTERVAL 秒重試一次，
+    直到成功或 stop_threads。
+    """
+    RECONNECT_INTERVAL = 3.0
+
+    def __init__(self, bus, interface_type=None):
+        self._lock = threading.Lock()
+        self._bus = bus
+        self.interface_type = interface_type
+        self._reconnecting = False
+
+    def get(self):
+        """取得現行 bus；斷線重連期間回傳 None"""
+        return self._bus
+
+    def reconnect(self):
+        """關閉死掉的 bus 並重建連線（阻塞呼叫端執行緒直到成功或 stop_threads）。
+
+        若另一條執行緒已在重連，直接返回；呼叫端應改為輪詢 get()。
+        """
+        with self._lock:
+            if self._reconnecting:
+                return
+            self._reconnecting = True
+            dead_bus, self._bus = self._bus, None
+
+        try:
+            if dead_bus is not None:
+                try:
+                    dead_bus.shutdown()
+                except Exception:
+                    pass
+
+            while not stop_threads:
+                logger.warning(f"CAN Bus 斷線，{self.RECONNECT_INTERVAL:.0f} 秒後嘗試重連...")
+                time.sleep(self.RECONNECT_INTERVAL)
+                if stop_threads:
+                    return
+                new_bus, interface_type = init_can_bus(max_retries=1)
+                if new_bus is not None:
+                    with self._lock:
+                        self._bus = new_bus
+                        self.interface_type = interface_type
+                    logger.info(f"CAN Bus 重連成功: {interface_type}")
+                    return
+        finally:
+            with self._lock:
+                self._reconnecting = False
+
+    def shutdown(self):
+        """關閉現行 bus（程式結束時呼叫）"""
+        with self._lock:
+            bus, self._bus = self._bus, None
+        if bus is not None:
+            try:
+                bus.shutdown()
+            except Exception:
+                pass
+
+
+# 以 bus 物件為 key 快取 manager：receiver 與 obd_query 傳入同一個 raw bus
+# 時會共享同一個 BusManager（dict 持有 bus 強引用，id 不會被重用）
+_bus_managers = {}
+_bus_managers_lock = threading.Lock()
+
+
+def ensure_bus_manager(bus_or_manager):
+    """把 raw bus 包成 BusManager；同一個 bus 物件永遠對應同一個 manager"""
+    if isinstance(bus_or_manager, BusManager):
+        return bus_or_manager
+    with _bus_managers_lock:
+        entry = _bus_managers.get(id(bus_or_manager))
+        if entry is None:
+            # 同時保存原始 bus 的強引用，確保 id 在程式生命週期內不被重用
+            entry = (BusManager(bus_or_manager), bus_or_manager)
+            _bus_managers[id(bus_or_manager)] = entry
+        return entry[0]
+
+
 def select_serial_port():
     import glob
     
@@ -491,17 +580,21 @@ def unified_receiver(bus, db, signals):
     """
     統一處理所有接收到的 CAN 訊息 (包含 DBC 解碼和 OBD 解析)
     關鍵修改：使用 signals.emit() 取代 dashboard.set_xxx()
-    
+
     RPI4 優化：
     - 減少 recv timeout 以降低延遲
     - 狀態變化偵測：只在狀態真正改變時才 emit signal
     - 減少不必要的 logger 呼叫
+
+    斷線復原：連續錯誤達上限時不再停止執行緒，改由 BusManager
+    重建連線後繼續接收（USB CAN 裝置拔插後可自動恢復）
     """
     global data_store
+    bus_manager = ensure_bus_manager(bus)
     last_can_hz_calc = time.time()
     can_count = 0
     error_count = 0
-    max_consecutive_errors = 100
+    max_consecutive_errors = MAX_CONSECUTIVE_RECV_ERRORS
     
     # RPM 平滑參數
     current_rpm_smoothed = 0.0
@@ -567,12 +660,18 @@ def unified_receiver(bus, db, signals):
     logger.info("CAN 訊息接收執行緒已啟動")
     
     while not stop_threads:
+        bus = bus_manager.get()
+        if bus is None:
+            # 另一條執行緒正在重連，等待新 bus
+            time.sleep(0.5)
+            continue
+
         try:
             # RPI4 優化：減少 timeout 從 0.1 到 0.01，降低延遲
             # 在 SLCAN 上，較短的 timeout 能更快響應新訊息
-            msg = bus.recv(timeout=0.01) 
-            
-            if msg is None: 
+            msg = bus.recv(timeout=0.01)
+
+            if msg is None:
                 continue # 超時沒數據，繼續下一圈
             
             # 重置錯誤計數（收到有效訊息）
@@ -1029,17 +1128,22 @@ def unified_receiver(bus, db, signals):
             error_count += 1
             logger.error(f"CAN Bus 錯誤: {e}")
             if error_count >= max_consecutive_errors:
-                logger.critical(f"連續錯誤達 {max_consecutive_errors} 次，接收執行緒即將停止")
-                break
+                logger.critical(f"連續錯誤達 {max_consecutive_errors} 次，嘗試重建 CAN Bus 連線")
+                bus_manager.reconnect()
+                error_count = 0
+                continue
             time.sleep(0.1)  # 錯誤後稍微延遲
-            
+
         except Exception as e:
             error_count += 1
             logger.error(f"接收執行緒未預期錯誤: {type(e).__name__}: {e}", exc_info=True)
             if error_count >= max_consecutive_errors:
-                logger.critical(f"連續錯誤達 {max_consecutive_errors} 次，接收執行緒即將停止")
-                break
-    
+                logger.critical(f"連續錯誤達 {max_consecutive_errors} 次，嘗試重建 CAN Bus 連線")
+                bus_manager.reconnect()
+                error_count = 0
+                continue
+            time.sleep(0.1)
+
     logger.info("CAN 訊息接收執行緒已停止")
 
 def obd_query(bus, signals):
@@ -1057,20 +1161,32 @@ def obd_query(bus, signals):
     """
     global data_store
     logger.info("OBD-II 查詢執行緒已啟動 (低延遲模式)")
-    
+    bus_manager = ensure_bus_manager(bus)
+
     # 低頻 PID 輪詢索引
     low_freq_pids = [0x05, 0x0B, 0x42, 0x10]  # Temp, Turbo, Battery, MAF
     low_freq_idx = 0
     high_freq_counter = 0
     HIGH_FREQ_BURST = 5  # 每 5 次高頻查詢後，穿插一個低頻查詢
-    
+
     # 請求間隔（毫秒）- 發送後的最小等待時間
     # ECU 通常需要 10-50ms 來回應，我們設定 25ms 作為平衡點
     REQUEST_INTERVAL = 0.025  # 25ms
-    
+
+    # 連續送出失敗達此數（每次失敗間隔 0.1s）即觸發重連，
+    # 避免對死掉的 bus 無止境重試
+    send_error_count = 0
+    MAX_SEND_ERRORS = MAX_CONSECUTIVE_SEND_ERRORS
+
     while not stop_threads:
         if current_mode == "CAN_ONLY":
             time.sleep(1)
+            continue
+
+        bus = bus_manager.get()
+        if bus is None:
+            # 重連進行中，暫停查詢
+            time.sleep(0.5)
             continue
 
         try:
@@ -1115,12 +1231,25 @@ def obd_query(bus, signals):
             
             # 最小循環間隔 - 讓出 CPU 給其他線程
             # 不需要額外的長時間 sleep，因為上面已經有足夠的間隔了
-            
+            send_error_count = 0
+
         except can.CanError as e:
+            send_error_count += 1
             logger.warning(f"CAN 發送錯誤: {e}")
+            if send_error_count >= MAX_SEND_ERRORS:
+                logger.critical(f"連續送出失敗達 {MAX_SEND_ERRORS} 次，嘗試重建 CAN Bus 連線")
+                bus_manager.reconnect()
+                send_error_count = 0
+                continue
             time.sleep(0.1)  # 錯誤時稍微等長一點
         except Exception as e:
+            send_error_count += 1
             logger.error(f"OBD 查詢錯誤: {e}")
+            if send_error_count >= MAX_SEND_ERRORS:
+                logger.critical(f"連續失敗達 {MAX_SEND_ERRORS} 次，嘗試重建 CAN Bus 連線")
+                bus_manager.reconnect()
+                send_error_count = 0
+                continue
             time.sleep(0.5)
     
     logger.info("OBD-II 查詢執行緒已停止")
@@ -1309,10 +1438,8 @@ def main():
                 logger.info("正在關閉系統...")
                 stop_threads = True
                 if state.bus:
-                    try:
-                        state.bus.shutdown()
-                    except:
-                        pass
+                    # 經 BusManager 關閉：重連後現行 bus 可能已不是啟動時那一個
+                    ensure_bus_manager(state.bus).shutdown()
                 console.print("[green]程式已安全結束[/green]")
             
             return cleanup

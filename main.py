@@ -67,7 +67,7 @@ from spotify.spotify_auth import SpotifyAuthManager
 from spotify.spotify_qr_auth import SpotifyQRAuthDialog
 from spotify.spotify_integration import setup_spotify
 
-from navigation.speed_limit import get_speed_limit_loader, query_speed_limit
+from navigation.speed_limit_worker import SpeedLimitWorker
 
 from hardware.gpio_buttons import setup_gpio_buttons, get_gpio_handler
 
@@ -391,12 +391,17 @@ class Dashboard(QWidget):
         self.gps_lon = lon
     
     def _update_speed_limit(self):
-        """根據 GPS 座標更新速限（計時器控制，GPS 不可靠時計時器會停止）"""
+        """根據 GPS 座標更新速限（計時器控制，GPS 不可靠時計時器會停止）
+
+        查詢在 SpeedLimitWorker 背景執行緒進行，結果回到 _on_speed_limit_result
+        """
         if self.gps_lat is None or self.gps_lon is None:
             return
-        
-        limit, direction, dual_limits = query_speed_limit(self.gps_lat, self.gps_lon, self.current_bearing)
-        
+
+        self.speed_limit_worker.request(self.gps_lat, self.gps_lon, self.current_bearing)
+
+    def _on_speed_limit_result(self, limit, direction, dual_limits):
+        """速限查詢結果（worker 執行緒經 signal 回到主執行緒）"""
         if limit != self.current_speed_limit or dual_limits != self.current_speed_limit_dual:
             self.current_speed_limit = limit
             self.current_speed_limit_dual = dual_limits
@@ -1610,7 +1615,11 @@ class Dashboard(QWidget):
         self.speed_limit_timer.timeout.connect(self._update_speed_limit_flash)
         self.speed_limit_timer.start(500)  # 閃爍節奏 0.5 秒，避免 20 FPS 空轉
         
-        # 啟動速限查詢 Timer（每 5 秒查詢一次）
+        # 啟動速限查詢 worker + Timer（每 5 秒查詢一次）
+        # CSV 載入與查詢都在背景執行緒，主執行緒只收結果
+        self.speed_limit_worker = SpeedLimitWorker()
+        self.speed_limit_worker.result_ready.connect(self._on_speed_limit_result)
+        self.speed_limit_worker.start()
         self.speed_limit_query_timer = QTimer()
         self.speed_limit_query_timer.timeout.connect(self._update_speed_limit)
         self.speed_limit_query_timer.start(5000)  # 5000ms = 5 秒
@@ -4934,7 +4943,8 @@ def main():
         # 返回清理函數
         def cleanup():
             datagrab.stop_threads = True
-            can_bus.shutdown()
+            # 經 BusManager 關閉：重連後現行 bus 可能已不是啟動時那一個
+            datagrab.ensure_bus_manager(can_bus).shutdown()
             print("[OK] CAN Bus 已關閉")
         
         return cleanup
