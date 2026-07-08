@@ -64,6 +64,7 @@ class SpotifyAuthManager:
         "user-modify-playback-state",   # 控制播放
         "user-read-recently-played",    # 讀取最近播放
     ]
+    REQUEST_TIMEOUT = 10
     
     def __init__(self, config_path=None, cache_path=None, on_reauth_required=None):
         """
@@ -125,18 +126,10 @@ class SpotifyAuthManager:
             
         try:
             # 建立 Spotify OAuth 管理器
-            self.auth_manager = DashboardSpotifyOAuth(
-                invalid_grant_callback=self._handle_invalid_grant,
-                client_id=self.config['client_id'],
-                client_secret=self.config['client_secret'],
-                redirect_uri=self.config['redirect_uri'],
-                scope=" ".join(self.SCOPES),
-                cache_path=self.cache_path,
-                open_browser=True,
-            )
+            self.auth_manager = self._create_oauth_manager()
             
             # 建立 Spotify 客戶端
-            self.sp = Spotify(auth_manager=self.auth_manager)
+            self.sp = self._create_spotify_client(self.auth_manager)
             
             # 測試認證
             user = self.sp.current_user()
@@ -149,6 +142,44 @@ class SpotifyAuthManager:
         except Exception as e:
             logger.error(f"Spotify 認證失敗: {e}")
             return False
+
+    def _oauth_kwargs(self):
+        return {
+            "invalid_grant_callback": self._handle_invalid_grant,
+            "client_id": self.config['client_id'],
+            "client_secret": self.config['client_secret'],
+            "redirect_uri": self.config['redirect_uri'],
+            "scope": " ".join(self.SCOPES),
+            "cache_path": self.cache_path,
+            "open_browser": True,
+        }
+
+    def _create_oauth_manager(self):
+        kwargs = self._oauth_kwargs()
+        try:
+            return DashboardSpotifyOAuth(
+                **kwargs,
+                requests_timeout=self.REQUEST_TIMEOUT,
+            )
+        except TypeError as exc:
+            logger.warning(
+                "Spotipy OAuth 不支援 requests_timeout，改用舊建構方式: %s",
+                exc,
+            )
+            return DashboardSpotifyOAuth(**kwargs)
+
+    def _create_spotify_client(self, auth_manager):
+        try:
+            return Spotify(
+                auth_manager=auth_manager,
+                requests_timeout=self.REQUEST_TIMEOUT,
+            )
+        except TypeError as exc:
+            logger.warning(
+                "Spotipy client 不支援 requests_timeout，改用舊建構方式: %s",
+                exc,
+            )
+            return Spotify(auth_manager=auth_manager)
     
     def get_client(self):
         """

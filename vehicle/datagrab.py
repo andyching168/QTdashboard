@@ -170,6 +170,11 @@ def set_speed_sync_mode(mode: str):
     return speed_sync_mode
 
 
+def should_emit_gear_update(gear_str: str, last_emitted_gear_str: str) -> bool:
+    """只有檔位實際變化時才需要通知 UI。"""
+    return gear_str != last_emitted_gear_str
+
+
 def quick_read_gear(bus, timeout=1.0):
     """
     快速讀取當前檔位（用於啟動時判斷是否跳過開機動畫）
@@ -617,6 +622,7 @@ def unified_receiver(bus, db, signals):
     
     # 檔位切換狀態追蹤
     last_gear_str = None
+    last_emitted_gear_str = None
     last_gear_change_time = 0
     
     # === RPI4 優化：狀態緩存，只在變化時 emit ===
@@ -857,8 +863,10 @@ def unified_receiver(bus, db, signals):
                     # 記錄當前檔位供下次使用
                     last_gear_str = gear_str
                     
-                    # 更新前端檔位顯示
-                    signals.update_gear.emit(gear_str)
+                    # 更新前端檔位顯示：0x340 可能高頻重複送同一檔位，只在變化時 emit
+                    if should_emit_gear_update(gear_str, last_emitted_gear_str):
+                        signals.update_gear.emit(gear_str)
+                        last_emitted_gear_str = gear_str
                     
                     # [已移除] 複雜的 CAN RPM 解析邏輯
                     # 由於 Luxgen M7 的 RPM 訊號在 D/R 檔位使用了特殊的 Base+Delta 編碼，

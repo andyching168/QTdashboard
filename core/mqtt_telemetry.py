@@ -154,6 +154,14 @@ class MqttTelemetryController(QObject):
     def reconnect(self):
         """重新連接 MQTT"""
         # 先清理舊的連線
+        self.stop()
+
+        # 重新初始化
+        self.init_client()
+
+    def stop(self):
+        """停止遙測 timer 並關閉 MQTT client。"""
+        self._stop_telemetry_timer()
         if self.client is not None:
             try:
                 self.client.disconnect()
@@ -161,10 +169,7 @@ class MqttTelemetryController(QObject):
             except Exception:
                 pass
             self.client = None
-            self.connected = False
-
-        # 重新初始化
-        self.init_client()
+        self.connected = False
 
     @pyqtSlot()
     def _start_telemetry_timer(self):

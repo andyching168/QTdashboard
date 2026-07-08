@@ -122,18 +122,59 @@ class MarqueeLabel(QLabel):
     _global_pause_threshold = 166
     _instances = weakref.WeakSet()
     _waiting_for_sync = False
+    _shared_timer = None
+    _scroll_interval_ms = 30
+    _scroll_gap = 20
     
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
         self._scroll_pos = 0
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._on_timeout)
-        self._timer.setInterval(30)
         self._is_scrollable = False
         self._at_home = True
         self._is_active = False
+        self._metrics_dirty = True
+        self._text_width = 0
+        self._baseline = 0
+        self._cycle_width = self._scroll_gap
         
         MarqueeLabel._instances.add(self)
+        self._recalculate_metrics()
+
+    @classmethod
+    def _ensure_shared_timer(cls):
+        if cls._shared_timer is None:
+            cls._shared_timer = QTimer()
+            cls._shared_timer.setInterval(cls._scroll_interval_ms)
+            cls._shared_timer.timeout.connect(cls._on_shared_timeout)
+        return cls._shared_timer
+
+    @classmethod
+    def _sync_shared_timer(cls):
+        timer = cls._ensure_shared_timer()
+        should_run = any(
+            inst._is_active and inst._is_scrollable
+            for inst in list(cls._instances)
+        )
+        if should_run and not timer.isActive():
+            timer.start()
+        elif not should_run and timer.isActive():
+            timer.stop()
+
+    @classmethod
+    def _on_shared_timeout(cls):
+        if cls._global_pause_counter > 0:
+            cls._global_pause_counter -= 1
+            if cls._global_pause_counter == 0:
+                cls._waiting_for_sync = False
+            for inst in list(cls._instances):
+                if inst._is_active and inst._is_scrollable:
+                    inst.update()
+            cls._sync_shared_timer()
+            return
+
+        for inst in list(cls._instances):
+            inst._tick_scroll()
+        cls._sync_shared_timer()
 
     def setText(self, text):
         if text == self.text():
@@ -141,15 +182,28 @@ class MarqueeLabel(QLabel):
         super().setText(text)
         self._scroll_pos = 0
         self._at_home = True
-        self._check_scrollable()
+        self._recalculate_metrics()
         
         if self._is_active:
             MarqueeLabel._waiting_for_sync = False
             MarqueeLabel._global_pause_counter = MarqueeLabel._global_pause_threshold
-            if not self._timer.isActive():
-                self._timer.start()
+            MarqueeLabel._sync_shared_timer()
         
         self.update()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._recalculate_metrics()
+
+    def event(self, event):
+        if event.type() in (
+            QEvent.Type.FontChange,
+            QEvent.Type.StyleChange,
+            QEvent.Type.PaletteChange,
+        ):
+            self._metrics_dirty = True
+            self._recalculate_metrics()
+        return super().event(event)
     
     def showEvent(self, event):
         super().showEvent(event)
@@ -165,72 +219,65 @@ class MarqueeLabel(QLabel):
         self._is_active = True
         self._scroll_pos = 0
         self._at_home = True
-        self._check_scrollable()
+        self._recalculate_metrics()
         MarqueeLabel._global_pause_counter = MarqueeLabel._global_pause_threshold
         MarqueeLabel._waiting_for_sync = False
-        if self._is_scrollable and not self._timer.isActive():
-            self._timer.start()
+        MarqueeLabel._sync_shared_timer()
         self.update()
     
     def _deactivate(self):
         if not self._is_active:
             return
         self._is_active = False
-        if self._timer.isActive():
-            self._timer.stop()
         self._scroll_pos = 0
         self._at_home = True
+        MarqueeLabel._sync_shared_timer()
 
-    def _check_scrollable(self):
+    def _recalculate_metrics(self):
         fm = self.fontMetrics()
-        text_width = fm.horizontalAdvance(self.text())
-        self._is_scrollable = text_width > self.width()
+        self._text_width = fm.horizontalAdvance(self.text())
+        self._baseline = (self.height() + fm.ascent() - fm.descent()) / 2
+        self._cycle_width = self._text_width + self._scroll_gap
+        was_scrollable = self._is_scrollable
+        self._is_scrollable = self._text_width > self.width()
+        if not self._is_scrollable:
+            self._scroll_pos = 0
+            self._at_home = True
+        elif not was_scrollable:
+            self._scroll_pos = 0
+            self._at_home = True
+        self._metrics_dirty = False
+        MarqueeLabel._sync_shared_timer()
         
     def paintEvent(self, a0):
+        if self._metrics_dirty:
+            self._recalculate_metrics()
+
         painter = QPainter(self)
         
         painter.setPen(self.palette().color(self.foregroundRole()))
         painter.setFont(self.font())
         
-        fm = self.fontMetrics()
-        text_width = fm.horizontalAdvance(self.text())
-        
-        if text_width <= self.width():
-            if self._timer.isActive():
-                self._timer.stop()
+        if not self._is_scrollable:
             self._is_scrollable = False
             painter.drawText(self.rect(), int(self.alignment()), self.text())
             return
-
-        self._is_scrollable = True
-        
-        if self._is_active and not self._timer.isActive():
-            self._timer.start()
 
         painter.save()
         painter.setClipRect(self.rect())
         
         x = -self._scroll_pos
-        y = (self.height() + fm.ascent() - fm.descent()) / 2
+        y = self._baseline
         
         painter.drawText(int(x), int(y), self.text())
         
         if self._scroll_pos > 0:
-            painter.drawText(int(x + text_width + 20), int(y), self.text())
+            painter.drawText(int(x + self._cycle_width), int(y), self.text())
         
         painter.restore()
 
-    def _on_timeout(self):
+    def _tick_scroll(self):
         if not self._is_active:
-            if self._timer.isActive():
-                self._timer.stop()
-            return
-        
-        if MarqueeLabel._global_pause_counter > 0:
-            MarqueeLabel._global_pause_counter -= 1
-            if MarqueeLabel._global_pause_counter == 0:
-                MarqueeLabel._waiting_for_sync = False
-            self.update()
             return
         
         if not self._is_scrollable:
@@ -244,10 +291,8 @@ class MarqueeLabel(QLabel):
                 return
             else:
                 self._scroll_pos += 1
-                fm = self.fontMetrics()
-                text_width = fm.horizontalAdvance(self.text())
                 
-                if self._scroll_pos >= text_width + 20:
+                if self._scroll_pos >= self._cycle_width:
                     self._scroll_pos = 0
                     self._at_home = True
                     
@@ -266,10 +311,7 @@ class MarqueeLabel(QLabel):
         self._at_home = False
         self._scroll_pos += 1
         
-        fm = self.fontMetrics()
-        text_width = fm.horizontalAdvance(self.text())
-        
-        if self._scroll_pos >= text_width + 20:
+        if self._scroll_pos >= self._cycle_width:
             self._scroll_pos = 0
             self._at_home = True
             
@@ -288,10 +330,8 @@ class MarqueeLabel(QLabel):
     
     def __del__(self):
         try:
-            if hasattr(self, '_timer') and self._timer is not None:
-                if self._timer.isActive():
-                    self._timer.stop()
-                self._timer.deleteLater()
+            MarqueeLabel._instances.discard(self)
+            MarqueeLabel._sync_shared_timer()
         except RuntimeError:
             pass
 

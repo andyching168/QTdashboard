@@ -150,22 +150,30 @@ class DoorStatusCard(QWidget):
     def load_images(self):
         """載入所有門狀態圖片"""
         sprite_path = os.path.join(os.path.dirname(__file__), "..", "assets", "sprites", "carSprite")
-        
-        base_pixmap = QPixmap(os.path.join(sprite_path, "closed_base.png"))
-        if not base_pixmap.isNull():
-            scaled_base = base_pixmap.scaled(340, 280, 
-                                            Qt.AspectRatioMode.KeepAspectRatio,
-                                            Qt.TransformationMode.SmoothTransformation)
-            self.base_layer.setPixmap(scaled_base)
-        
-        self.fl_handle_pixmap = QPixmap(os.path.join(sprite_path, "closed_fl_handle.png"))
-        self.fr_handle_pixmap = QPixmap(os.path.join(sprite_path, "closed_fr_handle.png"))
-        
-        self.fl_open_pixmap = QPixmap(os.path.join(sprite_path, "FL.png"))
-        self.fr_open_pixmap = QPixmap(os.path.join(sprite_path, "FR.png"))
-        self.rl_open_pixmap = QPixmap(os.path.join(sprite_path, "RL.png"))
-        self.rr_open_pixmap = QPixmap(os.path.join(sprite_path, "RR.png"))
-        self.bk_open_pixmap = QPixmap(os.path.join(sprite_path, "BK.png"))
+
+        self.base_pixmap = self._load_scaled_pixmap(sprite_path, "closed_base.png")
+        if not self.base_pixmap.isNull():
+            self.base_layer.setPixmap(self.base_pixmap)
+
+        self.fl_handle_pixmap = self._load_scaled_pixmap(sprite_path, "closed_fl_handle.png")
+        self.fr_handle_pixmap = self._load_scaled_pixmap(sprite_path, "closed_fr_handle.png")
+
+        self.fl_open_pixmap = self._load_scaled_pixmap(sprite_path, "FL.png")
+        self.fr_open_pixmap = self._load_scaled_pixmap(sprite_path, "FR.png")
+        self.rl_open_pixmap = self._load_scaled_pixmap(sprite_path, "RL.png")
+        self.rr_open_pixmap = self._load_scaled_pixmap(sprite_path, "RR.png")
+        self.bk_open_pixmap = self._load_scaled_pixmap(sprite_path, "BK.png")
+
+    def _load_scaled_pixmap(self, sprite_path, filename):
+        pixmap = QPixmap(os.path.join(sprite_path, filename))
+        if pixmap.isNull():
+            return pixmap
+        return pixmap.scaled(
+            340,
+            280,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
     
     def set_door_status(self, door, is_closed):
         door = door.upper()
@@ -184,52 +192,31 @@ class DoorStatusCard(QWidget):
     
     def update_display(self):
         if self.door_fl_closed:
-            scaled_pixmap = self.fl_handle_pixmap.scaled(340, 280,
-                                                         Qt.AspectRatioMode.KeepAspectRatio,
-                                                         Qt.TransformationMode.SmoothTransformation)
-            self.fl_handle_layer.setPixmap(scaled_pixmap)
+            self.fl_handle_layer.setPixmap(self.fl_handle_pixmap)
             self.fl_open_layer.clear()
         else:
             self.fl_handle_layer.clear()
-            scaled_pixmap = self.fl_open_pixmap.scaled(340, 280,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
-            self.fl_open_layer.setPixmap(scaled_pixmap)
+            self.fl_open_layer.setPixmap(self.fl_open_pixmap)
         
         if self.door_fr_closed:
-            scaled_pixmap = self.fr_handle_pixmap.scaled(340, 280,
-                                                         Qt.AspectRatioMode.KeepAspectRatio,
-                                                         Qt.TransformationMode.SmoothTransformation)
-            self.fr_handle_layer.setPixmap(scaled_pixmap)
+            self.fr_handle_layer.setPixmap(self.fr_handle_pixmap)
             self.fr_open_layer.clear()
         else:
             self.fr_handle_layer.clear()
-            scaled_pixmap = self.fr_open_pixmap.scaled(340, 280,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
-            self.fr_open_layer.setPixmap(scaled_pixmap)
+            self.fr_open_layer.setPixmap(self.fr_open_pixmap)
         
         if not self.door_rl_closed:
-            scaled_pixmap = self.rl_open_pixmap.scaled(340, 280,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
-            self.rl_open_layer.setPixmap(scaled_pixmap)
+            self.rl_open_layer.setPixmap(self.rl_open_pixmap)
         else:
             self.rl_open_layer.clear()
         
         if not self.door_rr_closed:
-            scaled_pixmap = self.rr_open_pixmap.scaled(340, 280,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
-            self.rr_open_layer.setPixmap(scaled_pixmap)
+            self.rr_open_layer.setPixmap(self.rr_open_pixmap)
         else:
             self.rr_open_layer.clear()
         
         if not self.door_bk_closed:
-            scaled_pixmap = self.bk_open_pixmap.scaled(340, 280,
-                                                       Qt.AspectRatioMode.KeepAspectRatio,
-                                                       Qt.TransformationMode.SmoothTransformation)
-            self.bk_open_layer.setPixmap(scaled_pixmap)
+            self.bk_open_layer.setPixmap(self.bk_open_pixmap)
         else:
             self.bk_open_layer.clear()
         

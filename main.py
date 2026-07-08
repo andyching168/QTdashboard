@@ -646,12 +646,6 @@ class Dashboard(QWidget):
         self.left_gradient_pos = 0.0
         self.right_gradient_pos = 0.0
         
-        # 動畫計時器 - 用於平滑的漸層效果
-        self.animation_timer = QTimer()
-        self.animation_timer.timeout.connect(self.update_gradient_animation)
-        # Timer 啟動延遲到 start_dashboard() 調用時
-        # self.animation_timer.start(16)  # 約 60 FPS
-        
         return status_bar
     
     def update_time_display(self):
@@ -661,80 +655,6 @@ class Dashboard(QWidget):
         self.time_label.setText(current_time)
         # 方向燈 watchdog：複用既有 1 秒 timer，零額外開銷
         self._check_turn_signal_watchdog()
-    
-    def update_gradient_animation(self):
-        """更新漸層動畫效果（優化：只在需要時更新樣式）"""
-        # === 靜態開關版本 - 無動畫 ===
-        # 直接根據開關狀態設定漸層位置，無漸變效果
-        old_left_pos = self.left_gradient_pos
-        old_right_pos = self.right_gradient_pos
-        old_left_on = getattr(self, '_prev_left_turn_on', None)
-        old_right_on = getattr(self, '_prev_right_turn_on', None)
-        
-        # 左轉燈 - 靜態開關
-        if self.left_turn_on:
-            self.left_gradient_pos = 1.0  # 開啟時全滿
-        else:
-            self.left_gradient_pos = 0.0  # 關閉時全暗
-        
-        # 右轉燈 - 靜態開關
-        if self.right_turn_on:
-            self.right_gradient_pos = 1.0  # 開啟時全滿
-        else:
-            self.right_gradient_pos = 0.0  # 關閉時全暗
-        
-        # 只在狀態實際變更時才更新樣式（避免無謂的 CSS 重解析）
-        left_changed = (self.left_gradient_pos != old_left_pos or 
-                       self.left_turn_on != old_left_on)
-        right_changed = (self.right_gradient_pos != old_right_pos or 
-                        self.right_turn_on != old_right_on)
-        
-        if left_changed or right_changed:
-            self._prev_left_turn_on = self.left_turn_on
-            self._prev_right_turn_on = self.right_turn_on
-            self.update_turn_signal_style()
-        
-        # === 原始動畫代碼（已註解） ===
-        # 如果兩個方向燈都關閉且動畫已完成，跳過更新
-        # if (not self.left_turn_on and not self.right_turn_on and 
-        #     self.left_gradient_pos <= 0.0 and self.right_gradient_pos <= 0.0):
-        #     return
-        # 
-        # # 熄滅動畫速度
-        # fade_speed = 0.05
-        # 
-        # # 記錄舊的狀態用於比較
-        # old_left_pos = self.left_gradient_pos
-        # old_right_pos = self.right_gradient_pos
-        # old_left_on = getattr(self, '_prev_left_turn_on', None)
-        # old_right_on = getattr(self, '_prev_right_turn_on', None)
-        # 
-        # # 左轉燈動畫
-        # if self.left_turn_on:
-        #     # 亮起時直接全滿
-        #     self.left_gradient_pos = 1.0
-        # else:
-        #     # 熄滅時從中間向外漸暗
-        #     self.left_gradient_pos = max(0.0, self.left_gradient_pos - fade_speed)
-        # 
-        # # 右轉燈動畫
-        # if self.right_turn_on:
-        #     # 亮起時直接全滿
-        #     self.right_gradient_pos = 1.0
-        # else:
-        #     # 熄滅時從中間向外漸暗
-        #     self.right_gradient_pos = max(0.0, self.right_gradient_pos - fade_speed)
-        # 
-        # # 只在狀態實際變更時才更新樣式（避免無謂的 CSS 重解析）
-        # left_changed = (self.left_gradient_pos != old_left_pos or 
-        #                self.left_turn_on != old_left_on)
-        # right_changed = (self.right_gradient_pos != old_right_pos or 
-        #                 self.right_turn_on != old_right_on)
-        # 
-        # if left_changed or right_changed:
-        #     self._prev_left_turn_on = self.left_turn_on
-        #     self._prev_right_turn_on = self.right_turn_on
-        #     self.update_turn_signal_style()
     
     def update_turn_signal_style(self):
         """更新方向燈的視覺樣式 - 使用狀態快取避免重複 setStyleSheet"""
@@ -1612,8 +1532,86 @@ class Dashboard(QWidget):
             print("GPIO 按鈕已啟用 - 可使用實體按鈕控制")
         else:
             print("GPIO 按鈕不可用 - 請使用鍵盤 F1/F2 控制")
-        
+
         print("儀表板邏輯已啟動")
+
+    def closeEvent(self, event):
+        """關閉視窗時釋放 timer、worker 與外部連線。"""
+        print("[Dashboard] closing, stopping timers and workers...")
+
+        for name in (
+            'time_timer',
+            'speed_limit_timer',
+            'speed_limit_query_timer',
+            'brightness_timer',
+            'physics_timer',
+            'gc_timer',
+            'door_auto_switch_timer',
+        ):
+            self._stop_timer_attr(name)
+
+        speed_limit_worker = getattr(self, 'speed_limit_worker', None)
+        if speed_limit_worker is not None:
+            try:
+                speed_limit_worker.stop()
+            except Exception as exc:
+                print(f"[Dashboard] stop speed_limit_worker failed: {exc}")
+
+        network_monitor = getattr(self, 'network_monitor', None)
+        if network_monitor is not None:
+            try:
+                network_monitor.stop()
+            except Exception as exc:
+                print(f"[Dashboard] stop network_monitor failed: {exc}")
+
+        spotify_controller = getattr(self, 'spotify_controller', None)
+        integration = getattr(spotify_controller, 'integration', None)
+        if integration is not None:
+            try:
+                integration.stop()
+            except Exception as exc:
+                print(f"[Dashboard] stop Spotify integration failed: {exc}")
+
+        mqtt_controller = getattr(self, 'mqtt_controller', None)
+        if mqtt_controller is not None:
+            try:
+                mqtt_controller.stop()
+            except Exception as exc:
+                print(f"[Dashboard] stop MQTT failed: {exc}")
+
+        jank_detector = getattr(self, 'jank_detector', None)
+        if jank_detector is not None:
+            try:
+                jank_detector.stop()
+            except Exception as exc:
+                print(f"[Dashboard] stop jank_detector failed: {exc}")
+
+        self._stop_qthread_attr('gps_monitor_thread')
+        self._stop_qthread_attr('radar_monitor_thread')
+
+        super().closeEvent(event)
+
+    def _stop_timer_attr(self, name):
+        timer = getattr(self, name, None)
+        if timer is not None:
+            try:
+                timer.stop()
+            except Exception as exc:
+                print(f"[Dashboard] stop {name} failed: {exc}")
+
+    def _stop_qthread_attr(self, name):
+        thread = getattr(self, name, None)
+        if thread is None:
+            return
+        try:
+            if hasattr(thread, 'running'):
+                thread.running = False
+            if hasattr(thread, 'quit'):
+                thread.quit()
+            if hasattr(thread, 'isRunning') and thread.isRunning():
+                thread.wait(500)
+        except Exception as exc:
+            print(f"[Dashboard] stop {name} failed: {exc}")
     
     def _incremental_gc(self):
         """智能垃圾回收 - 只在車輛靜止時執行
@@ -2652,7 +2650,7 @@ class Dashboard(QWidget):
         Args:
             state: "left_on", "left_off", "right_on", "right_off", "both_on", "both_off", "off"
         
-        RPI4 優化：收到 CAN 訊號時立即更新 UI，不等待 animation_timer
+        RPI4 優化：收到 CAN 訊號時立即更新 UI，不啟動額外動畫 timer
         """
         prev_left = self.left_turn_on
         prev_right = self.right_turn_on
@@ -2684,7 +2682,7 @@ class Dashboard(QWidget):
             self.left_turn_on = False
             self.right_turn_on = False
         
-        # 立即更新 gradient pos 和 style（不再依賴 animation_timer）
+        # 立即更新 gradient pos 和 style
         self.left_gradient_pos = 1.0 if self.left_turn_on else 0.0
         self.right_gradient_pos = 1.0 if self.right_turn_on else 0.0
         self.update_turn_signal_style()
@@ -3824,6 +3822,9 @@ class Dashboard(QWidget):
         Args:
             turbo_bar: 增壓值 (bar)，負值為真空/負壓，正值為增壓
         """
+        if abs(float(turbo_bar) - float(getattr(self, 'turbo', 0.0))) < 0.01:
+            return
+
         self.turbo = turbo_bar
         # 發送 signal 給行程資訊卡片（用於計算油耗）
         self.signal_update_turbo.emit(turbo_bar)
