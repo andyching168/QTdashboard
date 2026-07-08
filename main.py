@@ -2061,21 +2061,46 @@ class Dashboard(QWidget):
         except Exception as e:
             print(f"開啟 WiFi 管理器錯誤: {e}")
 
+    def connect_worker_signals(self, signals):
+        """統一接線 datagrab.WorkerSignals -> Dashboard 最終 slot / signal。
+
+        高頻數值 signal 直接鏈接到 Dashboard 的 signal_update_*（一次
+        queued 跨執行緒傳遞後在主執行緒 fan-out），不再經過 set_* 轉手；
+        需要正規化 / 驗證 / 節流的項目仍走對應 slot 方法。
+        run_dashboard 的 setup_data_source 與 demo 模式都應使用此方法接線。
+        """
+        # 純轉手項目：WorkerSignals 直接鏈接內部 signal
+        signals.update_rpm.connect(self.signal_update_rpm)
+        signals.update_speed.connect(self.signal_update_speed)
+        signals.update_temp.connect(self.signal_update_temperature)
+        signals.update_fuel.connect(self.signal_update_fuel)
+        signals.update_fuel_consumption.connect(self.signal_update_fuel_consumption)
+        # 需要正規化（大寫）/ 驗證 / 節流 / 批次展開的項目走對應方法
+        signals.update_gear.connect(self.set_gear)
+        signals.update_turn_signal.connect(self.set_turn_signal)
+        signals.update_door_status.connect(self.set_door_status)
+        signals.update_turbo.connect(self.set_turbo)
+        signals.update_battery.connect(self.set_battery)
+        signals.update_obd_batch.connect(self.set_obd_batch)
+
     # === 執行緒安全的公開方法 (從背景執行緒呼叫) ===
+    # 注意：datagrab / demo 的接線已改用 connect_worker_signals()，
+    # 以下 set_speed/set_rpm/set_temperature/set_fuel 保留給
+    # tests/（test_receiver、test_odo_card、test_trip_card 等）外部呼叫點使用
     @perf_track
     def set_speed(self, speed):
         """外部數據接口：設置速度 (0-200 km/h)
         執行緒安全：透過 Signal 發送，由主執行緒執行
         """
         self.signal_update_speed.emit(float(speed))
-    
+
     @perf_track
     def set_rpm(self, rpm):
         """外部數據接口：設置轉速 (0-8 x1000rpm)
         執行緒安全：透過 Signal 發送，由主執行緒執行
         """
         self.signal_update_rpm.emit(float(rpm))
-    
+
     def set_temperature(self, temp):
         """外部數據接口：設置水溫 (0-100，對應約 40-120°C)
         - 0-30: 冷車 (藍區)
@@ -3763,14 +3788,6 @@ class Dashboard(QWidget):
         # 若引擎狀態從 on 掉到 off，立即上傳一次 MQTT
         self._maybe_publish_engine_off()
     
-    def set_fuel_consumption(self, instant: float, avg: float):
-        """外部數據接口：設置油耗 - 透過 Signal 發送，由主執行緒執行
-        Args:
-            instant: 瞬時油耗 (L/100km)
-            avg: 平均油耗 (L/100km)
-        """
-        self.signal_update_fuel_consumption.emit(instant, avg)
-    
     @pyqtSlot(float, float)
     def _slot_update_fuel_consumption(self, instant: float, avg: float):
         """Slot: 在主執行緒中更新油耗顯示"""
@@ -4395,19 +4412,9 @@ def main():
             print("[WARNING] CAN Bus 未初始化，儀表板將顯示預設值 '--'")
             return None
         
-        # 連接信號到 Dashboard
+        # 連接信號到 Dashboard（WorkerSignals 直接接到最終 slot / signal）
         signals = datagrab.WorkerSignals()
-        signals.update_rpm.connect(dashboard.set_rpm)
-        signals.update_speed.connect(dashboard.set_speed)
-        signals.update_temp.connect(dashboard.set_temperature)
-        signals.update_obd_batch.connect(dashboard.set_obd_batch)
-        signals.update_fuel.connect(dashboard.set_fuel)
-        signals.update_gear.connect(dashboard.set_gear)
-        signals.update_turn_signal.connect(dashboard.set_turn_signal)
-        signals.update_door_status.connect(dashboard.set_door_status)
-        signals.update_turbo.connect(dashboard.set_turbo)
-        signals.update_battery.connect(dashboard.set_battery)
-        signals.update_fuel_consumption.connect(dashboard.set_fuel_consumption)
+        dashboard.connect_worker_signals(signals)
         
         # 啟動背景執行緒
         import threading

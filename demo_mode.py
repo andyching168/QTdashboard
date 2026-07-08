@@ -33,7 +33,8 @@ MOCK_GPS_COORDS = [
 
 
 class VehicleSignals(QObject):
-    """Dashboard 所需的數據訊號"""
+    """Dashboard 所需的數據訊號（介面對齊 vehicle.datagrab.WorkerSignals，
+    供 dashboard.connect_worker_signals() 統一接線）"""
 
     update_rpm = pyqtSignal(float)
     update_speed = pyqtSignal(float)
@@ -42,6 +43,11 @@ class VehicleSignals(QObject):
     update_gear = pyqtSignal(str)
     update_turbo = pyqtSignal(float)
     update_battery = pyqtSignal(float)
+    # 以下訊號 demo 模式不會發射，僅為對齊 WorkerSignals 介面
+    update_turn_signal = pyqtSignal(str)
+    update_door_status = pyqtSignal(str, bool)
+    update_fuel_consumption = pyqtSignal(float, float)
+    update_obd_batch = pyqtSignal(dict)
 
 
 class VehicleSimulator:
@@ -355,14 +361,8 @@ def main() -> None:
             gps_timer.timeout.connect(gps_tick)
             gps_timer.start(5000)
 
-        # 連接 Dashboard 接收端
-        signals.update_rpm.connect(dashboard.set_rpm)
-        signals.update_speed.connect(dashboard.set_speed)
-        signals.update_temp.connect(dashboard.set_temperature)
-        signals.update_fuel.connect(dashboard.set_fuel)
-        signals.update_gear.connect(dashboard.set_gear)
-        signals.update_turbo.connect(dashboard.set_turbo)
-        signals.update_battery.connect(dashboard.set_battery)
+        # 連接 Dashboard 接收端（WorkerSignals 直接接到最終 slot / signal）
+        dashboard.connect_worker_signals(signals)
 
         def cleanup():
             timer.stop()
