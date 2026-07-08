@@ -78,20 +78,14 @@ from core.utils import (
     OdometerStorage,
     is_raspberry_pi,
     is_production_environment,
-    system_resource_snapshot,
 )
 
 from core.mqtt_telemetry import MqttTelemetryController
 from core.network_monitor import NetworkMonitor
 from core.shutdown_monitor import get_shutdown_monitor
+from core.shutdown_coordinator import ShutdownMqttCoordinator
 from core.max_value_logger import get_max_value_logger
 from core.startup_progress import StartupProgressWindow
-from core.shutdown_mqtt import (
-    build_shutdown_event,
-    build_performance_event,
-    publish_pending_then_current,
-    upsert_pending_event,
-)
 
 
 class Dashboard(QWidget):
@@ -1282,98 +1276,6 @@ class Dashboard(QWidget):
         self._update_left_indicators()
         print("[ShutdownSummary] 隱藏本次行程總結")
 
-    def _build_shutdown_mqtt_event(self):
-        """建立熄火 MQTT event。"""
-        trip_info = {}
-        if hasattr(self, "trip_info_card") and hasattr(self.trip_info_card, "get_trip_info"):
-            try:
-                trip_info = self.trip_info_card.get_trip_info()
-            except Exception as e:
-                print(f"[ShutdownMQTT] 讀取行程資訊失敗: {e}")
-
-        return build_shutdown_event(
-            lat=self.gps_lat,
-            lon=self.gps_lon,
-            location_fixed=getattr(self, "is_gps_fixed", False),
-            elapsed_time=trip_info.get("elapsed_time"),
-            trip_distance=trip_info.get("trip_distance"),
-            avg_fuel=trip_info.get("avg_fuel"),
-        )
-
-    def _build_performance_mqtt_event(self, shutdown_event):
-        """建立熄火當下的效能 MQTT event，並保留對應 shutdown event_id。"""
-        system_snapshot = system_resource_snapshot()
-        system_snapshot["uptime_sec"] = round(time.time() - self._dashboard_started_at, 1)
-
-        perf_snapshot = PerformanceMonitor().snapshot()
-        jank_detector = getattr(self, "jank_detector", None)
-        if jank_detector is not None:
-            jank_snapshot = jank_detector.snapshot()
-        else:
-            jank_snapshot = {"enabled": False, "count": 0, "recent": []}
-
-        return build_performance_event(
-            shutdown_event,
-            system_snapshot=system_snapshot,
-            performance_snapshot=perf_snapshot,
-            jank_snapshot=jank_snapshot,
-        )
-
-    def _publish_shutdown_mqtt_event(self):
-        """熄火時送出 retained MQTT event；失敗會留在本地待下次補送。"""
-        if self._shutdown_mqtt_in_progress:
-            print("[ShutdownMQTT] 發送中，略過重複請求")
-            return
-
-        event = self._build_shutdown_mqtt_event()
-        performance_event = self._build_performance_mqtt_event(event)
-        upsert_pending_event(event)
-        upsert_pending_event(performance_event)
-
-        config_file = get_mqtt_config_path()
-        if not os.path.exists(config_file):
-            print("[ShutdownMQTT] 未設定 MQTT，已先儲存熄火紀錄")
-            self.show_toast("MQTT 尚未設定，熄火紀錄已先儲存", "warning", 4500)
-            return
-
-        if self.mqtt_controller.client is None or not self.mqtt_controller.connected:
-            print("[ShutdownMQTT] MQTT 尚未連線，已先儲存熄火紀錄")
-            self.show_toast("MQTT 尚未連線，熄火紀錄已先儲存", "warning", 4500)
-            return
-
-        self._shutdown_mqtt_in_progress = True
-
-        def _worker():
-            try:
-                with open(config_file, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                result = publish_pending_then_current(self.mqtt_controller.client, config, event)
-                sent_count = result.get("sent_count", 0)
-                remaining_count = result.get("remaining_count", 0)
-                sent_ids = result.get("sent_ids") or []
-                performance_sent = performance_event.get("event_id") in sent_ids
-
-                if result.get("current_sent"):
-                    if sent_count > 1:
-                        self.show_toast(f"已補送 {sent_count - 1} 筆紀錄，並送出本次熄火紀錄", "success", 4500)
-                    else:
-                        self.show_toast("本次熄火紀錄已送出", "success", 3500)
-                else:
-                    self.show_toast("MQTT 傳送失敗，熄火紀錄已先儲存", "warning", 4500)
-
-                if remaining_count:
-                    print(f"[ShutdownMQTT] 尚有 {remaining_count} 筆 pending 未送出")
-                if not performance_sent:
-                    print("[ShutdownMQTT] 效能快照尚未送出，已保留 pending")
-            except Exception as e:
-                print(f"[ShutdownMQTT] 發送錯誤: {e}")
-                self.show_toast("MQTT 傳送失敗，熄火紀錄已先儲存", "warning", 4500)
-            finally:
-                self._shutdown_mqtt_in_progress = False
-
-        import threading
-        threading.Thread(target=_worker, daemon=True).start()
-
     def show_toast(self, message: str, level: str = "info", duration_ms: int = 3000):
         """顯示右上角短暫通知，可安全地從背景執行緒呼叫。"""
         self.signal_show_toast.emit(str(message), str(level), int(duration_ms))
@@ -1387,25 +1289,11 @@ class Dashboard(QWidget):
         self.toast_manager.raise_()
     
     def _init_shutdown_monitor(self):
-        """初始化關機監控器"""
-        self._shutdown_monitor = get_shutdown_monitor()
-        
-        # 連接信號
-        self._shutdown_monitor.power_lost.connect(self._on_power_lost)
-        self._shutdown_monitor.power_restored.connect(self._on_power_restored)
-        
-        # 連接無電壓訊號超時信號（3 分鐘沒收到 OBD 電壓數據）
-        self._shutdown_monitor.no_signal_timeout.connect(self._on_no_voltage_signal_timeout)
-        self._shutdown_monitor.telegram_notification_finished.connect(self._on_telegram_notification_finished)
-        self._shutdown_monitor.shutdown_cancelled.connect(self._hide_shutdown_summary_card)
-        
-        # 連接轉速信號到關機監控器（用於判斷是否低於 300 RPM）
-        self.signal_update_rpm.connect(lambda rpm: self._shutdown_monitor.update_rpm(rpm * 1000))
-        
-        # 啟動無訊號監控
-        self._shutdown_monitor.start_no_signal_monitoring()
-        
-        print("[ShutdownMonitor] 關機監控器已初始化（含無訊號超時監控）")
+        """初始化關機監控器（接線與熄火 MQTT 發布委派給 ShutdownMqttCoordinator）"""
+        self._shutdown_coordinator = ShutdownMqttCoordinator(
+            self, self.mqtt_controller, get_mqtt_config_path(), parent=self
+        )
+        self._shutdown_monitor = self._shutdown_coordinator.attach_monitor()
 
     def _on_telegram_notification_finished(self, success: bool, message: str):
         """顯示熄火 Telegram 通知結果。"""
@@ -1418,7 +1306,7 @@ class Dashboard(QWidget):
         """電源中斷時顯示關機對話框"""
         print("⚠️ 偵測到電源中斷，顯示關機對話框")
         self._show_shutdown_summary_card()
-        self._publish_shutdown_mqtt_event()
+        self._shutdown_coordinator.publish()
         
         # 釋放 GPS 資源，讓 location_notifier 可以接手
         if hasattr(self, 'gps_monitor_thread') and self.gps_monitor_thread is not None:
@@ -1540,7 +1428,6 @@ class Dashboard(QWidget):
             parent=self,
         )
 
-        self._shutdown_mqtt_in_progress = False
 
         # MQTT 遙測控制器（連線 / 遙測上傳 / 導航訊息轉發）
         self.mqtt_controller = MqttTelemetryController(self, get_mqtt_config_path(), parent=self)
