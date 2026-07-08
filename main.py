@@ -86,6 +86,7 @@ from core.shutdown_monitor import get_shutdown_monitor
 from core.shutdown_coordinator import ShutdownMqttCoordinator
 from core.max_value_logger import get_max_value_logger
 from core.startup_progress import StartupProgressWindow
+from core.gps_reliability import is_speed_limit_gps_reliable
 
 
 class Dashboard(QWidget):
@@ -249,28 +250,7 @@ class Dashboard(QWidget):
         """更新 GPS 狀態圖示"""
         self.is_gps_fixed = is_fixed
         self._apply_gps_styles()
-        
-        # GPS 穩定時啟動速限查詢計時器，否則暫停
-        if is_fixed:
-            if hasattr(self, 'speed_limit_query_timer') and not self.speed_limit_query_timer.isActive():
-                self.speed_limit_query_timer.start()
-                print("[SpeedLimit] GPS fixed, starting query timer")
-        else:
-            if hasattr(self, 'speed_limit_query_timer') and self.speed_limit_query_timer.isActive():
-                self.speed_limit_query_timer.stop()
-                # 立即隱藏速限
-                self.current_speed_limit = None
-                self.current_speed_limit_dual = None
-                self.speed_limit_label.setText("--")
-                self.speed_limit_label.setStyleSheet("""
-                    QLabel {
-                        color: #888;
-                        font-size: 48px;
-                        font-weight: bold;
-                        background: transparent;
-                    }
-                """)
-                print("[SpeedLimit] GPS lost, stopping query timer")
+        self._sync_speed_limit_query_state()
         
     def _update_gps_source(self, is_internal: bool, is_fresh: bool = True):
         """更新 GPS 來源（內部/外部 MQTT）
@@ -283,6 +263,42 @@ class Dashboard(QWidget):
         self.is_external_gps_fresh = is_fresh if not is_internal else True
         print(f"[GPS] Source changed: {'Internal' if is_internal else 'External (MQTT)'}, fresh={is_fresh}")
         self._apply_gps_styles()
+        self._sync_speed_limit_query_state()
+
+    def _is_speed_limit_gps_reliable(self):
+        """速限只允許使用內建 GPS fix，避免 MQTT/最後位置誤導駕駛。"""
+        return is_speed_limit_gps_reliable(
+            self.is_gps_fixed,
+            self.is_using_external_gps,
+        )
+
+    def _clear_speed_limit_display(self):
+        """清除並隱藏速限，避免留下不可靠位置查到的舊值。"""
+        self.current_speed_limit = None
+        self.current_speed_limit_dual = None
+        self._speed_limit_flashing = False
+
+        if hasattr(self, 'speed_limit_label'):
+            self.speed_limit_label.setText("--")
+            self.speed_limit_label.hide()
+        if hasattr(self, 'speed_limit_container'):
+            self.speed_limit_container.hide()
+
+    def _sync_speed_limit_query_state(self):
+        """依 GPS 可靠度啟停速限查詢。"""
+        if not hasattr(self, 'speed_limit_query_timer'):
+            return
+
+        if self._is_speed_limit_gps_reliable():
+            if not self.speed_limit_query_timer.isActive():
+                self.speed_limit_query_timer.start()
+                print("[SpeedLimit] Internal GPS fixed, starting query timer")
+            return
+
+        if self.speed_limit_query_timer.isActive():
+            self.speed_limit_query_timer.stop()
+            print("[SpeedLimit] GPS not reliable for speed limits, stopping query timer")
+        self._clear_speed_limit_display()
     
     def _update_gps_device(self, found: bool):
         """更新 GPS 裝置狀態"""
@@ -379,6 +395,10 @@ class Dashboard(QWidget):
 
         查詢在 SpeedLimitWorker 背景執行緒進行，結果回到 _on_speed_limit_result
         """
+        if not self._is_speed_limit_gps_reliable():
+            self._clear_speed_limit_display()
+            return
+
         if self.gps_lat is None or self.gps_lon is None:
             return
 
@@ -386,6 +406,10 @@ class Dashboard(QWidget):
 
     def _on_speed_limit_result(self, limit, direction, dual_limits):
         """速限查詢結果（worker 執行緒經 signal 回到主執行緒）"""
+        if not self._is_speed_limit_gps_reliable():
+            self._clear_speed_limit_display()
+            return
+
         if limit != self.current_speed_limit or dual_limits != self.current_speed_limit_dual:
             self.current_speed_limit = limit
             self.current_speed_limit_dual = dual_limits
@@ -1511,7 +1535,8 @@ class Dashboard(QWidget):
         self.speed_limit_worker.start()
         self.speed_limit_query_timer = QTimer()
         self.speed_limit_query_timer.timeout.connect(self._update_speed_limit)
-        self.speed_limit_query_timer.start(5000)  # 5000ms = 5 秒
+        self.speed_limit_query_timer.setInterval(5000)  # 5000ms = 5 秒
+        self._sync_speed_limit_query_state()
         
         # 啟動物理心跳 Timer（里程累積）
         self.last_physics_time = time.time()  # 重設時間基準
