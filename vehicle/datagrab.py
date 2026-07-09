@@ -90,6 +90,24 @@ cached_rpm = 0.0
 cached_speed = 0.0
 FUEL_DENSITY = 0.775  # 汽油密度 (g/mL)
 
+# OBD 車速由 receiver 執行緒更新、Dashboard 的物理積分器讀取。
+# UI signal 會在整數速度不變時節流，因此不能拿 UI 更新時間判斷資料是否失聯。
+_obd_speed_snapshot_lock = threading.Lock()
+_obd_speed_snapshot = {"raw_speed": 0.0, "updated_at": 0.0}
+
+
+def update_obd_speed_snapshot(raw_speed: float, updated_at: float = None):
+    """記錄每一筆 PID 0D 回應，供里程積分判斷資料新鮮度。"""
+    with _obd_speed_snapshot_lock:
+        _obd_speed_snapshot["raw_speed"] = max(0.0, float(raw_speed))
+        _obd_speed_snapshot["updated_at"] = time.time() if updated_at is None else float(updated_at)
+
+
+def get_obd_speed_snapshot():
+    """回傳 (raw_speed, updated_at) 的一致快照。"""
+    with _obd_speed_snapshot_lock:
+        return _obd_speed_snapshot["raw_speed"], _obd_speed_snapshot["updated_at"]
+
 # 校正會話控制（僅透過 UI 長按手動啟用）
 calibration_enabled = False  # 僅手動啟用時才允許自動校正
 # 速度校正設定
@@ -733,6 +751,8 @@ def unified_receiver(bus, db, signals):
                         if len(msg.data) < 4:
                             continue
                         raw_speed = msg.data[3]  # 單位: km/h
+                        speed_received_at = time.time()
+                        update_obd_speed_snapshot(raw_speed, speed_received_at)
                         
                         # 平滑處理
                         if current_speed_smoothed == 0:
@@ -746,7 +766,7 @@ def unified_receiver(bus, db, signals):
                         
                         data_store["OBD"]["speed"] = raw_speed
                         data_store["OBD"]["speed_smoothed"] = current_speed_smoothed
-                        data_store["OBD"]["last_update"] = time.time()
+                        data_store["OBD"]["last_update"] = speed_received_at
                         
                         # 套用校正係數後更新 UI（依據速度模式）
                         mode = speed_sync_mode

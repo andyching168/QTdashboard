@@ -194,7 +194,7 @@ def test_dashboard_turbo_dirty_check_skips_small_changes():
 def test_dashboard_close_event_cleans_major_runtime_resources():
     from main import Dashboard
 
-    source = inspect.getsource(Dashboard.closeEvent)
+    source = inspect.getsource(Dashboard.prepare_for_exit)
     for name in (
         "network_monitor",
         "speed_limit_worker",

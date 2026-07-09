@@ -7,32 +7,18 @@ import json
 import subprocess
 from collections import deque
 
-# === 螢幕電源管理設定 ===
-try:
-    subprocess.run(['xset', 's', 'off'], capture_output=True)        # 關閉螢幕保護
-    subprocess.run(['xset', 's', 'noblank'], capture_output=True)  # 關閉黑屏
-    subprocess.run(['xset', '-dpms'], capture_output=True)          # 禁用 DPMS
-    print("[Display] 螢幕保護已停用")
-except Exception as e:
-    print(f"[Display] 設定失敗: {e}")
-
-# === 啟動 CAN Bus 介面（必須在最前面）===
-try:
-    result = subprocess.run(
-        ['ip', '-details', 'link', 'show', 'can0'],
-        capture_output=True, text=True, timeout=2
-    )
-    if result.returncode == 0 and 'can0' in result.stdout:
-        subprocess.run(
-            ['sudo', 'ip', 'link', 'set', 'can0', 'up', 'type', 'can', 'bitrate', '500000'],
-            capture_output=True, timeout=5
-        )
-        print("[CAN] 介面 can0 已啟動")
-except Exception as e:
-    print(f"[CAN] 啟動失敗: {e}")
-
 # 專案根目錄
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+
+def configure_display_power():
+    """在真正啟動 dashboard 時才停用螢幕保護，保持 import 無副作用。"""
+    try:
+        for command in (['xset', 's', 'off'], ['xset', 's', 'noblank'], ['xset', '-dpms']):
+            subprocess.run(command, capture_output=True, timeout=2, check=False)
+        print("[Display] 螢幕保護已停用")
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        print(f"[Display] 設定略過: {exc}")
 
 def get_spotify_config_path():
     return os.path.join(PROJECT_ROOT, "spotify", "spotify_config.json")
@@ -1537,7 +1523,15 @@ class Dashboard(QWidget):
 
     def closeEvent(self, event):
         """關閉視窗時釋放 timer、worker 與外部連線。"""
-        print("[Dashboard] closing, stopping timers and workers...")
+        self.prepare_for_exit()
+        super().closeEvent(event)
+
+    def prepare_for_exit(self):
+        """所有退出路徑共用的同步保存與資源釋放流程。"""
+        if getattr(self, '_exit_prepared', False):
+            return
+        self._exit_prepared = True
+        print("[Dashboard] preparing for exit: stopping timers and workers...")
 
         for name in (
             'time_timer',
@@ -1589,7 +1583,13 @@ class Dashboard(QWidget):
         self._stop_qthread_attr('gps_monitor_thread')
         self._stop_qthread_attr('radar_monitor_thread')
 
-        super().closeEvent(event)
+        try:
+            OdometerStorage().save_now()
+            if hasattr(os, 'sync'):
+                os.sync()
+            print("[Dashboard] odometer data synchronized")
+        except Exception as exc:
+            print(f"[Dashboard] save before exit failed: {exc}")
 
     def _stop_timer_attr(self, name):
         timer = getattr(self, name, None)
@@ -2491,9 +2491,20 @@ class Dashboard(QWidget):
             
         self.last_physics_time = current_time
         
-        # 取得當前速度 (來自 _slot_set_speed 的最新 raw 值)
-        # 如果還沒初始化過，就預設為 0
+        # OBD UI signal 會在整數速度不變時節流；以 receiver 的每筆 PID 0D
+        # snapshot 判斷是否仍有新鮮車速，避免斷線後持續積分最後一筆速度。
         current_speed = getattr(self, "calc_speed_source", 0.0)
+        try:
+            import vehicle.datagrab as datagrab
+            snapshot_speed, speed_updated_at = datagrab.get_obd_speed_snapshot()
+            if speed_updated_at > 0:
+                if current_time - speed_updated_at > 1.5:
+                    self._prev_physics_speed = 0.0
+                    return
+                current_speed = snapshot_speed
+        except Exception:
+            # Demo mode / no CAN data source keeps its existing speed integration behaviour.
+            pass
         
         # 取得上一次計算時的速度 (用於梯形公式)
         prev_speed = getattr(self, "_prev_physics_speed", current_speed)
@@ -4272,6 +4283,9 @@ def run_dashboard(
     env_name = "生產環境（樹莓派）" if is_production else "開發環境（Mac/Windows）"
     print(f"檢測到 {env_name}")
     print(f"系統: {platform.system()}, 全螢幕模式: {'是' if is_production else '否'}")
+
+    if is_production:
+        configure_display_power()
     
     # 生產環境（樹莓派）隱藏滑鼠游標
     if is_production:

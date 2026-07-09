@@ -1577,6 +1577,18 @@ class ControlPanel(QWidget):
         
         dialog.exec()
     
+    def _prepare_dashboard_exit(self):
+        """讓 Dashboard 在任何手動退出前同步保存並停止背景資源。"""
+        parent = self.parent()
+        if parent is not None and hasattr(parent, 'prepare_for_exit'):
+            parent.prepare_for_exit()
+
+    def _execute_system_power_action(self, command):
+        """保存資料後才交給系統 reboot/shutdown。"""
+        import subprocess
+        self._prepare_dashboard_exit()
+        subprocess.run(command, check=False)
+
     def _power_action(self, action, dialog):
         """執行電源操作"""
         from PyQt6.QtWidgets import QMessageBox, QApplication
@@ -1637,9 +1649,9 @@ class ControlPanel(QWidget):
                     pass
                 self._show_power_countdown("關閉程式", 1)
                 def force_exit():
-                    print("[電源] 強制退出應用程式...")
-                    import os
-                    os._exit(0)
+                    print("[電源] 正在安全退出應用程式...")
+                    self._prepare_dashboard_exit()
+                    QApplication.quit()
                 QTimer.singleShot(1000, force_exit)
             # 取消則不做任何事
             return
@@ -1671,7 +1683,7 @@ class ControlPanel(QWidget):
                 if is_linux:
                     print("[電源] 準備系統重啟...")
                     self._show_power_countdown("系統重啟", 3)
-                    QTimer.singleShot(3000, lambda: subprocess.run(['sudo', 'reboot']))
+                    QTimer.singleShot(3000, lambda: self._execute_system_power_action(['sudo', 'reboot']))
                 else:
                     # macOS 模擬
                     info_box = QMessageBox()
@@ -1685,7 +1697,7 @@ class ControlPanel(QWidget):
                 if is_linux:
                     print("[電源] 準備關機...")
                     self._show_power_countdown("關機", 3)
-                    QTimer.singleShot(3000, lambda: subprocess.run(['sudo', 'shutdown', '-h', 'now']))
+                    QTimer.singleShot(3000, lambda: self._execute_system_power_action(['sudo', 'shutdown', '-h', 'now']))
                 else:
                     # macOS 模擬
                     info_box = QMessageBox()
@@ -1737,6 +1749,8 @@ class ControlPanel(QWidget):
         import subprocess
         import sys
         import os
+
+        self._prepare_dashboard_exit()
         
         python_exe = sys.executable
         env = os.environ.copy()
