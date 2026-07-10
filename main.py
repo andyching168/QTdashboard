@@ -3871,7 +3871,8 @@ class Dashboard(QWidget):
         Args:
             turbo_bar: 增壓值 (bar)，負值為真空/負壓，正值為增壓
         """
-        if abs(float(turbo_bar) - float(getattr(self, 'turbo', 0.0))) < 0.01:
+        current = getattr(self, 'turbo', None)
+        if current is not None and abs(float(turbo_bar) - float(current)) < 0.01:
             return
 
         self.turbo = turbo_bar
