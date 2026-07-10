@@ -8,6 +8,8 @@ import subprocess
 import re
 import json
 import os
+import threading
+import time
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QListWidget, QListWidgetItem, 
                              QLineEdit, QDialog, QMessageBox, QProgressBar,
@@ -168,7 +170,56 @@ class VirtualKeyboard(QWidget):
             style.polish(self.caps_button)
 
 
-class WiFiScanner(QThread):
+class CancellableProcessThread(QThread):
+    """可在視窗關閉時終止目前 subprocess 的 QThread。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cancel_event = threading.Event()
+        self._process = None
+        self._process_lock = threading.Lock()
+
+    def cancel(self):
+        self._cancel_event.set()
+        self.requestInterruption()
+        with self._process_lock:
+            process = self._process
+        if process is not None and process.poll() is None:
+            process.terminate()
+
+    def _wait(self, seconds):
+        return self._cancel_event.wait(seconds)
+
+    def _run_command(self, args, *, timeout, text=False, env=None):
+        process = subprocess.Popen(
+            args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=text,
+            env=env,
+        )
+        with self._process_lock:
+            self._process = process
+        started = time.monotonic()
+        try:
+            while True:
+                if self._cancel_event.is_set():
+                    process.terminate()
+                    raise InterruptedError("WiFi operation cancelled")
+                try:
+                    stdout, stderr = process.communicate(timeout=0.1)
+                    return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
+                except subprocess.TimeoutExpired:
+                    if time.monotonic() - started >= timeout:
+                        process.kill()
+                        stdout, stderr = process.communicate()
+                        raise subprocess.TimeoutExpired(args, timeout, stdout, stderr)
+        finally:
+            with self._process_lock:
+                self._process = None
+
+
+class WiFiScanner(CancellableProcessThread):
     """WiFi 掃描執行緒"""
     scan_completed = pyqtSignal(list)
     
@@ -176,19 +227,17 @@ class WiFiScanner(QThread):
         """掃描可用的 WiFi 網路"""
         try:
             # 先執行重新掃描（需要 root 權限或 polkit 授權）
-            subprocess.run(
+            self._run_command(
                 ['nmcli', 'dev', 'wifi', 'rescan'],
-                capture_output=True,
                 timeout=10
             )
             # 等待掃描完成
-            import time
-            time.sleep(2)
+            if self._wait(2):
+                return
             
             # 使用 nmcli 列出 WiFi（--rescan yes 會自動重新掃描）
-            result = subprocess.run(
+            result = self._run_command(
                 ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list', '--rescan', 'yes'],
-                capture_output=True,
                 text=True,
                 timeout=15
             )
@@ -218,12 +267,14 @@ class WiFiScanner(QThread):
             networks.sort(key=lambda x: x['signal'], reverse=True)
             self.scan_completed.emit(networks)
             
+        except InterruptedError:
+            return
         except Exception as e:
             print(f"WiFi 掃描錯誤: {e}")
             self.scan_completed.emit([])
 
 
-class WiFiConnector(QThread):
+class WiFiConnector(CancellableProcessThread):
     """WiFi 連線執行緒
 
     nmcli 連線流程的 subprocess 逾時最壞可累計約 90 秒，
@@ -244,8 +295,8 @@ class WiFiConnector(QThread):
             if self.test_mode:
                 # 測試模式：模擬連線
                 print(f"測試模式：模擬連線到 {ssid}" + (f" (密碼: {password})" if password else ""))
-                import time
-                time.sleep(2)  # 模擬連線延遲
+                if self._wait(2):
+                    return
 
                 class MockResult:
                     returncode = 0
@@ -258,32 +309,30 @@ class WiFiConnector(QThread):
                 env['LC_ALL'] = 'C'
 
                 # 先檢查是否已有此網路的連線設定
-                check_result = subprocess.run(
+                check_result = self._run_command(
                     ['nmcli', '-t', '-f', 'NAME', 'con', 'show'],
-                    capture_output=True, text=True, timeout=5, env=env
+                    text=True, timeout=5, env=env
                 )
                 existing_connections = check_result.stdout.strip().split('\n')
 
                 if ssid in existing_connections:
                     # 已有連線設定，先刪除舊設定再重新連線（避免 key-mgmt 問題）
                     print(f"找到現有連線設定: {ssid}，刪除舊設定...")
-                    subprocess.run(['nmcli', 'con', 'delete', ssid],
-                                  capture_output=True, timeout=10, env=env)
+                    self._run_command(['nmcli', 'con', 'delete', ssid], timeout=10, env=env)
 
                 # 建立新連線
                 if password:
                     # 方法 1：嘗試使用標準 wifi connect 命令
                     cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password]
                     print(f"嘗試連線: {' '.join(cmd[:5])} ****")
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=env)
+                    result = self._run_command(cmd, text=True, timeout=30, env=env)
 
                     # 如果失敗，嘗試方法 2：手動建立連線設定
                     if result.returncode != 0 and 'key-mgmt' in result.stderr.lower():
                         print(f"標準連線失敗，嘗試手動建立連線設定...")
 
                         # 刪除可能殘留的設定
-                        subprocess.run(['nmcli', 'con', 'delete', ssid],
-                                      capture_output=True, timeout=10, env=env)
+                        self._run_command(['nmcli', 'con', 'delete', ssid], timeout=10, env=env)
 
                         # 使用 nmcli connection add 建立連線，明確指定 key-mgmt
                         add_cmd = [
@@ -294,20 +343,20 @@ class WiFiConnector(QThread):
                             'wifi-sec.key-mgmt', 'wpa-psk',
                             'wifi-sec.psk', password
                         ]
-                        add_result = subprocess.run(add_cmd, capture_output=True, text=True, timeout=15, env=env)
+                        add_result = self._run_command(add_cmd, text=True, timeout=15, env=env)
 
                         if add_result.returncode == 0:
                             # 啟用連線
-                            result = subprocess.run(
+                            result = self._run_command(
                                 ['nmcli', 'con', 'up', ssid],
-                                capture_output=True, text=True, timeout=30, env=env
+                                text=True, timeout=30, env=env
                             )
                         else:
                             result = add_result
                 else:
                     # 連線到開放網路
                     cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid]
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=env)
+                    result = self._run_command(cmd, text=True, timeout=30, env=env)
 
             if result.returncode == 0:
                 self.connect_finished.emit(True, ssid, '')
@@ -315,11 +364,41 @@ class WiFiConnector(QThread):
                 error_msg = result.stderr or result.stdout or "連線失敗"
                 self.connect_finished.emit(False, ssid, error_msg)
 
+        except InterruptedError:
+            return
         except subprocess.TimeoutExpired:
             self.connect_finished.emit(False, ssid, 'timeout: 連線逾時，請重試')
 
         except Exception as e:
             self.connect_finished.emit(False, ssid, f'exception: {str(e)}')
+
+
+class WiFiStatusChecker(CancellableProcessThread):
+    status_ready = pyqtSignal(object)
+
+    def run(self):
+        env = os.environ.copy()
+        env['LANG'] = 'C'
+        env['LC_ALL'] = 'C'
+        try:
+            result = self._run_command(
+                ['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'],
+                text=True,
+                timeout=2,
+                env=env,
+            )
+            ssid = None
+            for line in result.stdout.strip().split('\n'):
+                if line.startswith('yes:') or line.startswith('是:'):
+                    candidate = line.split(':', 1)[1]
+                    if candidate:
+                        ssid = candidate
+                        break
+            self.status_ready.emit(ssid)
+        except InterruptedError:
+            return
+        except Exception:
+            self.status_ready.emit(None)
 
 
 class WiFiPasswordDialog(QDialog):
@@ -499,11 +578,12 @@ class WiFiManagerWidget(QWidget):
     connection_changed = pyqtSignal(bool, str)  # (已連線, SSID)
     
     def __init__(self, parent=None, test_mode=False):
-        super().__init__()
+        super().__init__(parent)
         self.networks = []
         self.current_ssid = None
         self.scanner = None
         self.connector = None
+        self.status_checker = None
         self.test_mode = test_mode  # Mac 測試模式
         
         # 1920x480 儀表板尺寸
@@ -511,10 +591,13 @@ class WiFiManagerWidget(QWidget):
         self.setup_ui()
         
         # 自動掃描
-        QTimer.singleShot(500, self.scan_networks)
+        self.scan_timer = QTimer(self)
+        self.scan_timer.setSingleShot(True)
+        self.scan_timer.timeout.connect(self.scan_networks)
+        self.scan_timer.start(500)
         
         # 定期檢查連線狀態
-        self.status_timer = QTimer()
+        self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(self.update_connection_status)
         self.status_timer.start(5000)  # 每5秒檢查一次
     
@@ -799,45 +882,38 @@ class WiFiManagerWidget(QWidget):
             QMessageBox.warning(self, "連線失敗", f"無法連線到 {ssid}\n\n{friendly_msg}")
     
     def update_connection_status(self):
-        """更新連線狀態"""
-        try:
-            if self.test_mode:
-                # 測試模式：顯示模擬狀態
-                self.status_label.setText("📱 測試模式 - 未連線")
-                self.status_label.setStyleSheet("font-size: 16px; color: #fa0;")
-                return
-            
-            # 使用 LANG=C 確保輸出為英文格式
-            env = os.environ.copy()
-            env['LANG'] = 'C'
-            env['LC_ALL'] = 'C'
-            
-            result = subprocess.run(
-                ['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                env=env
-            )
-            
-            for line in result.stdout.strip().split('\n'):
-                # 支援英文 yes 和中文「是」
-                if line.startswith('yes:') or line.startswith('是:'):
-                    ssid = line.split(':', 1)[1]
-                    if ssid:  # 確保 SSID 不為空
-                        self.current_ssid = ssid
-                        self.status_label.setText(f"✅ 已連線到 {ssid}")
-                        self.status_label.setStyleSheet("font-size: 16px; color: #6f6;")
-                        return
-            
-            # 未連線
+        """排程背景查詢；已有查詢時直接合併。"""
+        if self.test_mode:
+            self.status_label.setText("📱 測試模式 - 未連線")
+            self.status_label.setStyleSheet("font-size: 16px; color: #fa0;")
+            return
+        if self.status_checker is not None and self.status_checker.isRunning():
+            return
+        self.status_checker = WiFiStatusChecker(parent=self)
+        self.status_checker.status_ready.connect(self._apply_connection_status)
+        self.status_checker.start()
+
+    def _apply_connection_status(self, ssid):
+        if ssid:
+            self.current_ssid = ssid
+            self.status_label.setText(f"✅ 已連線到 {ssid}")
+            self.status_label.setStyleSheet("font-size: 16px; color: #6f6;")
+        else:
             self.current_ssid = None
             self.status_label.setText("❌ 未連線")
             self.status_label.setStyleSheet("font-size: 16px; color: #f66;")
-            
-        except Exception as e:
-            if not self.test_mode:
-                print(f"檢查連線狀態錯誤: {e}")
+
+    def closeEvent(self, event):
+        """停止所有 timer 並取消可能正在執行的 nmcli。"""
+        self.scan_timer.stop()
+        self.status_timer.stop()
+        for worker in (self.scanner, self.connector, self.status_checker):
+            if worker is not None and worker.isRunning():
+                cancel = getattr(worker, 'cancel', None)
+                if callable(cancel):
+                    cancel()
+                worker.wait(1500)
+        event.accept()
 
 
 def main():

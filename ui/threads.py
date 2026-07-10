@@ -14,6 +14,25 @@ logger = logging.getLogger(__name__)
 
 # 共享鎖，防止 GPS 和 Radar 線程競爭同一個 serial port
 _serial_lock = threading.Lock()
+_claimed_ports = {}
+
+
+def _claim_port(port, owner):
+    """短暫加鎖保留 serial port，避免 GPS/Radar 同時開啟同一裝置。"""
+    with _serial_lock:
+        claimant = _claimed_ports.get(port)
+        if claimant is not None and claimant is not owner:
+            return False
+        _claimed_ports[port] = owner
+        return True
+
+
+def _release_port(port, owner):
+    if not port:
+        return
+    with _serial_lock:
+        if _claimed_ports.get(port) is owner:
+            _claimed_ports.pop(port, None)
 
 # === 雷達功能開關 ===
 # 設為 False 可停用雷達掃描功能（連接埠偵測、資料讀取等全部跳過）
@@ -54,6 +73,12 @@ class GPSMonitorThread(QThread):
         self._soft_reset_requested = False  # D→N 等事件觸發的軟重啟請求
         self._last_ubx_reset_time = 0  # 上次 reset 時間（防頻繁重啟）
         self._usb_reset_count = 0  # 連續軟 reset 無效次數（累積後觸發 USB unbind/bind）
+        self._stop_event = threading.Event()
+        self._active_serial = None
+
+    def _wait(self, seconds):
+        """可被 stop() 立即喚醒的等待。"""
+        return self._stop_event.wait(seconds)
         
     def request_soft_reset(self):
         """外部介面：請求 GPS 軟重啟（如 D→N 換檔時觸發）
@@ -77,7 +102,8 @@ class GPSMonitorThread(QThread):
             logger.info("[GPS] RADAR_ENABLED=False，跳過等待雷達線程")
         else:
             # 等待雷達線程先鎖定其 port
-            time.sleep(2)
+            if self._wait(2):
+                return
         
         while self.running:
             # 1. 如果沒有鎖定 port，進行掃描
@@ -87,7 +113,8 @@ class GPSMonitorThread(QThread):
                 
                 if not ports:
                     self._update_device_status(found=False)
-                    time.sleep(2)
+                    if self._wait(2):
+                        break
                     continue
                 
                 # 發現至少一個 port，標記有裝置
@@ -106,29 +133,25 @@ class GPSMonitorThread(QThread):
                 found = False
                 for port in ports:
                     for baud in target_bauds:
+                        if not _claim_port(port, self):
+                            continue
                         try:
-                            with _serial_lock:
-                                ser = serial.Serial(port, baud, timeout=0.3)
-                                data_lines = []
-                                for i in range(3):
-                                    line = ser.readline()
-                                    if line:
-                                        s = line.decode('ascii', errors='ignore').strip()
-                                    data_lines.append(s)
-                                    # 識別 Radar，立即跳過（僅在雷達開啟時）
-                                    if RADAR_ENABLED and 'LR:' in s and 'RF:' in s:
-                                        ser.close()
-                                        found = True
-                                        break
-                                    # 識別 GPS
-                                    if ('$GPGGA' in s or '$GNGGA' in s or 
-                                        '$GPRMC' in s or '$GNRMC' in s) and ',' in s:
-                                        self._current_port = port
-                                        self.baud_rate = baud
-                                        self._consecutive_failures = 0
-                                        ser.close()
-                                        logger.info(f"[GPS] *** FOUND GPS on {port} @ {baud} ***")
-                                        break
+                            ser = serial.Serial(port, baud, timeout=0.3)
+                            data_lines = []
+                            for _ in range(3):
+                                line = ser.readline()
+                                s = line.decode('ascii', errors='ignore').strip() if line else ""
+                                data_lines.append(s)
+                                if RADAR_ENABLED and 'LR:' in s and 'RF:' in s:
+                                    found = True
+                                    break
+                                if (('$GPGGA' in s or '$GNGGA' in s or
+                                     '$GPRMC' in s or '$GNRMC' in s) and ',' in s):
+                                    self._current_port = port
+                                    self.baud_rate = baud
+                                    self._consecutive_failures = 0
+                                    logger.info(f"[GPS] *** FOUND GPS on {port} @ {baud} ***")
+                                    break
                             ser.close()
                             
                             # 如果檢測到乱码数据（不是GPS也不是Radar），可能port被佔用，快速跳過
@@ -138,8 +161,11 @@ class GPSMonitorThread(QThread):
                                     logger.info(f"[GPS] {port} @ {baud}: garbled data, skipping rest of port")
                                     break  # 跳過這個port的其餘baud
                                 
-                        except Exception as e:
+                        except Exception:
                             pass
+                        finally:
+                            if self._current_port != port:
+                                _release_port(port, self)
                         if self._current_port:
                             break
                     if self._current_port:
@@ -147,8 +173,8 @@ class GPSMonitorThread(QThread):
                 
                 if not self._current_port:
                     logger.info("[GPS] No GPS found, will retry...")
-                    time.sleep(2)
-                    time.sleep(2)
+                    if self._wait(2):
+                        break
             else:
                 # 2. 已鎖定 port，持續讀取
                 success = self._read_loop()
@@ -165,10 +191,12 @@ class GPSMonitorThread(QThread):
                         logger.warning(f"[GPS] Too many consecutive failures, treating as disconnection")
                     else:
                         logger.warning(f"[GPS] Connection lost on {self._current_port}")
-                    self._current_port = None
+                    old_port, self._current_port = self._current_port, None
+                    _release_port(old_port, self)
                     self._update_status(False)
                     self._consecutive_failures = 0
-                    time.sleep(1)
+                    if self._wait(1):
+                        break
                     
     def _try_connect(self, port):
         """測試連接"""
@@ -215,9 +243,9 @@ class GPSMonitorThread(QThread):
         SPEED_PARSE_WATCHDOG = 30.0  # 30 秒速度沒更新 → 強制 soft reset
         
         try:
-            with _serial_lock:
-                ser = serial.Serial(self._current_port, self.baud_rate, timeout=1.0)
-                while self.running:
+            ser = serial.Serial(self._current_port, self.baud_rate, timeout=0.25)
+            self._active_serial = ser
+            while self.running and not self.isInterruptionRequested():
                     now = time.time()
                     
                     # === 速度心跳檢查（每個迭代都檢查，不限空行） ===
@@ -265,7 +293,8 @@ class GPSMonitorThread(QThread):
                         except Exception:
                             pass
                         # 等待 GPS 模組清理內部狀態（NMEA 輸出重新同步）
-                        time.sleep(0.5)
+                        if self._wait(0.5):
+                            return False
                         last_rmc_time = time.time()  # 重置看門狗
                         self._last_ubx_reset_time = time.time()
                         self._soft_reset_requested = False
@@ -389,11 +418,12 @@ class GPSMonitorThread(QThread):
         except serial.SerialException as e:
             if "timeout" not in str(e).lower():
                 logger.error(f"[GPS] Serial error: {e}")
-            return True
+            return False
         except Exception as e:
             logger.error(f"[GPS] Error: {e}")
             return False
         finally:
+            self._active_serial = None
             if ser is not None:
                 try:
                     if ser.is_open:
@@ -403,11 +433,24 @@ class GPSMonitorThread(QThread):
             
         return True
 
-    def stop(self):
+    def stop(self, timeout_ms=3000):
         """停止監控並釋放資源"""
         self.running = False
-        self.wait() # 等待執行緒結束
-        logger.info("[GPS] Monitor thread stopped.")
+        self._stop_event.set()
+        self.requestInterruption()
+        ser = self._active_serial
+        if ser is not None:
+            try:
+                ser.close()
+            except Exception:
+                pass
+        stopped = self.wait(timeout_ms)
+        _release_port(self._current_port, self)
+        if stopped:
+            logger.info("[GPS] Monitor thread stopped.")
+        else:
+            logger.error("[GPS] Monitor thread did not stop within %dms", timeout_ms)
+        return stopped
 
     def inject_external_gps(self, lat: float, lon: float, speed: float, bearing: float, timestamp: str):
         """注入外部 GPS 資料（來自 MQTT 導航 payload）
@@ -629,6 +672,11 @@ class RadarMonitorThread(QThread):
         self._current_port = None
         self._last_payload = None
         self._last_scan_notice = None
+        self._stop_event = threading.Event()
+        self._active_serial = None
+
+    def _wait(self, seconds):
+        return self._stop_event.wait(seconds)
 
     def _perf_logging_enabled(self):
         return os.environ.get('PERF_MONITOR', '').lower() in ('1', 'true', 'yes')
@@ -654,7 +702,8 @@ class RadarMonitorThread(QThread):
                     if self._perf_logging_enabled() and notice != self._last_scan_notice:
                         print(notice)
                     self._last_scan_notice = notice
-                    time.sleep(2)
+                    if self._wait(2):
+                        break
                     continue
                 
                 # 嘗試每一個 port
@@ -666,64 +715,70 @@ class RadarMonitorThread(QThread):
                         break
                 
                 if not found:
-                    time.sleep(2)
+                    if self._wait(2):
+                        break
             else:
                 # 2. 已鎖定 port，持續讀取
                 if not self._read_loop():
                     # 讀取失敗（斷線），重置 port
                     if self._perf_logging_enabled():
                         print(f"[Radar] Connection lost on {self._current_port}")
-                    self._current_port = None
-                    time.sleep(1)
+                    old_port, self._current_port = self._current_port, None
+                    _release_port(old_port, self)
+                    if self._wait(1):
+                        break
                     
     def _try_connect(self, port):
         """測試連接"""
+        if not _claim_port(port, self):
+            return False
+        connected = False
         try:
-            with _serial_lock:
-                # 嘗試開啟 serial port
-                with serial.Serial(port, self.baud_rate, timeout=0.5) as ser:
-                    # 讀取幾行看看是不是雷達數據
-                    for _ in range(3):  # 快速檢測
-                        line = ser.readline()
-                        try:
-                            line_str = line.decode('ascii', errors='ignore').strip()
-                            # 跳過 GPS NMEA 數據
-                            if '$G' in line_str or '$GN' in line_str:
-                                return False  # 這是 GPS port
-                            # 檢查特徵：包含 'LR:' 和 'RR:' 和 'LF:' 和 'RF:'
-                            if 'LR:' in line_str and 'RR:' in line_str and 'LF:' in line_str and 'RF:' in line_str:
-                                if self._perf_logging_enabled():
-                                    print(f"[Radar] Found Radar on {port} @ {self.baud_rate}")
-                                    print(f"[Radar] Sample data: {line_str}")
-                                return True
-                        except:
-                            pass
-        except:
-            pass
-        return False
-        
-    def _read_loop(self):
-        """持續讀取迴圈"""
-        try:
-            with _serial_lock:
-                ser = serial.Serial(self._current_port, self.baud_rate, timeout=1.0)
-                while self.running:
+            with serial.Serial(port, self.baud_rate, timeout=0.5) as ser:
+                for _ in range(3):
                     line = ser.readline()
-                    if not line:
-                        continue
-                        
                     try:
                         line_str = line.decode('ascii', errors='ignore').strip()
-                        # 檢查是否包含雷達數據（支援有括號或無括號格式）
+                        if '$G' in line_str or '$GN' in line_str:
+                            return False
                         if 'LR:' in line_str and 'RR:' in line_str and 'LF:' in line_str and 'RF:' in line_str:
-                            if line_str == self._last_payload:
-                                continue
-                            self._last_payload = line_str
                             if self._perf_logging_enabled():
-                                print(f"[Radar] Data: {line_str}")  # Debug 用
-                            self.radar_message_received.emit(line_str)
-                    except ValueError:
+                                print(f"[Radar] Found Radar on {port} @ {self.baud_rate}")
+                                print(f"[Radar] Sample data: {line_str}")
+                            connected = True
+                            return True
+                    except Exception:
                         pass
+        except Exception:
+            pass
+        finally:
+            if not connected:
+                _release_port(port, self)
+        return False
+
+    def _read_loop(self):
+        """持續讀取迴圈"""
+        ser = None
+        try:
+            ser = serial.Serial(self._current_port, self.baud_rate, timeout=0.25)
+            self._active_serial = ser
+            while self.running and not self.isInterruptionRequested():
+                line = ser.readline()
+                if not line:
+                    continue
+
+                try:
+                    line_str = line.decode('ascii', errors='ignore').strip()
+                    # 檢查是否包含雷達數據（支援有括號或無括號格式）
+                    if 'LR:' in line_str and 'RR:' in line_str and 'LF:' in line_str and 'RF:' in line_str:
+                        if line_str == self._last_payload:
+                            continue
+                        self._last_payload = line_str
+                        if self._perf_logging_enabled():
+                            print(f"[Radar] Data: {line_str}")  # Debug 用
+                        self.radar_message_received.emit(line_str)
+                except ValueError:
+                    pass
         except serial.SerialException as e:
             if self._perf_logging_enabled():
                 print(f"[Radar] Serial error: {e}")
@@ -732,9 +787,26 @@ class RadarMonitorThread(QThread):
             if self._perf_logging_enabled():
                 print(f"[Radar] Error: {e}")
             return False
+        finally:
+            self._active_serial = None
+            if ser is not None:
+                try:
+                    ser.close()
+                except Exception:
+                    pass
             
         return True
 
-    def stop(self):
+    def stop(self, timeout_ms=3000):
         self.running = False
-        self.wait()
+        self._stop_event.set()
+        self.requestInterruption()
+        ser = self._active_serial
+        if ser is not None:
+            try:
+                ser.close()
+            except Exception:
+                pass
+        stopped = self.wait(timeout_ms)
+        _release_port(self._current_port, self)
+        return stopped

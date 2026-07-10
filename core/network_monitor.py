@@ -10,7 +10,9 @@
 """
 
 import os
+import platform
 import socket
+import subprocess
 import threading
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
@@ -24,6 +26,7 @@ class NetworkMonitor(QObject):
 
     # 主執行緒 -> Dashboard：狀態已更新，通知 UI 刷新（每次檢查都發）
     signal_status_updated = pyqtSignal(bool)  # is_connected
+    signal_wifi_status_updated = pyqtSignal(object)  # {ssid, signal, interface}
 
     def __init__(self, dashboard, spotify_config_path, spotify_cache_path,
                  mqtt_config_path, parent=None):
@@ -64,12 +67,16 @@ class NetworkMonitor(QObject):
         self._health_timer.timeout.connect(self.check_service_health)
         self._health_timer.start(60000)  # 60 秒
 
-    def stop(self):
+    def stop(self, timeout=3.0):
         """停止 worker thread"""
         self._stop_requested = True
         self._wake.set()
         if self._health_timer is not None:
             self._health_timer.stop()
+        thread = self._worker_thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=timeout)
+        return thread is None or not thread.is_alive()
 
     def request_check_now(self):
         """喚醒 worker thread 立即做一次檢查（coalesce：重複呼叫只會觸發一次）"""
@@ -87,15 +94,17 @@ class NetworkMonitor(QObject):
                 break
             interval = 5.0
             is_connected = self._check_connection()
+            wifi_status = self._check_wifi_status()
             # 透過 Signal 回到主執行緒更新狀態
             self.signal_connectivity_result.emit(is_connected)
+            self.signal_wifi_status_updated.emit(wifi_status)
 
     @staticmethod
     def _check_connection():
         """實際的連線檢查（worker thread 執行）"""
         # 方法 1: 嘗試 socket 連接 Google DNS
         try:
-            sock = socket.create_connection(("8.8.8.8", 53), timeout=3)
+            sock = socket.create_connection(("8.8.8.8", 53), timeout=1)
             sock.close()
             return True
         except Exception:
@@ -103,7 +112,7 @@ class NetworkMonitor(QObject):
 
         # 方法 2: 嘗試 socket 連接 Cloudflare DNS
         try:
-            sock = socket.create_connection(("1.1.1.1", 53), timeout=3)
+            sock = socket.create_connection(("1.1.1.1", 53), timeout=1)
             sock.close()
             return True
         except Exception:
@@ -111,6 +120,54 @@ class NetworkMonitor(QObject):
 
         # 都失敗了
         return False
+
+    @staticmethod
+    def _check_wifi_status():
+        """背景取得 SSID/訊號，絕不在 Qt 主執行緒執行命令。"""
+        if platform.system() != 'Linux':
+            return {}
+        interface = None
+        signal = 0
+        try:
+            with open('/proc/net/wireless', 'r', encoding='utf-8') as file:
+                for line in file.readlines()[2:]:
+                    parts = line.strip().split()
+                    if ':' in line and len(parts) >= 3:
+                        interface = parts[0].rstrip(':')
+                        signal = min(100, max(0, int(float(parts[2].rstrip('.')) * 100 / 70)))
+                        break
+        except Exception:
+            pass
+
+        ssid = None
+        env = os.environ.copy()
+        env['LANG'] = 'C'
+        env['LC_ALL'] = 'C'
+        if interface:
+            try:
+                result = subprocess.run(
+                    ['iw', 'dev', interface, 'link'], capture_output=True,
+                    text=True, timeout=1, env=env,
+                )
+                for line in result.stdout.splitlines():
+                    if line.strip().startswith('SSID:'):
+                        ssid = line.split(':', 1)[1].strip()
+                        break
+            except Exception:
+                pass
+        if not ssid:
+            try:
+                result = subprocess.run(
+                    ['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'],
+                    capture_output=True, text=True, timeout=1, env=env,
+                )
+                for line in result.stdout.splitlines():
+                    if line.lower().startswith('yes:') or line.startswith('是:'):
+                        ssid = line.split(':', 1)[1].strip() or None
+                        break
+            except Exception:
+                pass
+        return {'ssid': ssid, 'signal': signal, 'interface': interface}
 
     # === 主執行緒處理 ===
 

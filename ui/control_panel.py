@@ -8,6 +8,22 @@ from PyQt6.QtGui import *
 
 from ui.theme import get_theme_manager, T
 
+
+class BackgroundTask(QThread):
+    """執行單一阻塞工作，所有 UI 更新由 result_ready 回主執行緒。"""
+    result_ready = pyqtSignal(object)
+
+    def __init__(self, task, parent=None):
+        super().__init__(parent)
+        self._task = task
+
+    def run(self):
+        try:
+            self.result_ready.emit({'ok': True, 'value': self._task()})
+        except Exception as exc:
+            self.result_ready.emit({'ok': False, 'error': exc})
+
+
 class TurnSignalBar(QWidget):
     """方向燈漸層條 - 使用 QPainter 繪製，避免 CSS 效能問題
     
@@ -329,151 +345,39 @@ class ControlPanel(QWidget):
         self.update_wifi_status()
     
     def update_wifi_status(self):
-        """更新 WiFi 狀態 - 使用 /proc/net/wireless + iw（輕量快速）"""
-        import random
-        
-        # 檢查是否在 Linux 環境
-        if platform.system() != 'Linux':
-            # macOS/Windows: 顯示模擬資料
-            dummy_networks = ["Home-WiFi", "Office-5G", "Starbucks_Free", "iPhone 熱點"]
-            ssid = random.choice(dummy_networks)
-            signal = random.randint(60, 95)
-            
-            self.wifi_ssid = ssid
-            self.wifi_signal = signal
-            self.wifi_status_label.setText(ssid)
-            
-            if signal >= 80:
-                signal_text = "信號極佳"
-                signal_color = "#6f6"
-            elif signal >= 60:
-                signal_text = "信號良好"
-                signal_color = "#6f6"
-            else:
-                signal_text = "信號普通"
-                signal_color = "#fa0"
-            
-            self.wifi_detail_label.setText(signal_text)
-            self.wifi_signal_label.setText(f"{signal}%")
-            self.wifi_signal_label.setStyleSheet(f"""
-                color: {signal_color};
-                font-size: 18px;
-                font-weight: bold;
-                background: transparent;
-            """)
-            return
-        
-        # Linux: 使用 /proc/net/wireless 讀取信號強度（超快，<1ms）
-        try:
-            ssid = None
-            signal = 0
-            interface = None
-            
-            # 1. 從 /proc/net/wireless 讀取信號強度和介面名稱
-            # 格式：Inter-| sta-|   Quality        |   Discarded packets
-            #        face | tus | link level noise |  nwid  crypt   frag  retry   misc
-            #       wlp6s0: 0000   57.  -53.  -256        0      0      0      0    578
-            if os.path.exists('/proc/net/wireless'):
-                with open('/proc/net/wireless', 'r') as f:
-                    lines = f.readlines()
-                    for line in lines[2:]:  # 跳過標題行
-                        line = line.strip()
-                        if ':' in line:
-                            parts = line.split()
-                            if len(parts) >= 3:
-                                interface = parts[0].rstrip(':')
-                                # link quality 通常是 0-70，轉換為百分比
-                                try:
-                                    link_quality = float(parts[2].rstrip('.'))
-                                    signal = min(100, int(link_quality * 100 / 70))
-                                except (ValueError, IndexError):
-                                    signal = 0
-                                break
-            
-            # 2. 使用 iw 取得 SSID（比 iwgetid 更常見，不會觸發掃描）
-            if interface and signal > 0:
-                import subprocess
-                try:
-                    # iw dev <interface> link 可以取得當前連接的 SSID
-                    result = subprocess.run(
-                        ['iw', 'dev', interface, 'link'],
-                        capture_output=True,
-                        text=True,
-                        timeout=1  # 1秒超時
-                    )
-                    if result.returncode == 0:
-                        for line in result.stdout.split('\n'):
-                            line = line.strip()
-                            if line.startswith('SSID:'):
-                                ssid = line[5:].strip()
-                                break
-                except FileNotFoundError:
-                    # iw 不存在，嘗試使用 nmcli（只查詢當前連接，不掃描）
-                    try:
-                        result = subprocess.run(
-                            ['nmcli', '-t', '-f', 'active,ssid', 'dev', 'wifi'],
-                            capture_output=True,
-                            text=True,
-                            timeout=1
-                        )
-                        if result.returncode == 0:
-                            for line in result.stdout.strip().split('\n'):
-                                # 格式: 是:SSID 或 yes:SSID
-                                if line.startswith('是:') or line.lower().startswith('yes:'):
-                                    ssid = line.split(':', 1)[1]
-                                    break
-                    except Exception:
-                        ssid = None
-                except Exception:
-                    ssid = None
-            
-            # 3. 更新 UI
-            if ssid and signal > 0:
-                self.wifi_ssid = ssid
-                self.wifi_signal = signal
-                self.wifi_status_label.setText(ssid)
-                
-                if signal >= 80:
-                    signal_text = "信號極佳"
-                    signal_color = "#6f6"
-                elif signal >= 60:
-                    signal_text = "信號良好"
-                    signal_color = "#6f6"
-                elif signal >= 40:
-                    signal_text = "信號普通"
-                    signal_color = "#fa0"
-                else:
-                    signal_text = "信號較弱"
-                    signal_color = "#f66"
-                
-                self.wifi_detail_label.setText(signal_text)
-                self.wifi_signal_label.setText(f"{signal}%")
-                self.wifi_signal_label.setStyleSheet(f"""
-                    color: {signal_color};
-                    font-size: 16px;
-                    font-weight: bold;
-                    background: transparent;
-                """)
-            else:
-                # 未連線或無法取得
-                self.wifi_ssid = None
-                self.wifi_signal = 0
-                self.wifi_status_label.setText("未連線")
-                self.wifi_detail_label.setText("點擊 WiFi 按鈕進行連線")
-                self.wifi_signal_label.setText("")
-                self.wifi_detail_label.setStyleSheet(f"""
-                    color: {T('DANGER')};
-                    font-size: 14px;
-                    background: transparent;
-                """)
-                
-        except Exception as e:
-            self.wifi_status_label.setText("無法取得狀態")
-            self.wifi_detail_label.setText(str(e)[:30])
-            self.wifi_signal_label.setText("")
-        
-        # 更新「更新」按鈕狀態 (只在有網路時啟用)
+        """要求既有 NetworkMonitor 立即刷新；本方法不執行 subprocess。"""
+        parent = self.parent()
+        monitor = getattr(parent, 'network_monitor', None) if parent is not None else None
+        if monitor is not None:
+            monitor.request_check_now()
         self._update_update_button_state()
+
+    def apply_wifi_status(self, snapshot):
+        """套用背景 worker 取得的 SSID/訊號快照。"""
+        snapshot = snapshot or {}
+        ssid = snapshot.get('ssid')
+        signal = int(snapshot.get('signal') or 0)
+        self.wifi_ssid = ssid
+        self.wifi_signal = signal
+        if not ssid:
+            self.wifi_status_label.setText("未連線")
+            self.wifi_detail_label.setText("點擊 WiFi 按鈕進行連線")
+            self.wifi_signal_label.setText("")
+            return
+        self.wifi_status_label.setText(ssid)
+        if signal >= 80:
+            signal_text, signal_color = "信號極佳", "#6f6"
+        elif signal >= 60:
+            signal_text, signal_color = "信號良好", "#6f6"
+        elif signal >= 40:
+            signal_text, signal_color = "信號普通", "#fa0"
+        else:
+            signal_text, signal_color = "信號較弱", "#f66"
+        self.wifi_detail_label.setText(signal_text)
+        self.wifi_signal_label.setText(f"{signal}%" if signal else "")
+        self.wifi_signal_label.setStyleSheet(
+            f"color: {signal_color}; font-size: 16px; font-weight: bold; background: transparent;"
+        )
     
     def _update_update_button_state(self):
         """根據網路狀態更新「更新」按鈕"""
@@ -763,7 +667,6 @@ class ControlPanel(QWidget):
     def do_time_sync(self):
         """執行 NTP 時間校正"""
         from PyQt6.QtWidgets import QMessageBox
-        import subprocess
         
         # 檢查網路狀態
         main_window = self.parent()
@@ -775,107 +678,14 @@ class ControlPanel(QWidget):
             msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             msg.exec()
             return
-        
-        # 更新按鈕狀態為同步中
+
+        worker = getattr(self, '_time_sync_worker', None)
+        if worker is not None and worker.isRunning():
+            return
         self._update_time_button_syncing(True)
-        
-        try:
-            result_text = ""
-            success = False
-            
-            # 嘗試使用 timedatectl (systemd-timesyncd)
-            if os.path.exists('/usr/bin/timedatectl'):
-                print("[時間校正] 使用 timedatectl...")
-                
-                # 啟用 NTP
-                subprocess.run(['sudo', 'timedatectl', 'set-ntp', 'true'], 
-                              capture_output=True, timeout=5)
-                
-                # 重啟 timesyncd 強制同步
-                subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-timesyncd'],
-                              capture_output=True, timeout=10)
-                
-                # 等待同步
-                import time
-                time.sleep(2)
-                
-                # 檢查同步狀態
-                result = subprocess.run(['timedatectl', 'show', '--property=NTPSynchronized'],
-                                       capture_output=True, text=True, timeout=5)
-                
-                if 'NTPSynchronized=yes' in result.stdout:
-                    success = True
-                    result_text = "NTP 同步成功"
-                else:
-                    # 即使沒有顯示同步成功，也可能已經更新
-                    success = True
-                    result_text = "已嘗試 NTP 同步"
-                    
-            # 備用：嘗試使用 ntpdate
-            elif os.path.exists('/usr/sbin/ntpdate'):
-                print("[時間校正] 使用 ntpdate...")
-                result = subprocess.run(
-                    ['sudo', 'ntpdate', '-u', 'pool.ntp.org'],
-                    capture_output=True, text=True, timeout=15
-                )
-                if result.returncode == 0:
-                    success = True
-                    result_text = "NTP 同步成功"
-                else:
-                    # 嘗試備用伺服器
-                    result = subprocess.run(
-                        ['sudo', 'ntpdate', '-u', 'time.google.com'],
-                        capture_output=True, text=True, timeout=15
-                    )
-                    success = result.returncode == 0
-                    result_text = "NTP 同步成功" if success else "同步失敗"
-            else:
-                result_text = "未找到 NTP 工具"
-                success = False
-            
-            # 如果有 RTC，也同步到 RTC
-            if success and os.path.exists('/dev/rtc0'):
-                print("[時間校正] 同步時間到 RTC...")
-                subprocess.run(['sudo', 'hwclock', '-w'], capture_output=True, timeout=5)
-                result_text += "\n已同步到 RTC"
-            
-            # 顯示結果
-            from datetime import datetime
-            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            msg = QMessageBox()
-            if success:
-                msg.setWindowTitle("時間校正完成")
-                msg.setText(f"{result_text}\n\n目前時間：{current_time}")
-                msg.setIcon(QMessageBox.Icon.Information)
-            else:
-                msg.setWindowTitle("時間校正失敗")
-                msg.setText(f"{result_text}\n\n請檢查網路連線後重試。")
-                msg.setIcon(QMessageBox.Icon.Warning)
-            
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            msg.exec()
-            
-            # 更新日期時間顯示
-            self.update_status_info()
-            
-        except subprocess.TimeoutExpired:
-            msg = QMessageBox()
-            msg.setWindowTitle("時間校正逾時")
-            msg.setText("NTP 同步逾時，請檢查網路連線後重試。")
-            msg.setIcon(QMessageBox.Icon.Warning)
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            msg.exec()
-        except Exception as e:
-            msg = QMessageBox()
-            msg.setWindowTitle("時間校正錯誤")
-            msg.setText(f"發生錯誤：{str(e)}")
-            msg.setIcon(QMessageBox.Icon.Critical)
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            msg.exec()
-        finally:
-            # 恢復按鈕狀態
-            self._update_time_button_syncing(False)
+        self._time_sync_worker = BackgroundTask(self._perform_time_sync_task, self)
+        self._time_sync_worker.result_ready.connect(self._on_time_sync_finished)
+        self._time_sync_worker.start()
     
     def _update_time_button_syncing(self, syncing):
         """更新時間按鈕的同步狀態"""
@@ -914,6 +724,55 @@ class ControlPanel(QWidget):
                         background-color: #3367d6;
                     }
                 """)
+
+    @staticmethod
+    def _perform_time_sync_task():
+        import subprocess
+        if os.path.exists('/usr/bin/timedatectl'):
+            subprocess.run(['sudo', 'timedatectl', 'set-ntp', 'true'], capture_output=True, timeout=5)
+            subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-timesyncd'], capture_output=True, timeout=10)
+            time.sleep(2)
+            result = subprocess.run(
+                ['timedatectl', 'show', '--property=NTPSynchronized'],
+                capture_output=True, text=True, timeout=5,
+            )
+            success = True
+            text = "NTP 同步成功" if 'NTPSynchronized=yes' in result.stdout else "已嘗試 NTP 同步"
+        elif os.path.exists('/usr/sbin/ntpdate'):
+            result = subprocess.run(
+                ['sudo', 'ntpdate', '-u', 'pool.ntp.org'],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode != 0:
+                result = subprocess.run(
+                    ['sudo', 'ntpdate', '-u', 'time.google.com'],
+                    capture_output=True, text=True, timeout=15,
+                )
+            success = result.returncode == 0
+            text = "NTP 同步成功" if success else "同步失敗"
+        else:
+            success, text = False, "未找到 NTP 工具"
+        if success and os.path.exists('/dev/rtc0'):
+            subprocess.run(['sudo', 'hwclock', '-w'], capture_output=True, timeout=5)
+            text += "\n已同步到 RTC"
+        return {'success': success, 'message': text}
+
+    def _on_time_sync_finished(self, result):
+        from datetime import datetime
+        self._update_time_button_syncing(False)
+        msg = QMessageBox(self)
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        if result.get('ok'):
+            payload = result['value']
+            msg.setWindowTitle("時間校正完成" if payload['success'] else "時間校正失敗")
+            msg.setIcon(QMessageBox.Icon.Information if payload['success'] else QMessageBox.Icon.Warning)
+            msg.setText(f"{payload['message']}\n\n目前時間：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            msg.setWindowTitle("時間校正錯誤")
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setText(f"發生錯誤：{result['error']}")
+        msg.exec()
+        self.update_status_info()
 
     def cycle_brightness(self):
         """循環切換亮度"""
@@ -1091,7 +950,7 @@ class ControlPanel(QWidget):
         update_btn = QPushButton("更新（Pull + 重啟）")
         update_btn.setToolTip("執行 git pull 並重新啟動")
         switch_btn = QPushButton("切換分支（僅 Checkout）")
-        switch_btn.setToolTip="僅切換分支，不更新代碼"
+        switch_btn.setToolTip("僅切換分支，不更新代碼")
         cancel_btn = QPushButton("取消")
         
         layout.addWidget(update_btn)
@@ -1115,78 +974,57 @@ class ControlPanel(QWidget):
             return
         
         do_pull = (result == 1)
-        
-        try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            
-            if do_pull:
-                print(f"[更新] 正在執行 git pull origin {selected_branch}...")
-                result = subprocess.run(
-                    ['git', 'pull', 'origin', selected_branch],
-                    cwd=script_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                action_desc = "更新"
-            else:
-                print(f"[分支] 正在執行 git checkout {selected_branch}...")
-                result = subprocess.run(
-                    ['git', 'checkout', selected_branch],
-                    cwd=script_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                action_desc = "分支切換"
-            
-            if result.returncode != 0:
-                error_msg = result.stderr or result.stdout or "未知錯誤"
-                err_box = QMessageBox()
-                err_box.setWindowTitle(f"{action_desc}失敗")
-                err_box.setText(f"Git {'pull' if do_pull else 'checkout'} 失敗:\n{error_msg}")
-                err_box.setIcon(QMessageBox.Icon.Critical)
-                err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-                err_box.exec()
-                return
-            
-            print(f"[{action_desc}] Git {'pull' if do_pull else 'checkout'} 結果: {result.stdout}")
-            
-            # 顯示成功訊息
-            success_box = QMessageBox()
-            success_box.setWindowTitle(f"{action_desc}完成")
-            success_box.setText(f"已成功{action_desc}！")
-            success_box.setInformativeText(f"{result.stdout}\n\n程式將在 2 秒後重新啟動...")
-            success_box.setIcon(QMessageBox.Icon.Information)
-            success_box.setWindowFlags(success_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            success_box.exec()
-            
-            # 延遲重啟 (給使用者看到訊息)
-            from PyQt6.QtCore import QTimer
-            QTimer.singleShot(2000, lambda: self._restart_application(script_dir))
-            
-        except subprocess.TimeoutExpired:
-            err_box = QMessageBox()
-            err_box.setWindowTitle("更新逾時")
-            err_box.setText("Git pull 執行逾時，請檢查網路連線後重試。")
-            err_box.setIcon(QMessageBox.Icon.Critical)
-            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            err_box.exec()
-        except FileNotFoundError:
-            err_box = QMessageBox()
-            err_box.setWindowTitle("Git 未安裝")
-            err_box.setText("找不到 git 指令，請確認已安裝 Git。")
-            err_box.setIcon(QMessageBox.Icon.Critical)
-            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            err_box.exec()
-        except Exception as e:
-            err_box = QMessageBox()
-            err_box.setWindowTitle("更新錯誤")
-            err_box.setText(f"更新過程發生錯誤:\n{str(e)}")
-            err_box.setIcon(QMessageBox.Icon.Critical)
-            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            err_box.exec()
+
+        worker = getattr(self, '_git_update_worker', None)
+        if worker is not None and worker.isRunning():
+            return
+        repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self._git_update_context = (repo_dir, do_pull)
+        self._git_update_worker = BackgroundTask(
+            lambda: self._perform_git_task(repo_dir, selected_branch, do_pull),
+            self,
+        )
+        self._git_update_worker.result_ready.connect(self._on_git_task_finished)
+        self._git_update_worker.start()
     
+    @staticmethod
+    def _perform_git_task(repo_dir, selected_branch, do_pull):
+        import subprocess
+        command = (
+            ['git', 'pull', 'origin', selected_branch]
+            if do_pull else
+            ['git', 'checkout', selected_branch]
+        )
+        result = subprocess.run(
+            command, cwd=repo_dir, capture_output=True, text=True, timeout=30,
+        )
+        return {
+            'success': result.returncode == 0,
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'action': "更新" if do_pull else "分支切換",
+        }
+
+    def _on_git_task_finished(self, result):
+        repo_dir, _ = self._git_update_context
+        if not result.get('ok'):
+            QMessageBox.critical(self, "更新錯誤", f"更新過程發生錯誤：\n{result['error']}")
+            return
+        payload = result['value']
+        if not payload['success']:
+            QMessageBox.critical(
+                self,
+                f"{payload['action']}失敗",
+                payload['stderr'] or payload['stdout'] or "未知錯誤",
+            )
+            return
+        QMessageBox.information(
+            self,
+            f"{payload['action']}完成",
+            f"已成功{payload['action']}！\n\n程式將在 2 秒後重新啟動。",
+        )
+        QTimer.singleShot(2000, lambda: self._restart_application(repo_dir))
+
     def on_accent_color_changed(self, color_hex: str):
         """當強調色改變時通知 ControlPanel；實際 UI 刷新由集中主題邏輯處理。"""
         # 保留此 slot 以維持既有 signal/slot 相容性。

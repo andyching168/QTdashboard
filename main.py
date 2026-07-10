@@ -44,7 +44,7 @@ from ui.door_card import DoorStatusCard
 from ui.trip_card import OdometerCard, OdometerCardWide, TripCard, TripCardWide, TripInfoCardWide
 from ui.music_card import MusicCard, MusicCardWide
 from ui.navigation_card import NavigationCard
-from ui.threads import GPSMonitorThread, RadarMonitorThread
+from ui.threads import GPSMonitorThread, RadarMonitorThread, RADAR_ENABLED
 from ui.scalable_window import ScalableWindow
 from ui.numeric_keypad import NumericKeypad
 from ui.theme import get_theme_manager, T, reapply_t_function
@@ -227,10 +227,12 @@ class Dashboard(QWidget):
             self.gps_monitor_thread.start()
             self.gps_device_found = None  # None=unknown, True=found, False=not found
         
-        # 初始化雷達監控器
-        self.radar_monitor_thread = RadarMonitorThread()
-        self.radar_monitor_thread.radar_message_received.connect(self._slot_update_radar)
-        self.radar_monitor_thread.start()
+        # 雷達功能停用時不建立空轉 QThread。
+        self.radar_monitor_thread = None
+        if RADAR_ENABLED:
+            self.radar_monitor_thread = RadarMonitorThread()
+            self.radar_monitor_thread.radar_message_received.connect(self._slot_update_radar)
+            self.radar_monitor_thread.start()
         
         # 創建亮度覆蓋層（必須在 init_ui 之後，確保在最上層）
         self._create_brightness_overlay()
@@ -255,6 +257,11 @@ class Dashboard(QWidget):
         """
         self.is_using_external_gps = not is_internal
         self.is_external_gps_fresh = is_fresh if not is_internal else True
+        if is_internal:
+            self.external_gps_lat = None
+            self.external_gps_lon = None
+            self._last_external_gps_key = None
+        self._sync_active_gps_position()
         print(f"[GPS] Source changed: {'Internal' if is_internal else 'External (MQTT)'}, fresh={is_fresh}")
         self._apply_gps_styles()
         self._sync_speed_limit_query_state()
@@ -380,9 +387,23 @@ class Dashboard(QWidget):
             self.speed_label.setText(f"{int(speed_kmh)}")
     
     def _update_gps_position(self, lat, lon):
-        """更新 GPS 座標（速限由計時器每 5 秒查詢一次）"""
-        self.gps_lat = lat
-        self.gps_lon = lon
+        """更新目前來源的 GPS 座標，內外部位置保持隔離。"""
+        if self.is_using_external_gps:
+            self.external_gps_lat = lat
+            self.external_gps_lon = lon
+        else:
+            self.internal_gps_lat = lat
+            self.internal_gps_lon = lon
+        self._sync_active_gps_position()
+
+    def _sync_active_gps_position(self):
+        """同步相容用 gps_lat/gps_lon；速限仍只讀 internal 座標。"""
+        if self.is_using_external_gps:
+            self.gps_lat = getattr(self, 'external_gps_lat', None)
+            self.gps_lon = getattr(self, 'external_gps_lon', None)
+        else:
+            self.gps_lat = getattr(self, 'internal_gps_lat', None)
+            self.gps_lon = getattr(self, 'internal_gps_lon', None)
     
     def _update_speed_limit(self):
         """根據 GPS 座標更新速限（計時器控制，GPS 不可靠時計時器會停止）
@@ -393,10 +414,12 @@ class Dashboard(QWidget):
             self._clear_speed_limit_display()
             return
 
-        if self.gps_lat is None or self.gps_lon is None:
+        lat = self.internal_gps_lat
+        lon = self.internal_gps_lon
+        if lat is None or lon is None:
             return
 
-        self.speed_limit_worker.request(self.gps_lat, self.gps_lon, self.current_bearing)
+        self.speed_limit_worker.request(lat, lon, self.current_bearing)
 
     def _on_speed_limit_result(self, limit, direction, dual_limits):
         """速限查詢結果（worker 執行緒經 signal 回到主執行緒）"""
@@ -1379,6 +1402,10 @@ class Dashboard(QWidget):
         # GPS 座標
         self.gps_lat = None
         self.gps_lon = None
+        self.internal_gps_lat = None
+        self.internal_gps_lon = None
+        self.external_gps_lat = None
+        self.external_gps_lon = None
         
         # 網路狀態監控器（常駐 worker thread，狀態透過 Signal 回主執行緒）
         self.network_monitor = NetworkMonitor(
@@ -1389,6 +1416,7 @@ class Dashboard(QWidget):
             parent=self,
         )
         self.network_monitor.signal_status_updated.connect(self._update_network_status)
+        self.network_monitor.signal_wifi_status_updated.connect(self.control_panel.apply_wifi_status)
 
         # Spotify 生命週期控制器（初始化 / 重試 / 重連 / 重新授權）
         self.spotify_controller = SpotifyController(
@@ -1604,6 +1632,12 @@ class Dashboard(QWidget):
         if thread is None:
             return
         try:
+            stop_method = getattr(thread, 'stop', None)
+            if callable(stop_method):
+                stopped = stop_method(3000)
+                if stopped is False:
+                    print(f"[Dashboard] {name} did not stop within timeout")
+                return
             if hasattr(thread, 'running'):
                 thread.running = False
             if hasattr(thread, 'quit'):
@@ -1855,8 +1889,7 @@ class Dashboard(QWidget):
         """MQTT 設定儲存完成回調"""
         if success:
             print("MQTT 設定已儲存！")
-            # 可以在這裡初始化 MQTT 連線
-            self._init_mqtt_client()
+            self._reconnect_mqtt()
         else:
             print("MQTT 設定失敗")
         
@@ -1985,6 +2018,32 @@ class Dashboard(QWidget):
             lat = lon = speed = None
             bearing = 0
 
+        # 先驗證訊息時間，再允許它改變任何 GPS 狀態。可解析且超過 15 秒
+        # 的 retained/舊訊息只用來清除導航 UI，不作為外部定位。
+        timestamp_str = data.get('timestamp')
+        message_is_stale = False
+        if timestamp_str:
+            try:
+                from datetime import datetime, timezone
+                msg_time = datetime.fromisoformat(str(timestamp_str).replace('Z', '+00:00'))
+                if msg_time.tzinfo is None:
+                    msg_time = msg_time.replace(tzinfo=timezone.utc)
+                time_diff = abs((datetime.now(timezone.utc) - msg_time.astimezone(timezone.utc)).total_seconds())
+                message_is_stale = time_diff > 15
+                if perf_log:
+                    print(f"[Navigation] 訊息時間: {timestamp_str}, 時間差: {time_diff:.1f}秒")
+            except (TypeError, ValueError) as exc:
+                # 缺少可用的發送端時間時，GPSMonitorThread 以本機收件時間判斷。
+                if perf_log:
+                    print(f"[Navigation] timestamp 無法解析，改用本機收件時間: {exc}")
+
+        if message_is_stale:
+            stale_key = ("stale",)
+            if hasattr(self, 'nav_card') and self._last_navigation_ui_key != stale_key:
+                self.nav_card.show_no_nav_ui()
+                self._last_navigation_ui_key = stale_key
+            return
+
         # 更新 bearing (用於速限查詢)
         self.current_bearing = bearing
 
@@ -1992,6 +2051,8 @@ class Dashboard(QWidget):
         # 1) 內部 GPS 未定位時啟用
         # 2) 一旦進入外部模式，後續持續注入以維持 freshness，避免圖示閃回 searching
         if lat is not None and lon is not None and self.gps_monitor_thread is not None:
+            self.external_gps_lat = lat
+            self.external_gps_lon = lon
             keep_external = (not self.is_gps_fixed) or self.gps_monitor_thread.is_using_external_gps()
             if keep_external:
                 external_gps_key = (round(lat, 6), round(lon, 6), round(speed or 0, 1), round(bearing, 1))
@@ -1999,39 +2060,6 @@ class Dashboard(QWidget):
                     print(f"[Navigation] 使用 MQTT GPS 備援: lat={lat}, lon={lon}, speed={speed}")
                 self._last_external_gps_key = external_gps_key
                 self.gps_monitor_thread.inject_external_gps(lat, lon, speed or 0, bearing, data.get('timestamp', ''))
-
-            # 更新 GPS 位置（速限由計時器每 5 秒查詢一次）
-            self.gps_lat = lat
-            self.gps_lon = lon
-        
-        # 檢查 timestamp 新鮮度 (15秒內)
-        timestamp_str = data.get('timestamp')
-        if timestamp_str:
-            try:
-                from datetime import datetime, timezone
-                # 解析 ISO 8601 格式的 timestamp
-                msg_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                current_time = datetime.now(timezone.utc)
-                time_diff = abs((current_time - msg_time).total_seconds())
-                
-                if perf_log:
-                    print(f"[Navigation] 訊息時間: {timestamp_str}, 時間差: {time_diff:.1f}秒")
-                
-                if time_diff > 15:
-                    if perf_log:
-                        print(f"[Navigation] ⚠️ 訊息過時 (相差 {time_diff:.1f}秒)，僅更新 GPS 備援並顯示無導航畫面")
-                    # 訊息過時，顯示無導航資訊畫面
-                    stale_key = ("stale",)
-                    if hasattr(self, 'nav_card') and self._last_navigation_ui_key != stale_key:
-                        self.nav_card.show_no_nav_ui()
-                        self._last_navigation_ui_key = stale_key
-                    return
-                    
-            except Exception as e:
-                if perf_log:
-                    print(f"[Navigation] ⚠️ 解析 timestamp 失敗: {e}，仍繼續處理")
-        elif perf_log:
-            print("[Navigation] ⚠️ 訊息無 timestamp，仍繼續處理")
         
         if hasattr(self, 'nav_card'):
             nav_key = (
@@ -2119,12 +2147,22 @@ class Dashboard(QWidget):
         """顯示 WiFi 管理器"""
         try:
             from wifi.wifi_manager import WiFiManagerWidget
+
+            existing = getattr(self, 'wifi_dialog', None)
+            if existing is not None and existing.isVisible():
+                existing.raise_()
+                return
+            if existing is not None:
+                existing.close()
+                existing.deleteLater()
+                self.wifi_dialog = None
             
             # 在 Mac 上自動啟用測試模式
             test_mode = platform.system() == 'Darwin'
             
             # 創建 WiFi 管理器對話框
             self.wifi_dialog = WiFiManagerWidget(self, test_mode=test_mode)
+            self.wifi_dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
             self.wifi_dialog.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
             self.wifi_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
             
@@ -4509,24 +4547,27 @@ def main():
         success, status, can_bus, db = _hardware_init_result
         
         if can_bus is None:
-            print("[WARNING] CAN Bus 未初始化，儀表板將顯示預設值 '--'")
-            return None
+            print("[WARNING] CAN Bus 未初始化，背景將持續等待 SocketCAN")
         
         # 連接信號到 Dashboard（WorkerSignals 直接接到最終 slot / signal）
         signals = datagrab.WorkerSignals()
         dashboard.connect_worker_signals(signals)
+        datagrab.stop_threads = False
+        bus_manager = datagrab.ensure_bus_manager(can_bus)
+        if can_bus is None:
+            bus_manager.reconnect()
         
         # 啟動背景執行緒
         import threading
         t_receiver = threading.Thread(
             target=datagrab.unified_receiver, 
-            args=(can_bus, db, signals), 
+            args=(bus_manager, db, signals),
             daemon=True, 
             name="CAN-Receiver"
         )
         t_query = threading.Thread(
             target=datagrab.obd_query, 
-            args=(can_bus, signals), 
+            args=(bus_manager, signals),
             daemon=True, 
             name="OBD-Query"
         )
@@ -4539,8 +4580,9 @@ def main():
         # 返回清理函數
         def cleanup():
             datagrab.stop_threads = True
-            # 經 BusManager 關閉：重連後現行 bus 可能已不是啟動時那一個
-            datagrab.ensure_bus_manager(can_bus).shutdown()
+            bus_manager.shutdown()
+            t_receiver.join(timeout=2)
+            t_query.join(timeout=2)
             print("[OK] CAN Bus 已關閉")
         
         return cleanup

@@ -268,6 +268,9 @@ sudo dphys-swapfile swapon
 # 載入驅動
 sudo modprobe can
 sudo modprobe can_raw
+> 正式車機請使用 SocketCAN can0。以下 SLCAN 指令僅供舊韌體轉換或桌面除錯，
+> Dashboard 在 Raspberry Pi/Linux 上不會自動掃描 serial port 作為 CAN。
+
 sudo modprobe slcan
 
 # 設定 CAN 介面 (假設使用 /dev/ttyUSB0)

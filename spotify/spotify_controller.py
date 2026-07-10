@@ -23,7 +23,7 @@ class SpotifyController(QObject):
 
     # 背景初始化執行緒 -> 主執行緒：初始化結果 (success, context)
     # context: "initial" / "retry" / "auth" / "reconnect"
-    signal_init_result = pyqtSignal(bool, str)
+    signal_init_result = pyqtSignal(object, str, int)
 
     def __init__(self, dashboard, config_path, cache_path, parent=None):
         super().__init__(parent)
@@ -36,6 +36,9 @@ class SpotifyController(QObject):
         self.init_attempts = 0
         self.integration = None  # Spotify 整合實例引用
         self.reauth_required = False
+        self._operation_lock = threading.Lock()
+        self._setup_lock = threading.Lock()
+        self._operation_generation = 0
 
         self.signal_init_result.connect(self._on_init_result)
 
@@ -48,7 +51,7 @@ class SpotifyController(QObject):
             print("發現 Spotify 設定檔和快取，正在初始化...")
             self._dashboard.music_card.show_player_ui()
             # 在背景執行緒初始化，避免卡住 UI
-            threading.Thread(target=self._initial_init_worker, daemon=True).start()
+            self._start_operation("initial")
         else:
             if not os.path.exists(self._config_path):
                 print("未發現 Spotify 設定檔，顯示綁定介面")
@@ -62,93 +65,75 @@ class SpotifyController(QObject):
             return
 
         print(f"[Spotify] 重試初始化 (嘗試 {self.init_attempts + 1}/3)...")
-        threading.Thread(target=self._retry_init_worker, daemon=True).start()
+        self._start_operation("retry")
 
     def init_after_auth(self):
         """授權成功後在背景執行緒初始化 Spotify"""
         self.reauth_required = False
         self.init_attempts = 0
-        threading.Thread(target=self._auth_init_worker, daemon=True).start()
+        self._start_operation("auth")
 
     def reconnect(self):
         """重新連接 Spotify（網路恢復 / 健康檢查觸發）"""
-        threading.Thread(target=self._reconnect_worker, daemon=True).start()
+        if self.connected:
+            return
+        self._start_operation("reconnect")
 
     # === 背景初始化 worker（背景執行緒執行） ===
 
-    def _initial_init_worker(self):
-        """啟動時的初始化"""
-        result = setup_spotify(self._dashboard)
-        if result:
-            self.connected = True
-            self.integration = result  # 儲存整合實例引用
-            self.init_attempts = 0
-            print("Spotify 初始化成功")
-            self.signal_init_result.emit(True, "initial")
-        else:
-            self.connected = False
-            self.init_attempts += 1
-            print(f"Spotify 初始化失敗 (嘗試 {self.init_attempts})")
-            self.signal_init_result.emit(False, "initial")
+    def _start_operation(self, context):
+        """啟動最新一代初始化；較舊結果會被丟棄並清理。"""
+        with self._operation_lock:
+            self._operation_generation += 1
+            generation = self._operation_generation
+        threading.Thread(
+            target=self._init_worker,
+            args=(context, generation),
+            daemon=True,
+            name=f"Spotify-{context}-{generation}",
+        ).start()
 
-    def _retry_init_worker(self):
-        """重試初始化"""
-        result = setup_spotify(self._dashboard)
-        if result:
-            self.connected = True
-            self.integration = result  # 儲存整合實例引用
-            self.init_attempts = 0
-            print("[Spotify] ✅ 重試成功")
-            self.signal_init_result.emit(True, "retry")
-        else:
-            self.connected = False
-            self.init_attempts += 1
-            print(f"[Spotify] ❌ 重試失敗 (嘗試 {self.init_attempts})")
-            self.signal_init_result.emit(False, "retry")
-
-    def _auth_init_worker(self):
-        """授權完成後的初始化"""
+    def _init_worker(self, context, generation):
         try:
-            result = setup_spotify(self._dashboard)
-            if result:
-                self.connected = True
-                self.integration = result
-                self.init_attempts = 0
-                print("[Spotify] ✅ 初始化成功")
-                self.signal_init_result.emit(True, "auth")
-            else:
-                self.connected = False
-                print("[Spotify] ❌ 初始化失敗")
+            with self._setup_lock:
+                with self._operation_lock:
+                    if generation != self._operation_generation:
+                        return
+                result = setup_spotify(self._dashboard)
         except Exception as e:
-            self.connected = False
-            print(f"Spotify 初始化失敗: {e}")
-
-    def _reconnect_worker(self):
-        """重新連接（維持原行為：不更新 integration 引用、不排程重試）"""
-        try:
-            result = setup_spotify(self._dashboard)
-            if result:
-                self.connected = True
-                self.init_attempts = 0
-                print("[Spotify] ✅ 重新連接成功")
-            else:
-                self.init_attempts += 1
-                print(f"[Spotify] ❌ 重新連接失敗 (嘗試 {self.init_attempts})")
-        except Exception as e:
-            self.init_attempts += 1
-            print(f"[Spotify] ❌ 重新連接錯誤: {e}")
+            print(f"[Spotify] {context} 初始化錯誤: {e}")
+            result = None
+        self.signal_init_result.emit(result, context, generation)
 
     # === 主執行緒處理 ===
 
-    @pyqtSlot(bool, str)
-    def _on_init_result(self, success, context):
+    @pyqtSlot(object, str, int)
+    def _on_init_result(self, result, context, generation):
         """初始化結果處理（主執行緒）：UI 進度啟停與重試排程"""
-        if success:
+        with self._operation_lock:
+            is_latest = generation == self._operation_generation
+        if not is_latest:
+            if result is not None:
+                threading.Thread(target=result.stop, daemon=True).start()
+            return
+
+        if result is not None:
+            old_integration = self.integration
+            self.integration = result
+            self.connected = True
+            self.init_attempts = 0
+            if old_integration is not None and old_integration is not result:
+                threading.Thread(target=old_integration.stop, daemon=True).start()
+            print(f"[Spotify] ✅ {context} 初始化成功")
             # 依音樂卡片可見狀態啟停進度更新
             self._dashboard._set_spotify_progress_active(
                 self._dashboard._is_music_card_visible()
             )
             return
+
+        self.connected = False
+        self.init_attempts += 1
+        print(f"[Spotify] ❌ {context} 初始化失敗 (嘗試 {self.init_attempts})")
 
         # 初始化失敗：30 秒後重試（最多 3 次，需在線且授權快取存在）
         token_cache_exists = os.path.exists(self._cache_path)
@@ -165,6 +150,8 @@ class SpotifyController(QObject):
         """
         if self.reauth_required:
             return False
+        with self._operation_lock:
+            self._operation_generation += 1
         self.reauth_required = True
         self.connected = False
         self.init_attempts = 3

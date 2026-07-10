@@ -12,7 +12,6 @@
 import os
 import json
 import time
-import threading
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
 
@@ -65,6 +64,9 @@ class MqttTelemetryController(QObject):
             print("[MQTT] 設定檔不存在")
             return
 
+        if self.client is not None:
+            self.stop()
+
         try:
             with open(self._config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
@@ -79,6 +81,8 @@ class MqttTelemetryController(QObject):
             mqtt_publish_topic = self._publish_topic  # 上傳用的主題
 
             def on_connect(client, userdata, flags, rc, properties=None):
+                if controller.client is not client:
+                    return
                 if rc == 0:
                     controller.connected = True
                     print(f"[MQTT] ✅ 已連接到 {config['broker']}:{config['port']}")
@@ -93,17 +97,21 @@ class MqttTelemetryController(QObject):
                     controller.connected = False
                     print(f"[MQTT] ❌ 連線失敗，錯誤碼: {rc}")
 
-            def on_disconnect(client, userdata, rc, properties=None, reason_code=None):
+            def on_disconnect(client, userdata, disconnect_flags, reason_code, properties):
+                if controller.client is not client:
+                    return
                 controller.connected = False
                 # 透過 Signal 回主執行緒停止遙測上傳計時器
                 # （paho 網路執行緒不可直接操作 QTimer）
                 controller.signal_stop_telemetry.emit()
-                if rc != 0:
-                    print(f"[MQTT] ⚠️ 意外斷線 (rc={rc})，將自動重連...")
+                if reason_code != 0:
+                    print(f"[MQTT] ⚠️ 意外斷線 (reason={reason_code})，將自動重連...")
                 else:
                     print("[MQTT] 已斷線")
 
             def on_message(client, userdata, msg):
+                if controller.client is not client:
+                    return
                 try:
                     payload = msg.payload.decode('utf-8')
                     data = json.loads(payload)
@@ -131,20 +139,9 @@ class MqttTelemetryController(QObject):
             if username:
                 self.client.username_pw_set(username, password)
 
-            # 在背景執行緒中連線
-            mqtt_client = self.client
-
-            def connect_mqtt():
-                try:
-                    mqtt_client.connect(config['broker'], config['port'], keepalive=60)
-                    # 使用 loop_forever 會自動處理重連
-                    mqtt_client.loop_forever(retry_first_connection=True)
-                except Exception as e:
-                    print(f"[MQTT] 連線錯誤: {e}")
-                    controller.connected = False
-
-            mqtt_thread = threading.Thread(target=connect_mqtt, daemon=True)
-            mqtt_thread.start()
+            # Paho 自己持有唯一網路執行緒；connect_async 可涵蓋首次連線重試。
+            self.client.connect_async(config['broker'], config['port'], keepalive=60)
+            self.client.loop_start()
 
         except ImportError:
             print("[MQTT] paho-mqtt 未安裝")

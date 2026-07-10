@@ -15,6 +15,7 @@ from rich.align import Align
 
 # 硬體初始化模組（RPi 啟動時的硬體重試檢測）
 from vehicle.hardware_init import initialize_hardware, is_raspberry_pi as hw_is_raspberry_pi, HardwareStatus
+from vehicle.can_config import CAN_FILTERS, configured_slcan_port, slcan_debug_allowed
 
 # 設定入口點環境變數 (供程式重啟時判斷)
 os.environ['DASHBOARD_ENTRY'] = 'datagrab'
@@ -333,12 +334,13 @@ def setup_socketcan_interface(interface='can0', bitrate=500000):
         return False
 
 
-def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0):
+def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0,
+                 allow_slcan=None, slcan_port=None):
     """
     初始化 CAN Bus 連線
     優先順序：
-    1. Linux: SocketCAN (如果有可用介面)
-    2. 所有平台: SLCAN (USB CAN adapter)
+    1. Linux/RPi: SocketCAN（can0 優先）
+    2. macOS/Windows debug: SLCAN (USB CAN adapter)
     
     Args:
         bitrate: CAN Bus 速率
@@ -350,17 +352,9 @@ def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0):
     bus = None
     interface_type = None
     
-    # === CAN 過濾器：只接收我們需要的 ID ===
-    # 這可以大幅減少 CPU 負擔，特別是在高流量 CAN Bus 上
-    can_filters = [
-        {"can_id": 0x7E8, "can_mask": 0x7FF},  # OBD ECU 回應
-        {"can_id": 0x7E9, "can_mask": 0x7FF},  # OBD TCM 回應
-        {"can_id": 0x340, "can_mask": 0x7FF},  # ENGINE_RPM1 (檔位)
-        {"can_id": 0x335, "can_mask": 0x7FF},  # THROTTLE_STATUS (油量、巡航)
-        {"can_id": 0x38A, "can_mask": 0x7FF},  # SPEED_FL (車速)
-        {"can_id": 0x410, "can_mask": 0x7FF},  # CONSOLE_STATUS (方向燈撥桿)
-        {"can_id": 0x420, "can_mask": 0x7FF},  # BODY_ECU_STATUS (方向燈、門狀態)
-    ]
+    can_filters = CAN_FILTERS
+    if allow_slcan is None:
+        allow_slcan = slcan_debug_allowed()
     
     for attempt in range(max_retries):
         if attempt > 0:
@@ -372,6 +366,7 @@ def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0):
         if platform.system() == 'Linux':
             console.print("[cyan]偵測 SocketCAN 介面...[/cyan]")
             socketcan_interfaces = detect_socketcan_interfaces()
+            socketcan_interfaces.sort(key=lambda item: (item[0] != 'can0', item[0]))
             
             if socketcan_interfaces:
                 for iface, status in socketcan_interfaces:
@@ -405,10 +400,13 @@ def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0):
             else:
                 console.print("  [yellow]未發現 SocketCAN 介面[/yellow]")
         
-        # === 2. Fallback 到 SLCAN ===
+        # === 2. Desktop debug fallback 到 SLCAN ===
+        if not allow_slcan:
+            logger.info("Linux/RPi production policy: skip SLCAN serial probing")
+            continue
         console.print("[cyan]嘗試 SLCAN 模式...[/cyan]")
         
-        port = select_serial_port()
+        port = slcan_port or configured_slcan_port() or select_serial_port()
         if not port:
             console.print("[red]未找到可用的 CAN 裝置[/red]")
             # 繼續下一次重試
@@ -462,22 +460,31 @@ class BusManager:
         self._bus = bus
         self.interface_type = interface_type
         self._reconnecting = False
+        self._stop_event = threading.Event()
+        self._reconnect_thread = None
 
     def get(self):
         """取得現行 bus；斷線重連期間回傳 None"""
-        return self._bus
+        with self._lock:
+            return self._bus
 
     def reconnect(self):
-        """關閉死掉的 bus 並重建連線（阻塞呼叫端執行緒直到成功或 stop_threads）。
-
-        若另一條執行緒已在重連，直接返回；呼叫端應改為輪詢 get()。
-        """
+        """非阻塞要求背景重連；receiver/OBD thread 立即返回。"""
         with self._lock:
-            if self._reconnecting:
-                return
+            if self._reconnecting or self._stop_event.is_set():
+                return False
             self._reconnecting = True
             dead_bus, self._bus = self._bus, None
+            self._reconnect_thread = threading.Thread(
+                target=self._reconnect_loop,
+                args=(dead_bus,),
+                daemon=True,
+                name="CAN-Reconnect",
+            )
+            self._reconnect_thread.start()
+        return True
 
+    def _reconnect_loop(self, dead_bus):
         try:
             if dead_bus is not None:
                 try:
@@ -485,17 +492,22 @@ class BusManager:
                 except Exception:
                     pass
 
-            while not stop_threads:
-                logger.warning(f"CAN Bus 斷線，{self.RECONNECT_INTERVAL:.0f} 秒後嘗試重連...")
-                time.sleep(self.RECONNECT_INTERVAL)
-                if stop_threads:
-                    return
+            while not stop_threads and not self._stop_event.is_set():
+                logger.warning("CAN Bus 未連線，嘗試在背景重建...")
                 new_bus, interface_type = init_can_bus(max_retries=1)
                 if new_bus is not None:
                     with self._lock:
+                        if self._stop_event.is_set():
+                            try:
+                                new_bus.shutdown()
+                            except Exception:
+                                pass
+                            return
                         self._bus = new_bus
                         self.interface_type = interface_type
                     logger.info(f"CAN Bus 重連成功: {interface_type}")
+                    return
+                if self._stop_event.wait(self.RECONNECT_INTERVAL):
                     return
         finally:
             with self._lock:
@@ -503,6 +515,7 @@ class BusManager:
 
     def shutdown(self):
         """關閉現行 bus（程式結束時呼叫）"""
+        self._stop_event.set()
         with self._lock:
             bus, self._bus = self._bus, None
         if bus is not None:
@@ -510,6 +523,9 @@ class BusManager:
                 bus.shutdown()
             except Exception:
                 pass
+        thread = self._reconnect_thread
+        if thread is not None and thread is not threading.current_thread() and thread.is_alive():
+            thread.join(timeout=self.RECONNECT_INTERVAL + 1)
 
 
 # 以 bus 物件為 key 快取 manager：receiver 與 obd_query 傳入同一個 raw bus
@@ -532,17 +548,8 @@ def ensure_bus_manager(bus_or_manager):
 
 
 def select_serial_port():
-    import glob
-    
-    # 自動偵測的 serial ports
+    """選擇 desktop SLCAN debug port；非互動環境絕不等待輸入。"""
     ports = list(serial.tools.list_ports.comports())
-    
-    # 手動搜尋虛擬 serial ports (macOS/Linux)
-    virtual_ports = []
-    for pattern in ['/dev/ttys*', '/dev/pts/*', '/dev/ttyUSB*', '/dev/ttyACM*']:
-        virtual_ports.extend(glob.glob(pattern))
-    
-    # 合併所有可用的 ports
     all_ports = []
     canable_port = None  # 記錄 CANable 裝置
     
@@ -552,11 +559,6 @@ def select_serial_port():
         if 'canable' in p.description.lower():
             canable_port = p.device
             logger.info(f"偵測到 CANable 裝置: {p.device} - {p.description}")
-    
-    for vp in virtual_ports:
-        if not any(vp == p[0] for p in all_ports):  # 避免重複
-            all_ports.append((vp, "Virtual Serial Port"))
-    
     if not all_ports:
         console.print("[red]未找到任何 Serial 裝置！[/red]")
         console.print("[yellow]提示: 如要測試，請先建立虛擬 port 對：[/yellow]")
@@ -583,6 +585,10 @@ def select_serial_port():
         console.print(f"[green]自動選擇唯一裝置: {all_ports[0][0]}[/green]")
         return all_ports[0][0]
     
+    if not sys.stdin.isatty():
+        logger.warning("多個 serial port 且未指定 QTDASHBOARD_SLCAN_PORT，略過 SLCAN")
+        return None
+
     choice = console.input("請輸入裝置編號或路徑 [0]: ").strip()
     
     # 檢查是否為直接輸入路徑
@@ -1411,36 +1417,33 @@ def main():
         # === 設定資料來源回調 ===
         def setup_can_data_source(dashboard):
             """設定 CAN Bus 資料來源 - 在 dashboard 準備好後呼叫"""
+            global stop_threads
             
             # 如果是 RPi 環境，此時 state.bus 應該已經由 hardware_init_with_gui 設定好
             # 如果是開發環境，state.bus 在上面已經初始化
             
             if state.bus is None:
-                # CAN Bus 未初始化 - 在 RPi 環境下顯示 "--" 而不是退出
-                if hw_is_raspberry_pi():
-                    logger.warning("CAN Bus 未初始化，儀表板將顯示 '--'")
-                    console.print("[yellow]⚠️  CAN Bus 未連接，儀表板將顯示 '--'[/yellow]")
-                    console.print("[yellow]   儀表板仍正常運行，等待 CAN 設備...[/yellow]")
-                    # 不設定資料來源，Dashboard 會顯示預設值 "--"
-                    return None
-                else:
-                    logger.error("CAN Bus 未初始化，無法設定資料來源")
-                    return None
+                logger.warning("CAN Bus 未初始化，背景將持續等待介面出現")
+                console.print("[yellow]⚠️ CAN Bus 未連接，儀表板將等待 SocketCAN[/yellow]")
             
             # 連接信號到 Dashboard（WorkerSignals 直接接到最終 slot / signal）
             dashboard.connect_worker_signals(state.signals)
+            stop_threads = False
+            bus_manager = ensure_bus_manager(state.bus)
+            if state.bus is None:
+                bus_manager.reconnect()
             
             # 啟動背景執行緒
             logger.info("正在啟動背景執行緒...")
             t_receiver = threading.Thread(
                 target=unified_receiver, 
-                args=(state.bus, state.db, state.signals), 
+                args=(bus_manager, state.db, state.signals),
                 daemon=True, 
                 name="CAN-Receiver"
             )
             t_query = threading.Thread(
                 target=obd_query, 
-                args=(state.bus, state.signals), 
+                args=(bus_manager, state.signals),
                 daemon=True, 
                 name="OBD-Query"
             )
@@ -1455,9 +1458,9 @@ def main():
                 global stop_threads
                 logger.info("正在關閉系統...")
                 stop_threads = True
-                if state.bus:
-                    # 經 BusManager 關閉：重連後現行 bus 可能已不是啟動時那一個
-                    ensure_bus_manager(state.bus).shutdown()
+                bus_manager.shutdown()
+                t_receiver.join(timeout=2)
+                t_query.join(timeout=2)
                 console.print("[green]程式已安全結束[/green]")
             
             return cleanup
