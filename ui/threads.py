@@ -49,6 +49,7 @@ class GPSMonitorThread(QThread):
     """
     gps_fixed_changed = pyqtSignal(bool)
     gps_speed_changed = pyqtSignal(float)
+    gps_quality_changed = pyqtSignal(dict)
     gps_position_changed = pyqtSignal(float, float)  # lat, lon
     gps_source_changed = pyqtSignal(bool, bool)  # (is_internal, is_fresh)
     gps_device_status_changed = pyqtSignal(bool)  # True=device found, False=no device
@@ -237,6 +238,11 @@ class GPSMonitorThread(QThread):
         last_rmc_time = time.time()
         last_flush_time = time.time()
         last_speed_parse_time = time.time()  # 上次成功解析速度的時間
+        last_gga_quality = 0
+        last_satellites = 0
+        last_hdop = 99.0
+        last_rmc_valid = False
+        last_rmc_valid_at = 0.0
         SPEED_TIMEOUT = 3.0      # 3 秒沒收到速度就 emit 0
         RMC_WATCHDOG = 10.0     # 10 秒沒收到有效 RMC → 視為連線異常
         FLUSH_INTERVAL = 30.0    # 每 30 秒清空 serial 輸入緩衝區
@@ -341,9 +347,20 @@ class GPSMonitorThread(QThread):
                         
                         if line_str.startswith('$GNGGA') or line_str.startswith('$GPGGA'):
                             parts = line_str.split(',')
-                            if len(parts) >= 7:
+                            if len(parts) >= 9:
                                 try:
                                     gga_quality = int(parts[6])
+                                    last_gga_quality = gga_quality
+                                    last_satellites = int(parts[7] or 0)
+                                    last_hdop = float(parts[8] or 99.0)
+                                    self.gps_quality_changed.emit({
+                                        "fix_quality": last_gga_quality,
+                                        "satellites": last_satellites,
+                                        "hdop": last_hdop,
+                                        "rmc_valid": last_rmc_valid,
+                                        "rmc_timestamp": last_rmc_valid_at,
+                                        "timestamp": time.time(),
+                                    })
                                 except (ValueError, IndexError):
                                     pass
                                 
@@ -352,6 +369,16 @@ class GPSMonitorThread(QThread):
                             # RMC checksum 驗證：至少要有 status + 速度欄位
                             if len(parts) >= 3:
                                 rmc_status = parts[2]
+                                last_rmc_valid = (rmc_status == 'A')
+                                last_rmc_valid_at = time.time()
+                                self.gps_quality_changed.emit({
+                                    "fix_quality": last_gga_quality,
+                                    "satellites": last_satellites,
+                                    "hdop": last_hdop,
+                                    "rmc_valid": last_rmc_valid,
+                                    "rmc_timestamp": last_rmc_valid_at,
+                                    "timestamp": time.time(),
+                                })
                                 has_status = True
                                 last_rmc_time = time.time()  # 更新 RMC 看門狗
                                 

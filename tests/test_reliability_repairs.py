@@ -1,5 +1,6 @@
 """車用可靠度修復的純軟體回歸測試。"""
 import importlib
+import json
 import sys
 import time
 from types import SimpleNamespace
@@ -49,6 +50,119 @@ def test_physics_tick_stops_on_stale_obd_speed(monkeypatch):
 
     assert dashboard.trip_card.distance == 0
     assert dashboard._prev_physics_speed == 0.0
+
+
+def test_speed_modes_calculate_expected_obd_display_speed(monkeypatch):
+    from vehicle import datagrab
+
+    monkeypatch.setattr(datagrab, "_speed_correction_value", 1.01)
+
+    assert datagrab.calculate_obd_display_speed(100.0, "calibrated") == 101.0
+    assert datagrab.calculate_obd_display_speed(100.0, "fixed") == 105.8
+    assert datagrab.calculate_obd_display_speed(100.0, "gps") == 101.0
+
+
+def test_speed_settings_roundtrip_and_legacy_fallback(tmp_path, monkeypatch):
+    from vehicle import datagrab
+
+    config_path = tmp_path / "speed_calibration.json"
+    monkeypatch.setattr(datagrab, "_speed_correction_value", 1.07)
+    monkeypatch.setattr(datagrab, "speed_sync_mode", "gps")
+    monkeypatch.setattr(datagrab, "gps_speed_mode", True)
+
+    datagrab.persist_speed_settings(str(config_path))
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    assert payload["speed_correction"] == 1.07
+    assert payload["speed_sync_mode"] == "gps"
+
+    config_path.write_text('{"speed_correction": 0.98}', encoding="utf-8")
+    assert datagrab._load_speed_settings(config_path=str(config_path)) == (0.98, "calibrated")
+    assert datagrab.gps_speed_mode is False
+
+
+def test_invalid_speed_settings_fall_back_to_defaults(tmp_path, monkeypatch):
+    from vehicle import datagrab
+
+    config_path = tmp_path / "speed_calibration.json"
+    config_path.write_text('{"speed_correction": 1.02, "speed_sync_mode": "bad"}', encoding="utf-8")
+    monkeypatch.setattr(datagrab, "speed_sync_mode", "gps")
+    monkeypatch.setattr(datagrab, "gps_speed_mode", True)
+
+    assert datagrab._load_speed_settings(config_path=str(config_path)) == (1.02, "calibrated")
+    assert datagrab.gps_speed_mode is False
+
+    config_path.write_text("{broken", encoding="utf-8")
+    assert datagrab._load_speed_settings(config_path=str(config_path)) == (1.01, "calibrated")
+
+
+def test_dashboard_uses_processed_speed_but_keeps_raw_physics_source(monkeypatch):
+    from main import Dashboard
+    from vehicle import datagrab
+
+    now = time.time()
+    monkeypatch.setitem(datagrab.data_store, "OBD", {
+        "speed": 50.0,
+        "speed_smoothed": 49.5,
+        "last_update": now,
+    })
+    card = SimpleNamespace(current_speed=0.0)
+    dashboard = SimpleNamespace(
+        trip_card=card,
+        odo_card=SimpleNamespace(current_speed=0.0),
+        trip_info_card=SimpleNamespace(update_from_speed=lambda value: None),
+        _maybe_update_speed_correction=lambda value: None,
+        _displayed_speed_int=0,
+        _speed_hysteresis=0.3,
+        current_speed_limit=None,
+        _update_speed_display=lambda: None,
+    )
+
+    Dashboard._slot_set_speed.__wrapped__(dashboard, 52.0)
+
+    assert dashboard.speed == 52.0
+    assert dashboard.trip_card.current_speed == 52.0
+    assert dashboard.calc_speed_source == 50.0
+
+
+def test_gps_display_threshold_uses_smoothed_obd_speed(monkeypatch):
+    from main import Dashboard
+    from vehicle import datagrab
+
+    monkeypatch.setattr(datagrab, "gps_speed_mode", True)
+    dashboard = SimpleNamespace(is_gps_fixed=True, obd_speed_smoothed=19.9)
+    assert Dashboard._should_use_gps_speed(dashboard) is False
+
+    dashboard.obd_speed_smoothed = 20.0
+    assert Dashboard._should_use_gps_speed(dashboard) is True
+
+
+def test_speed_mode_switch_persists_and_refreshes_immediately(monkeypatch):
+    from main import Dashboard
+    from vehicle import datagrab
+
+    calls = []
+    monkeypatch.setattr(
+        datagrab,
+        "set_speed_sync_mode",
+        lambda mode, persist=False: calls.append(("persist", mode, persist)),
+    )
+    monkeypatch.setattr(datagrab, "calculate_obd_display_speed", lambda speed, mode: 105.8)
+    monkeypatch.setitem(datagrab.data_store, "OBD", {"speed_smoothed": 100.0})
+    dashboard = SimpleNamespace(
+        speed_sync_modes=["calibrated", "fixed", "gps"],
+        speed_sync_mode="calibrated",
+        control_panel=SimpleNamespace(set_speed_sync_state=lambda mode: calls.append(("ui", mode))),
+        _displayed_speed_int=100,
+        _slot_set_speed=lambda speed: calls.append(("speed", speed)),
+        _update_speed_display=lambda: calls.append(("display",)),
+    )
+
+    Dashboard.set_speed_sync_mode(dashboard, "fixed")
+
+    assert dashboard.speed_sync_mode == "fixed"
+    assert ("persist", "fixed", True) in calls
+    assert ("speed", 105.8) in calls
+    assert ("display",) in calls
 
 
 def test_control_panel_prepares_parent_before_exit():

@@ -6,6 +6,10 @@ import platform
 import subprocess
 import os
 import json
+import tempfile
+from collections import deque
+from statistics import median
+from types import MappingProxyType
 import can
 import cantools
 import serial.tools.list_ports
@@ -49,7 +53,7 @@ class WorkerSignals(QObject):
     必須繼承自 QObject 才能使用 pyqtSignal。
     """
     update_rpm = pyqtSignal(float)   # 發送轉速 (float)
-    update_speed = pyqtSignal(float) # 發送車速 (float)
+    update_speed = pyqtSignal(float) # 發送依目前模式處理後的 OBD 顯示車速 (float)
     update_temp = pyqtSignal(float)  # 發送水溫百分比 (float)
     update_fuel = pyqtSignal(float)  # 發送油量百分比 (float)
     update_gear = pyqtSignal(str)    # 發送檔位 (str)
@@ -109,8 +113,6 @@ def get_obd_speed_snapshot():
     with _obd_speed_snapshot_lock:
         return _obd_speed_snapshot["raw_speed"], _obd_speed_snapshot["updated_at"]
 
-# 校正會話控制（僅透過 UI 長按手動啟用）
-calibration_enabled = False  # 僅手動啟用時才允許自動校正
 # 速度校正設定
 SPEED_CALIBRATION_DIR = os.path.join(os.path.expanduser("~"), ".config", "qtdashboard")
 SPEED_CALIBRATION_FILE = os.path.join(SPEED_CALIBRATION_DIR, "speed_calibration.json")
@@ -119,23 +121,71 @@ SPEED_CORRECTION_MIN = 0.7
 SPEED_CORRECTION_MAX = 1.3
 _speed_correction_lock = threading.Lock()
 _speed_correction_value = SPEED_CORRECTION_DEFAULT
+SMART_BAND_STARTS = tuple(range(20, 140, 10))
+SMART_MIN_SAMPLES = 30
+_smart_calibration_lock = threading.Lock()
+_smart_bands = {}
+_smart_history = deque(maxlen=80)
+_smart_last_sample_at = 0.0
+_smart_last_persist_at = 0.0
+_smart_dirty = False
 
-def _load_speed_correction(default=SPEED_CORRECTION_DEFAULT):
-    """讀取速度校正係數"""
-    global _speed_correction_value
+def _empty_smart_bands():
+    return {
+        start: {"coefficient": None, "samples": 0, "updated_at": 0.0, "ratios": []}
+        for start in SMART_BAND_STARTS
+    }
+
+_smart_bands = _empty_smart_bands()
+
+def _band_start(speed):
+    if speed < 20:
+        return None
+    return min(130, int(speed // 10) * 10)
+
+def _band_label(start):
+    return "130+" if start == 130 else f"{start}–{start + 10}"
+
+def _load_speed_settings(default=SPEED_CORRECTION_DEFAULT, config_path=None):
+    """讀取速度校正係數與最後使用的顯示模式。"""
+    global _speed_correction_value, speed_sync_mode, gps_speed_mode, _smart_bands
     value = default
+    mode = "calibrated"
+    path = config_path or SPEED_CALIBRATION_FILE
+    _smart_bands = _empty_smart_bands()
     try:
-        with open(SPEED_CALIBRATION_FILE, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             payload = json.load(f)
             candidate = float(payload.get("speed_correction", value))
             candidate = max(SPEED_CORRECTION_MIN, min(SPEED_CORRECTION_MAX, candidate))
             value = candidate
+            candidate_mode = payload.get("speed_sync_mode", mode)
+            if candidate_mode in {"calibrated", "fixed", "gps"}:
+                mode = candidate_mode
+            loaded_bands = _empty_smart_bands()
+            smart = payload.get("smart_calibration", {})
+            for key, item in smart.get("bands", {}).items():
+                start = int(key)
+                if start not in loaded_bands or not isinstance(item, dict):
+                    continue
+                coefficient = item.get("coefficient")
+                if coefficient is not None:
+                    coefficient = max(SPEED_CORRECTION_MIN, min(SPEED_CORRECTION_MAX, float(coefficient)))
+                loaded_bands[start].update({
+                    "coefficient": coefficient,
+                    "samples": max(0, int(item.get("samples", 0))),
+                    "updated_at": max(0.0, float(item.get("updated_at", 0.0))),
+                    "ratios": [],
+                })
+            _smart_bands = loaded_bands
     except FileNotFoundError:
         pass
     except Exception as e:
         logger.warning(f"讀取速度校正檔失敗，使用預設值: {e}")
     _speed_correction_value = value
-    return value
+    speed_sync_mode = mode
+    gps_speed_mode = (mode == "gps")
+    return value, mode
 
 def get_speed_correction():
     """取得目前速度校正係數"""
@@ -152,31 +202,179 @@ def set_speed_correction(new_value, persist=False):
         persist_speed_correction()
     return clamped
 
-def persist_speed_correction():
-    """將目前速度校正係數寫入磁碟"""
+def persist_speed_settings(config_path=None):
+    """將目前速度校正係數與顯示模式寫入磁碟。"""
     value = get_speed_correction()
+    path = config_path or SPEED_CALIBRATION_FILE
+    global _smart_dirty, _smart_last_persist_at
+    temp_path = None
     try:
-        os.makedirs(SPEED_CALIBRATION_DIR, exist_ok=True)
-        with open(SPEED_CALIBRATION_FILE, "w", encoding="utf-8") as f:
-            json.dump({"speed_correction": value, "updated_at": time.time()}, f)
+        directory = os.path.dirname(path) or "."
+        os.makedirs(directory, exist_ok=True)
+        with _smart_calibration_lock:
+            bands_payload = {
+                str(start): {
+                    "coefficient": state["coefficient"],
+                    "samples": state["samples"],
+                    "updated_at": state["updated_at"],
+                }
+                for start, state in _smart_bands.items()
+            }
+        payload = {
+            "speed_correction": value,
+            "speed_sync_mode": speed_sync_mode,
+            "updated_at": time.time(),
+            "smart_calibration": {"version": 1, "bands": bands_payload},
+        }
+        fd, temp_path = tempfile.mkstemp(prefix="speed_calibration.", suffix=".tmp", dir=directory)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
             f.flush()
-            os.fsync(f.fileno())  # 確保寫入磁碟
+            os.fsync(f.fileno())
+        os.replace(temp_path, path)
+        _smart_dirty = False
+        _smart_last_persist_at = time.time()
         logger.info(f"速度校正係數已儲存: {value:.4f}")
     except Exception as e:
         logger.warning(f"寫入速度校正檔失敗: {e}")
+        if temp_path:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
 
-# 初始化校正係數
-_load_speed_correction()
+def persist_speed_correction():
+    """向後相容：儲存完整速度設定。"""
+    persist_speed_settings()
+
+# 初始化校正係數與顯示模式
+_load_speed_settings()
 
 def is_speed_calibration_enabled():
-    return calibration_enabled
+    """向後相容：智慧校正現在永久啟用。"""
+    return True
 
 def set_speed_calibration_enabled(enabled: bool):
-    global calibration_enabled
-    calibration_enabled = bool(enabled)
-    logger.info(f"速度校正模式 {'啟用' if calibration_enabled else '停用'}")
+    logger.info("智慧速度校正為全時啟用，忽略啟停請求: %s", enabled)
 
-def set_speed_sync_mode(mode: str):
+def get_speed_sync_mode():
+    return speed_sync_mode
+
+def calculate_obd_display_speed(smoothed_speed, mode=None):
+    """將 OBD 平滑速度轉換為目前模式的顯示速度。"""
+    selected_mode = mode or speed_sync_mode
+    speed = max(0.0, float(smoothed_speed))
+    if selected_mode == "fixed":
+        return speed * 1.05 + 0.8
+    coefficient, _ = get_smart_speed_correction(speed)
+    return speed * coefficient
+
+def get_smart_speed_correction(speed):
+    """回傳 (係數, 是否來自成熟分層)，成熟層之間線性插值。"""
+    target = max(0.0, float(speed))
+    with _smart_calibration_lock:
+        mature = [
+            (start + (5 if start < 130 else 5), state["coefficient"])
+            for start, state in _smart_bands.items()
+            if state["coefficient"] is not None and state["samples"] >= SMART_MIN_SAMPLES
+        ]
+    if not mature:
+        return get_speed_correction(), False
+    mature.sort()
+    if target <= mature[0][0]:
+        return mature[0][1], True
+    if target >= mature[-1][0]:
+        return mature[-1][1], True
+    for (left_speed, left), (right_speed, right) in zip(mature, mature[1:]):
+        if left_speed <= target <= right_speed:
+            weight = (target - left_speed) / (right_speed - left_speed)
+            return left + (right - left) * weight, True
+    return get_speed_correction(), False
+
+def submit_smart_calibration_sample(obd_speed, obd_timestamp, gps_speed, gps_timestamp, quality, now=None):
+    """提交同步車速樣本；回傳本次是否已納入學習。"""
+    global _smart_last_sample_at, _smart_dirty
+    now = time.time() if now is None else float(now)
+    try:
+        obd_speed = float(obd_speed)
+        gps_speed = float(gps_speed)
+        quality_age = now - float(quality.get("timestamp", 0.0))
+        valid_quality = (
+            quality.get("rmc_valid") is True
+            and int(quality.get("fix_quality", 0)) >= 1
+            and int(quality.get("satellites", 0)) >= 6
+            and float(quality.get("hdop", 99.0)) <= 1.5
+            and 0 <= quality_age <= 2.0
+            and 0 <= now - float(quality.get("rmc_timestamp", 0.0)) <= 2.0
+        )
+    except (TypeError, ValueError, AttributeError):
+        return False
+    if not valid_quality or obd_speed < 20 or abs(float(obd_timestamp) - float(gps_timestamp)) > 0.75:
+        return False
+    if abs(gps_speed - obd_speed) > 15:
+        return False
+    ratio = gps_speed / max(obd_speed, 0.1)
+    if not SPEED_CORRECTION_MIN <= ratio <= SPEED_CORRECTION_MAX:
+        return False
+    with _smart_calibration_lock:
+        _smart_history.append((now, obd_speed, gps_speed))
+        recent = [item for item in _smart_history if now - item[0] <= 4.0]
+        if len(recent) < 8 or recent[-1][0] - recent[0][0] < 3.0:
+            return False
+        if max(x[1] for x in recent) - min(x[1] for x in recent) > 3.0:
+            return False
+        if max(x[2] for x in recent) - min(x[2] for x in recent) > 3.0:
+            return False
+        if now - _smart_last_sample_at < 1.0:
+            return False
+        start = _band_start(gps_speed)
+        if start is None:
+            return False
+        state = _smart_bands[start]
+        ratios = state["ratios"]
+        if len(ratios) >= 5:
+            center = median(ratios[-15:])
+            if abs(ratio - center) > 0.03:
+                return False
+        ratios.append(ratio)
+        if len(ratios) > 30:
+            del ratios[:-30]
+        robust_ratio = median(ratios)
+        previous = state["coefficient"]
+        state["coefficient"] = robust_ratio if previous is None else previous * 0.95 + robust_ratio * 0.05
+        state["samples"] += 1
+        state["updated_at"] = now
+        _smart_last_sample_at = now
+        _smart_dirty = True
+    maybe_persist_smart_calibration(now)
+    return True
+
+def maybe_persist_smart_calibration(now=None):
+    now = time.time() if now is None else float(now)
+    if _smart_dirty and now - _smart_last_persist_at >= 60.0:
+        persist_speed_settings()
+
+def get_smart_calibration_status():
+    with _smart_calibration_lock:
+        return tuple(MappingProxyType({
+            "start": start,
+            "label": _band_label(start),
+            "coefficient": state["coefficient"],
+            "samples": state["samples"],
+            "mature": state["samples"] >= SMART_MIN_SAMPLES,
+            "updated_at": state["updated_at"],
+        }) for start, state in sorted(_smart_bands.items()))
+
+def reset_smart_calibration():
+    global _smart_bands, _smart_dirty, _smart_last_sample_at
+    with _smart_calibration_lock:
+        _smart_bands = _empty_smart_bands()
+        _smart_history.clear()
+        _smart_last_sample_at = 0.0
+        _smart_dirty = True
+    persist_speed_settings()
+
+def set_speed_sync_mode(mode: str, persist=False):
     """設定速度同步模式，並同步 gps_speed_mode 旗標"""
     global speed_sync_mode, gps_speed_mode
     allowed = {"calibrated", "fixed", "gps"}
@@ -185,6 +383,8 @@ def set_speed_sync_mode(mode: str):
         return speed_sync_mode
     speed_sync_mode = mode
     gps_speed_mode = (mode == "gps")
+    if persist:
+        persist_speed_settings()
     logger.info(f"速度模式切換為 {mode}，gps_speed_mode={gps_speed_mode}")
     return speed_sync_mode
 
@@ -632,7 +832,7 @@ def unified_receiver(bus, db, signals):
     # 速度平滑參數 (OBD)
     current_speed_smoothed = 0.0
     speed_alpha = 0.3  # 速度平滑係數
-    last_obd_speed_int = None  # OBD 速度緩存
+    last_obd_speed_key = None  # (模式, 整數速度) 緩存
     
     # 油量平滑演算法參數
     # 使用移動平均 + 變化率限制，避免浮動
@@ -776,16 +976,12 @@ def unified_receiver(bus, db, signals):
                         
                         # 套用校正係數後更新 UI（依據速度模式）
                         mode = speed_sync_mode
-                        if mode == "fixed":
-                            speed_correction = 1.05
-                            corrected_speed = current_speed_smoothed * speed_correction + 0.8
-                        else:
-                            speed_correction = get_speed_correction()
-                            corrected_speed = current_speed_smoothed * speed_correction
+                        corrected_speed = calculate_obd_display_speed(current_speed_smoothed, mode)
                         speed_int = int(corrected_speed)
-                        if last_obd_speed_int is None or abs(speed_int - last_obd_speed_int) >= 1:
+                        speed_key = (mode, speed_int)
+                        if last_obd_speed_key is None or mode != last_obd_speed_key[0] or abs(speed_int - last_obd_speed_key[1]) >= 1:
                             signals.update_speed.emit(corrected_speed)
-                            last_obd_speed_int = speed_int
+                            last_obd_speed_key = speed_key
                     
                     # PID 05 (Coolant Temp) - 格式: [03, 41, 05, Temp, ...]
                     elif pid == 0x05 and msg.arbitration_id == 0x7E8:

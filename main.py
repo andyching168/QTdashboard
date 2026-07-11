@@ -131,6 +131,8 @@ class Dashboard(QWidget):
         self.is_using_external_gps = False
         self.is_external_gps_fresh = True
         self.current_gps_speed = 0.0
+        self.current_gps_speed_updated_at = 0.0
+        self.current_gps_quality = {}
         self.current_speed_limit = None
         self.current_speed_limit_dual = None  # For "N:XX / S:XX" display
         self.current_bearing = None
@@ -194,7 +196,8 @@ class Dashboard(QWidget):
 
         # 速度同步模式（calibrated -> fixed -> gps）
         self.speed_sync_modes = ["calibrated", "fixed", "gps"]
-        self.speed_sync_mode = "calibrated"
+        import vehicle.datagrab as datagrab
+        self.speed_sync_mode = datagrab.get_speed_sync_mode()
         
         # 亮度控制相關
         self.brightness_level = 0  # 0=100%, 1=75%, 2=50%
@@ -221,6 +224,7 @@ class Dashboard(QWidget):
             self.gps_monitor_thread = GPSMonitorThread()
             self.gps_monitor_thread.gps_fixed_changed.connect(self._update_gps_status)
             self.gps_monitor_thread.gps_speed_changed.connect(self._update_gps_speed)
+            self.gps_monitor_thread.gps_quality_changed.connect(self._update_gps_quality)
             self.gps_monitor_thread.gps_position_changed.connect(self._update_gps_position)
             self.gps_monitor_thread.gps_source_changed.connect(self._update_gps_source)
             self.gps_monitor_thread.gps_device_status_changed.connect(self._update_gps_device)
@@ -352,25 +356,12 @@ class Dashboard(QWidget):
     def _update_gps_speed(self, speed_kmh):
         """更新 GPS 速度"""
         self.current_gps_speed = speed_kmh
+        self.current_gps_speed_updated_at = time.time()
         
         # 更新左上角的 GPS 速度顯示
         if self.is_gps_fixed:
-            # 檢查是否在校正模式
-            import vehicle.datagrab as datagrab
-            try:
-                calibration_enabled = datagrab.is_speed_calibration_enabled()
-            except:
-                calibration_enabled = False
-            
-            if calibration_enabled:
-                # 校正模式：顯示速度和校正係數
-                correction = datagrab.get_speed_correction()
-                self.gps_speed_label.setText(f"{int(speed_kmh)}({correction:.2f})")
-                self.gps_speed_label.setFixedWidth(90)  # 加寬以容納校正係數
-            else:
-                # 一般模式：只顯示速度
-                self.gps_speed_label.setText(f"{int(speed_kmh)}")
-                self.gps_speed_label.setFixedWidth(50)
+            self.gps_speed_label.setText(f"{int(speed_kmh)}")
+            self.gps_speed_label.setFixedWidth(50)
         else:
             self.gps_speed_label.setText("--")
             self.gps_speed_label.setFixedWidth(50)
@@ -378,13 +369,15 @@ class Dashboard(QWidget):
         # 檢查是否應該顯示 GPS 速度
         # 條件: 速度同步開啟(datagrab.gps_speed_mode) AND GPS 定位完成 AND OBD速度 >= 20
         import vehicle.datagrab as datagrab
-        use_gps = (datagrab.gps_speed_mode and 
-                   self.is_gps_fixed and 
-                   self.speed >= 20.0)
+        use_gps = self._should_use_gps_speed()
                    
         if use_gps:
             # 直接更新顯示，覆蓋 CAN 速度
             self.speed_label.setText(f"{int(speed_kmh)}")
+
+    def _update_gps_quality(self, quality):
+        """更新供智慧車速校正使用的 GPS 品質快照。"""
+        self.current_gps_quality = dict(quality or {})
     
     def _update_gps_position(self, lat, lon):
         """更新目前來源的 GPS 座標，內外部位置保持隔離。"""
@@ -1441,11 +1434,6 @@ class Dashboard(QWidget):
         self._last_fuel_display = None
         self._last_battery_display = None
 
-        # 速度校正狀態
-        import vehicle.datagrab as datagrab
-        self.speed_correction = datagrab.get_speed_correction()
-        self._last_speed_cali_ts = 0
-        
         # RPM 動畫平滑 (GUI 端二次平滑)
         self.target_rpm = 0.0  # 目標轉速
         self.rpm_animation_alpha = 0.3  # GUI 端平滑係數
@@ -2091,7 +2079,12 @@ class Dashboard(QWidget):
 
         try:
             import vehicle.datagrab as datagrab
-            datagrab.set_speed_sync_mode(mode)
+            datagrab.set_speed_sync_mode(mode, persist=True)
+            obd_data = datagrab.data_store.get("OBD", {})
+            smoothed_speed = obd_data.get("speed_smoothed")
+            if hasattr(self, "_displayed_speed_int") and smoothed_speed is not None:
+                self._slot_set_speed(datagrab.calculate_obd_display_speed(smoothed_speed, mode))
+                self._update_speed_display()
         except Exception as e:
             print(f"[速度同步] 更新 datagrab 失敗: {e}")
         print(f"[速度同步] 模式切換為 {mode}")
@@ -2389,19 +2382,7 @@ class Dashboard(QWidget):
     @perf_track
     def _slot_set_speed(self, speed):
         """Slot: 在主執行緒中更新速度顯示"""
-        # 如果 GPS 速度優先且已定位且且速度 >= 20，則忽略 CAN 速度更新 (顯示部分)
         import vehicle.datagrab as datagrab
-        use_gps = (datagrab.gps_speed_mode and 
-                   self.is_gps_fixed and 
-                   speed >= 20.0) # 這裡用傳入的 speed (即 OBD 速度)
-                   
-        if use_gps:
-            # 仍然更新後台數據 (如 trip 計算)，但不更新主顯示
-            # 這裡假設 trip/odo 應該繼續使用 CAN 數據累計
-            pass
-        else:
-            # 只有在非 GPS 模式下才刷新顯示變數
-            pass
 
         # 動態校正速度權重：僅在 GPS 已鎖定且兩者差距小時逐步調整
         raw_obd_speed = None
@@ -2417,19 +2398,17 @@ class Dashboard(QWidget):
             pass
         
         # --- 修改點 A: 分離顯示速度與物理計算速度 ---
-        # 顯示用：如果有平滑值就用平滑值 (視覺不跳動)
-        display_speed_candidate = smoothed_obd_speed if smoothed_obd_speed is not None else speed
-        
         # 物理計算用：優先使用 RAW 數據 (積分更準)，如果沒有才用平滑或傳入值
-        physics_speed_candidate = raw_obd_speed if raw_obd_speed is not None else display_speed_candidate
+        physics_speed_candidate = raw_obd_speed if raw_obd_speed is not None else speed
         
         # 存入變數供 physics_tick 使用
         self.calc_speed_source = max(0.0, physics_speed_candidate if physics_speed_candidate is not None else 0.0)
 
         # 更新顯示邏輯
-        new_speed = max(0, min(200, display_speed_candidate if display_speed_candidate is not None else speed))
+        new_speed = max(0, min(200, speed))
+        self.obd_speed_smoothed = smoothed_obd_speed
         # 兼容性：保留 distance_speed 供其他模擬/測試使用 (例如鍵盤模擬)
-        self.distance_speed = max(0.0, display_speed_candidate if display_speed_candidate is not None else 0.0)
+        self.distance_speed = max(0.0, new_speed)
         
         # 里程/卡片顯示使用顯示速度（實際累積由 _physics_tick 驅動）
         self.trip_card.current_speed = new_speed
@@ -2439,9 +2418,6 @@ class Dashboard(QWidget):
         if hasattr(self, 'trip_info_card'):
             self.trip_info_card.update_from_speed(new_speed)
         
-        # 更新速度校正（維持原本邏輯）
-        self._maybe_update_speed_correction(smoothed_obd_speed or raw_obd_speed)
-
         # === 施密特觸發器 (Schmitt Trigger) ===
         # 防止速度在 116 ↔ 117 之間頻繁跳動
         # 
@@ -2482,41 +2458,6 @@ class Dashboard(QWidget):
             self._displayed_speed_int = new_displayed
             self._update_speed_display()
 
-    def _maybe_update_speed_correction(self, obd_speed):
-        """根據 GPS 與 OBD 速度差逐步修正校正係數"""
-        if obd_speed is None or not self.is_gps_fixed:
-            return
-        try:
-            import vehicle.datagrab as datagrab
-            if getattr(datagrab, "speed_sync_mode", "calibrated") == "fixed":
-                return
-            if hasattr(datagrab, "is_speed_calibration_enabled") and not datagrab.is_speed_calibration_enabled():
-                return
-        except Exception:
-            pass
-        gps_speed = self.current_gps_speed
-        if gps_speed <= 5 or obd_speed <= 5:
-            return
-        now = time.time()
-        if now - self._last_speed_cali_ts < 1.0:
-            return
-        diff = abs(gps_speed - obd_speed)
-        if diff > 10:
-            return
-
-        ratio = gps_speed / max(obd_speed, 0.1)
-        ratio = max(0.7, min(1.3, ratio))
-
-        import vehicle.datagrab as datagrab
-        prev = datagrab.get_speed_correction()
-        alpha = 0.05  # 漸進式更新，避免瞬間跳動
-        new_value = (1 - alpha) * prev + alpha * ratio
-        datagrab.set_speed_correction(new_value)
-        self.speed_correction = new_value
-        self._last_speed_cali_ts = now
-        if self._perf_logging_enabled():
-            print(f"[速度校正] GPS 已鎖定，係數 {prev:.3f} -> {new_value:.3f} (比例 {ratio:.3f}，差 {diff:.1f} km/h)")
-    
     def _physics_tick(self):
         """物理心跳：每 100ms 根據當前速度累積里程 (梯形積分法)"""
         current_time = time.time()
@@ -2540,6 +2481,15 @@ class Dashboard(QWidget):
                     self._prev_physics_speed = 0.0
                     return
                 current_speed = snapshot_speed
+                if not getattr(self, "is_using_external_gps", False):
+                    datagrab.submit_smart_calibration_sample(
+                        snapshot_speed,
+                        speed_updated_at,
+                        getattr(self, "current_gps_speed", 0.0),
+                        getattr(self, "current_gps_speed_updated_at", 0.0),
+                        getattr(self, "current_gps_quality", {}),
+                        now=current_time,
+                    )
         except Exception:
             # Demo mode / no CAN data source keeps its existing speed integration behaviour.
             pass
@@ -4199,14 +4149,21 @@ class Dashboard(QWidget):
 
     def _update_speed_display(self):
         """局部更新中心速度數字。"""
-        import vehicle.datagrab as datagrab
-        use_gps = datagrab.gps_speed_mode and self.is_gps_fixed and self.speed >= 20.0
+        use_gps = self._should_use_gps_speed()
         if use_gps:
             speed_text = str(int(self.current_gps_speed))
         else:
             speed_text = str(self._displayed_speed_int)
         if self.speed_label.text() != speed_text:
             self.speed_label.setText(speed_text)
+
+    def _should_use_gps_speed(self):
+        """單一 GPS 顯示門檻：已定位且 OBD 平滑速度至少 20 km/h。"""
+        import vehicle.datagrab as datagrab
+        obd_speed = getattr(self, "obd_speed_smoothed", None)
+        if obd_speed is None:
+            obd_speed = datagrab.data_store.get("OBD", {}).get("speed_smoothed", 0.0)
+        return bool(datagrab.gps_speed_mode and self.is_gps_fixed and obd_speed >= 20.0)
 
     def _update_gear_display(self):
         """局部更新檔位文字與顏色。"""

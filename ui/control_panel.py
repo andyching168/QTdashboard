@@ -9,6 +9,126 @@ from PyQt6.QtGui import *
 from ui.theme import get_theme_manager, T
 
 
+class SmartCalibrationChart(QWidget):
+    """輕量的分層校正係數折線圖。"""
+    def __init__(self, statuses, fallback, parent=None):
+        super().__init__(parent)
+        self.statuses = tuple(statuses)
+        self.fallback = float(fallback)
+        self._points = []
+        self.setMinimumHeight(165)
+        self.setMouseTracking(True)
+
+    def _range(self):
+        values = [s["coefficient"] for s in self.statuses if s["coefficient"] is not None]
+        values.append(self.fallback)
+        if len(values) <= 1:
+            return 0.95, 1.05
+        low, high = min(values), max(values)
+        margin = max(0.01, (high - low) * 0.2)
+        return low - margin, high + margin
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor("#15151a"))
+        rect = self.rect().adjusted(55, 12, -20, -30)
+        painter.setPen(QPen(QColor("#555b66"), 1))
+        painter.drawRect(rect)
+        if not any(s["samples"] for s in self.statuses):
+            painter.setPen(QColor("#a0a4aa"))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "尚未取得有效校正資料")
+            return
+        y_min, y_max = self._range()
+        count = max(1, len(self.statuses) - 1)
+        def point_for(index, value):
+            x = rect.left() + rect.width() * index / count
+            y = rect.bottom() - rect.height() * (value - y_min) / max(0.0001, y_max - y_min)
+            return QPointF(x, y)
+        fallback_y = point_for(0, self.fallback).y()
+        fallback_pen = QPen(QColor("#8a8f98"), 1, Qt.PenStyle.DashLine)
+        painter.setPen(fallback_pen)
+        painter.drawLine(QPointF(rect.left(), fallback_y), QPointF(rect.right(), fallback_y))
+        painter.drawText(4, int(fallback_y + 4), f"{self.fallback:.3f}")
+        self._points = []
+        previous = None
+        for index, status in enumerate(self.statuses):
+            value = status["coefficient"]
+            x = rect.left() + rect.width() * index / count
+            painter.setPen(QColor("#8a8f98"))
+            painter.drawText(QRectF(x - 25, rect.bottom() + 5, 50, 20), Qt.AlignmentFlag.AlignCenter, status["label"])
+            if value is None:
+                continue
+            point = point_for(index, value)
+            mature = status["mature"]
+            color = QColor("#4CAF50" if mature else "#FFB74D")
+            if previous is not None:
+                pen = QPen(color, 2, Qt.PenStyle.SolidLine if mature and previous[1] else Qt.PenStyle.DashLine)
+                painter.setPen(pen)
+                painter.drawLine(previous[0], point)
+            painter.setPen(QPen(color, 2))
+            painter.setBrush(color if mature else Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(point, 5, 5)
+            self._points.append((point, status))
+            previous = (point, mature)
+        painter.setPen(QColor("#a0a4aa"))
+        painter.drawText(4, rect.top() + 5, f"{y_max:.3f}")
+        painter.drawText(4, rect.bottom(), f"{y_min:.3f}")
+
+    def mousePressEvent(self, event):
+        pos = event.position()
+        for point, status in self._points:
+            if (point.x() - pos.x()) ** 2 + (point.y() - pos.y()) ** 2 <= 196:
+                state = "已成熟" if status["mature"] else "學習中"
+                QToolTip.showText(event.globalPosition().toPoint(), f"{status['label']} km/h\n係數 {status['coefficient']:.4f}\n樣本 {status['samples']}\n{state}", self)
+                break
+        super().mousePressEvent(event)
+
+
+class SmartCalibrationDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("全時智慧速度校正")
+        self.setFixedSize(1100, 440)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        self._build()
+
+    def _build(self):
+        from vehicle import datagrab
+        statuses = datagrab.get_smart_calibration_status()
+        layout = QVBoxLayout(self)
+        table = QTableWidget(len(statuses), 5)
+        table.setHorizontalHeaderLabels(["速度層 km/h", "校正係數", "有效樣本", "狀態", "最後更新"])
+        table.verticalHeader().hide()
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setMaximumHeight(155)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        for row, status in enumerate(statuses):
+            updated = time.strftime("%m-%d %H:%M:%S", time.localtime(status["updated_at"])) if status["updated_at"] else "--"
+            values = [status["label"], f"{status['coefficient']:.4f}" if status["coefficient"] is not None else "--", str(status["samples"]), "已成熟" if status["mature"] else "學習中", updated]
+            for column, value in enumerate(values):
+                table.setItem(row, column, QTableWidgetItem(value))
+        layout.addWidget(table)
+        layout.addWidget(SmartCalibrationChart(statuses, datagrab.get_speed_correction(), self))
+        buttons = QHBoxLayout()
+        reset = QPushButton("重置學習資料")
+        close = QPushButton("關閉")
+        reset.clicked.connect(self._reset)
+        close.clicked.connect(self.accept)
+        buttons.addStretch()
+        buttons.addWidget(reset)
+        buttons.addWidget(close)
+        layout.addLayout(buttons)
+
+    def _reset(self):
+        answer = QMessageBox.question(self, "確認重置", "確定要清除所有速度層的學習資料？\n目前顯示模式不會改變。", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            from vehicle import datagrab
+            datagrab.reset_smart_calibration()
+            self.accept()
+            QMessageBox.information(self.parentWidget(), "已重置", "智慧校正資料已清除。")
+
+
 class BackgroundTask(QThread):
     """執行單一阻塞工作，所有 UI 更新由 result_ready 回主執行緒。"""
     result_ready = pyqtSignal(object)
@@ -513,64 +633,9 @@ class ControlPanel(QWidget):
         return container
     
     def _on_speed_sync_long_press(self, btn):
-        """速度同步按鈕長按：切換速度校正模式"""
+        """速度同步按鈕長按：顯示全時智慧校正狀態。"""
         btn._is_long_press = True
-        
-        try:
-            import datagrab
-            current_enabled = datagrab.is_speed_calibration_enabled()
-            current_val = datagrab.get_speed_correction()
-        except Exception:
-            current_enabled = False
-            current_val = 1.01
-        
-        # 彈出確認對話框
-        from PyQt6.QtWidgets import QMessageBox
-        
-        msg = QMessageBox()
-        
-        if current_enabled:
-            # 已開啟 → 長按 = 存檔並關閉
-            msg.setWindowTitle("💾 儲存速度校正")
-            msg.setText(f"速度校正模式執行中\n\n目前校正係數：{current_val:.4f}\n\n是否儲存並關閉校正模式？")
-            msg.setIcon(QMessageBox.Icon.Question)
-        else:
-            # 未開啟 → 長按 = 開啟校正模式
-            msg.setWindowTitle("🔧 速度校正模式")
-            msg.setText(f"是否啟用速度校正模式？\n\n目前校正係數：{current_val:.4f}\n\n啟用後，系統會根據 GPS 速度\n逐漸修正 OBD 速度係數。\n\n💡 再次長按可手動儲存")
-            msg.setIcon(QMessageBox.Icon.Question)
-        
-        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
-        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-        
-        result = msg.exec()
-        
-        if result == QMessageBox.StandardButton.Yes:
-            try:
-                import datagrab
-                new_state = not current_enabled
-                datagrab.set_speed_calibration_enabled(new_state)
-                
-                # 顯示結果
-                status_msg = QMessageBox()
-                if new_state:
-                    # 開啟校正模式
-                    status_msg.setWindowTitle("🔧 校正模式已啟用")
-                    status_msg.setText(f"✅ 速度校正模式已啟用\n\n目前校正係數：{current_val:.4f}\n\n請在 GPS 訊號良好的情況下行駛，\n系統會自動調整校正值。\n\n💡 完成後長按此按鈕可儲存")
-                    status_msg.setIcon(QMessageBox.Icon.Information)
-                else:
-                    # 關閉並儲存
-                    datagrab.persist_speed_correction()
-                    final_val = datagrab.get_speed_correction()
-                    status_msg.setWindowTitle("💾 校正已儲存")
-                    status_msg.setText(f"✅ 速度校正係數已儲存！\n\n最終校正係數：{final_val:.4f}\n\n校正模式已關閉")
-                    status_msg.setIcon(QMessageBox.Icon.Information)
-                status_msg.setWindowFlags(status_msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-                status_msg.exec()
-                
-            except Exception as e:
-                print(f"[速度校正] 切換失敗: {e}")
+        SmartCalibrationDialog(self).exec()
     
     def adjust_color(self, hex_color, factor):
         """調整顏色亮度"""
