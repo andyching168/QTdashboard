@@ -91,6 +91,83 @@ class SmartCalibrationDialog(QDialog):
         self.setWindowTitle("全時智慧速度校正")
         self.setFixedSize(1100, 440)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        self.setStyleSheet("""
+            SmartCalibrationDialog {
+                background-color: #111318;
+                color: #f2f4f8;
+            }
+            QTableWidget {
+                background-color: #1b1e24;
+                alternate-background-color: #22262e;
+                color: #f2f4f8;
+                gridline-color: #454b57;
+                border: 1px solid #454b57;
+                selection-background-color: #315f85;
+                selection-color: #ffffff;
+                font-size: 15px;
+            }
+            QTableWidget::item {
+                background-color: #1b1e24;
+                color: #f2f4f8;
+                padding: 4px;
+            }
+            QTableWidget::item:alternate {
+                background-color: #22262e;
+            }
+            QTableWidget::item:selected {
+                background-color: #315f85;
+                color: #ffffff;
+            }
+            QHeaderView::section {
+                background-color: #292e37;
+                color: #ffffff;
+                border: 1px solid #454b57;
+                padding: 5px;
+                font-size: 15px;
+                font-weight: bold;
+            }
+            QTableCornerButton::section {
+                background-color: #292e37;
+                border: 1px solid #454b57;
+            }
+            QScrollBar:vertical {
+                background: #171a20;
+                width: 20px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #5d6675;
+                min-height: 32px;
+                border-radius: 8px;
+                margin: 2px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+            QPushButton {
+                background-color: #2d333d;
+                color: #ffffff;
+                border: 1px solid #596273;
+                border-radius: 8px;
+                padding: 8px 18px;
+                min-height: 28px;
+                font-size: 15px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #3a4350;
+            }
+            QPushButton:pressed {
+                background-color: #20252d;
+            }
+            QPushButton#resetCalibrationButton {
+                background-color: #8b2f36;
+                border-color: #c05259;
+            }
+            QPushButton#resetCalibrationButton:hover {
+                background-color: #a43a42;
+            }
+        """)
         self._build()
 
     def _build(self):
@@ -99,6 +176,7 @@ class SmartCalibrationDialog(QDialog):
         layout = QVBoxLayout(self)
         table = QTableWidget(len(statuses), 5)
         table.setHorizontalHeaderLabels(["速度層 km/h", "校正係數", "有效樣本", "狀態", "最後更新"])
+        table.setAlternatingRowColors(True)
         table.verticalHeader().hide()
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setMaximumHeight(155)
@@ -107,11 +185,15 @@ class SmartCalibrationDialog(QDialog):
             updated = time.strftime("%m-%d %H:%M:%S", time.localtime(status["updated_at"])) if status["updated_at"] else "--"
             values = [status["label"], f"{status['coefficient']:.4f}" if status["coefficient"] is not None else "--", str(status["samples"]), "已成熟" if status["mature"] else "學習中", updated]
             for column, value in enumerate(values):
-                table.setItem(row, column, QTableWidgetItem(value))
+                item = QTableWidgetItem(value)
+                if column == 3:
+                    item.setForeground(QColor("#70d98b" if status["mature"] else "#ffc46b"))
+                table.setItem(row, column, item)
         layout.addWidget(table)
         layout.addWidget(SmartCalibrationChart(statuses, datagrab.get_speed_correction(), self))
         buttons = QHBoxLayout()
         reset = QPushButton("重置學習資料")
+        reset.setObjectName("resetCalibrationButton")
         close = QPushButton("關閉")
         reset.clicked.connect(self._reset)
         close.clicked.connect(self.accept)

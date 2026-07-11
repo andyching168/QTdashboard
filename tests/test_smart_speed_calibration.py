@@ -193,3 +193,21 @@ def test_empty_calibration_chart_has_no_false_curve():
     assert chart._points == []
     chart.close()
     assert app is not None
+
+
+def test_calibration_dialog_uses_high_contrast_table_and_buttons():
+    from PyQt6.QtGui import QPalette
+    from PyQt6.QtWidgets import QApplication, QPushButton, QTableWidget
+    from ui.control_panel import SmartCalibrationDialog
+
+    app = QApplication.instance() or QApplication([])
+    dialog = SmartCalibrationDialog()
+    dialog.show()
+    app.processEvents()
+    table = dialog.findChild(QTableWidget)
+    buttons = dialog.findChildren(QPushButton)
+    assert table.palette().color(QPalette.ColorRole.Text).lightness() > 180
+    assert table.palette().color(QPalette.ColorRole.Base).lightness() < 80
+    assert buttons
+    assert all(button.palette().color(QPalette.ColorRole.ButtonText).lightness() > 180 for button in buttons)
+    dialog.close()
