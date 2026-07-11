@@ -9,6 +9,15 @@ from PyQt6.QtGui import *
 from ui.theme import get_theme_manager, T
 
 
+class ClickableStatusCard(QWidget):
+    clicked = pyqtSignal()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
 class SmartCalibrationChart(QWidget):
     """輕量的分層校正係數折線圖。"""
     def __init__(self, statuses, fallback, parent=None):
@@ -320,6 +329,9 @@ class ControlPanel(QWidget):
         # WiFi 狀態
         self.wifi_ssid = None
         self.wifi_signal = 0
+        self.wifi_interface = None
+        self.wifi_ip_address = None
+        self.wifi_view_mode = "status"
         self.speed_sync_mode = "calibrated"  # 速度同步初始模式
         
         # 主佈局
@@ -406,10 +418,13 @@ class ControlPanel(QWidget):
         status_layout.setSpacing(20)
         
         # WiFi 狀態卡片
-        wifi_card = QWidget()
+        wifi_card = ClickableStatusCard()
         wifi_card.setFixedSize(280, 80)
+        wifi_card.setCursor(Qt.CursorShape.PointingHandCursor)
+        wifi_card.setToolTip("點擊切換 Wi-Fi 狀態與 IP 位址")
+        wifi_card.clicked.connect(self.toggle_wifi_view)
         wifi_card.setStyleSheet(f"""
-            QWidget {{
+            ClickableStatusCard {{
                 background: rgba(255, 255, 255, 0.08);
                 border-radius: 12px;
             }}
@@ -561,6 +576,29 @@ class ControlPanel(QWidget):
         signal = int(snapshot.get('signal') or 0)
         self.wifi_ssid = ssid
         self.wifi_signal = signal
+        self.wifi_interface = snapshot.get('interface')
+        self.wifi_ip_address = snapshot.get('ip_address')
+        self._render_wifi_card()
+
+    def toggle_wifi_view(self):
+        """在 SSID/訊號與本機 IP 顯示之間切換。"""
+        self.wifi_view_mode = "ip" if self.wifi_view_mode == "status" else "status"
+        self._render_wifi_card()
+
+    def _render_wifi_card(self):
+        """依目前顯示模式重繪 Wi-Fi 狀態卡。"""
+        ssid = self.wifi_ssid
+        signal = self.wifi_signal
+        if self.wifi_view_mode == "ip":
+            if not ssid:
+                self.wifi_status_label.setText("未連線")
+                self.wifi_detail_label.setText("無可用 IP 位址")
+            else:
+                self.wifi_status_label.setText(self.wifi_ip_address or "取得中...")
+                interface_text = f" · {self.wifi_interface}" if self.wifi_interface else ""
+                self.wifi_detail_label.setText(f"IP 位址{interface_text}")
+            self.wifi_signal_label.setText("")
+            return
         if not ssid:
             self.wifi_status_label.setText("未連線")
             self.wifi_detail_label.setText("點擊 WiFi 按鈕進行連線")

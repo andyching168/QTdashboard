@@ -14,6 +14,8 @@ import platform
 import socket
 import subprocess
 import threading
+import fcntl
+import struct
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
 
@@ -158,16 +160,34 @@ class NetworkMonitor(QObject):
         if not ssid:
             try:
                 result = subprocess.run(
-                    ['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'],
+                    ['nmcli', '-t', '-f', 'ACTIVE,SSID,DEVICE', 'dev', 'wifi'],
                     capture_output=True, text=True, timeout=1, env=env,
                 )
                 for line in result.stdout.splitlines():
                     if line.lower().startswith('yes:') or line.startswith('是:'):
-                        ssid = line.split(':', 1)[1].strip() or None
+                        payload = line.split(':', 1)[1]
+                        ssid_text, separator, device = payload.rpartition(':')
+                        ssid = (ssid_text if separator else payload).strip() or None
+                        if not interface and separator:
+                            interface = device.strip() or None
                         break
             except Exception:
                 pass
-        return {'ssid': ssid, 'signal': signal, 'interface': interface}
+        ip_address = NetworkMonitor._get_interface_ipv4(interface)
+        return {'ssid': ssid, 'signal': signal, 'interface': interface, 'ip_address': ip_address}
+
+    @staticmethod
+    def _get_interface_ipv4(interface):
+        """以 ioctl 取得介面 IPv4，不啟動外部指令。"""
+        if not interface:
+            return None
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                packed = struct.pack('256s', interface[:15].encode('utf-8'))
+                result = fcntl.ioctl(sock.fileno(), 0x8915, packed)  # SIOCGIFADDR
+                return socket.inet_ntoa(result[20:24])
+        except (OSError, ValueError):
+            return None
 
     # === 主執行緒處理 ===
 

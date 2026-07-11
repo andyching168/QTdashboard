@@ -170,6 +170,41 @@ def test_control_panel_wifi_refresh_contains_no_subprocess():
     assert "subprocess.run" not in inspect.getsource(ControlPanel.update_wifi_status)
 
 
+def test_wifi_status_card_toggles_between_signal_and_ip():
+    qapp()
+    from ui.control_panel import ControlPanel
+
+    panel = ControlPanel()
+    panel.status_timer.stop()
+    panel.apply_wifi_status({
+        "ssid": "CarHotspot",
+        "signal": 82,
+        "interface": "wlan0",
+        "ip_address": "192.168.8.23",
+    })
+    assert panel.wifi_status_label.text() == "CarHotspot"
+    assert panel.wifi_detail_label.text() == "信號極佳"
+    assert panel.wifi_signal_label.text() == "82%"
+
+    panel.toggle_wifi_view()
+    assert panel.wifi_status_label.text() == "192.168.8.23"
+    assert panel.wifi_detail_label.text() == "IP 位址 · wlan0"
+    assert panel.wifi_signal_label.text() == ""
+
+    panel.apply_wifi_status({
+        "ssid": "CarHotspot",
+        "signal": 70,
+        "interface": "wlan0",
+        "ip_address": "192.168.8.24",
+    })
+    assert panel.wifi_status_label.text() == "192.168.8.24"
+
+    panel.toggle_wifi_view()
+    assert panel.wifi_status_label.text() == "CarHotspot"
+    assert panel.wifi_signal_label.text() == "70%"
+    panel.close()
+
+
 def test_gps_thread_stops_while_waiting_for_device(monkeypatch):
     qapp()
     from ui import threads
