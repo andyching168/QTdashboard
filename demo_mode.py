@@ -1,387 +1,110 @@
 #!/usr/bin/env python3
-"""
-演示模式：無需 CAN Bus 硬體
-- 預設自動模擬怠速/加速/巡航/減速
-- --control-data 可改為鍵盤直接調整數據，停用自動場景
-- PERF_MONITOR=1 或 --perf 可開啟效能監控
-- --mock-gps 可開啟 Mock GPS 座標（用於測試速限顯示）
-"""
+"""Luxgen M7 dashboard demo mode with a separate test console."""
 
 import argparse
 import logging
 import os
-import random
-import sys
-import time
 
-# 設定入口點環境變數 (供程式重啟時判斷)
-os.environ['DASHBOARD_ENTRY'] = 'demo'
+os.environ["DASHBOARD_ENTRY"] = "demo"
 
-from PyQt6.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QEvent, QObject, Qt, QTimer
+from PyQt6.QtWidgets import QApplication
 
 from main import run_dashboard
-
-
-# Mock GPS 測試座標
-MOCK_GPS_COORDS = [
-    (24.9850, 121.4921, "國3 35K 北上"),      # 速限 90
-    (24.9850, 121.4921, "國3 35K 南下"),      # 速限 110
-    (23.6751, 120.5846, "國3 267K"),          # 速限 90
-    (22.7090, 120.3604, "國10 0K"),           # 速限 80
-    (25.0330, 121.5654, "台北市區"),           # 非國道
-]
-
-
-class VehicleSignals(QObject):
-    """Dashboard 所需的數據訊號（介面對齊 vehicle.datagrab.WorkerSignals，
-    供 dashboard.connect_worker_signals() 統一接線）"""
-
-    update_rpm = pyqtSignal(float)
-    update_speed = pyqtSignal(float)
-    update_temp = pyqtSignal(float)
-    update_fuel = pyqtSignal(float)
-    update_gear = pyqtSignal(str)
-    update_turbo = pyqtSignal(float)
-    update_battery = pyqtSignal(float)
-    # 以下訊號 demo 模式不會發射，僅為對齊 WorkerSignals 介面
-    update_turn_signal = pyqtSignal(str)
-    update_door_status = pyqtSignal(str, bool)
-    update_fuel_consumption = pyqtSignal(float, float)
-    update_obd_batch = pyqtSignal(dict)
-
-
-class VehicleSimulator:
-    """車輛狀態模擬器"""
-
-    def __init__(self, test_shutdown_mode: bool = False, shutdown_delay: float = 5.0) -> None:
-        self.speed = 0.0
-        self.rpm = 0.8  # 千轉
-        self.fuel = 65.0
-        self.temp = 45.0  # 儀表百分比
-        self.gear = "P"
-        self.actual_gear = 1
-        self.turbo = -0.7
-        self.battery = 12.6
-
-        self.mode = "idle"
-        self.time = 0.0
-        self.target_speed = 0.0
-
-        # 電壓歸零測試
-        self.test_shutdown_mode = test_shutdown_mode
-        self.shutdown_delay = shutdown_delay
-        self.shutdown_triggered = False
-        self.startup_time = time.time()
-
-        # 音樂模擬（僅計時，方便和主程式一致）
-        self.music_time = 0.0
-        self.song_duration = 182
-        self.playlist = [
-            ("Drive My Car", "The Beatles", 182),
-            ("Highway Star", "Deep Purple", 206),
-            ("Ride", "Twenty One Pilots", 214),
-            ("Born to Run", "Bruce Springsteen", 270),
-            ("Life is a Highway", "Tom Cochrane", 264),
-        ]
-        self.current_song_index = 0
-
-    def update(self, dt: float = 0.1, manual_override: bool = False) -> None:
-        self.time += dt
-
-        # 測試模式：電壓歸零
-        if self.test_shutdown_mode:
-            elapsed = time.time() - self.startup_time
-            if elapsed >= self.shutdown_delay and not self.shutdown_triggered:
-                print(f"\n⚡ [測試模式] {self.shutdown_delay} 秒後觸發電壓歸零...")
-                print(f"   電壓: {self.battery:.1f}V → 0.0V")
-                self.battery = 0.0
-                self.shutdown_triggered = True
-                return
-
-        # 控制數據模式：僅做合理化處理
-        if manual_override:
-            self.speed = max(0.0, min(180.0, self.speed))
-            self.temp = max(40.0, min(120.0, self.temp + random.uniform(-0.1, 0.1)))
-            self.fuel = max(0.0, min(100.0, self.fuel))
-            self.battery = max(10.5, min(14.8, self.battery + random.uniform(-0.05, 0.05)))
-            self.rpm = max(0.6, min(7.0, 0.8 + (self.speed / 120.0) * 4.5))
-            self.turbo = max(-1.0, min(1.2, -0.6 + self.speed * 0.012 + random.uniform(-0.02, 0.02)))
-            self.music_time += dt
-            return
-
-        # 自動行駛場景
-        if self.mode == "idle":
-            if self.time > 5:
-                self.mode = "accelerating"
-                self.target_speed = random.uniform(60, 120)
-                self.gear = "D"
-                self.time = 0
-        elif self.mode == "accelerating" and self.speed >= self.target_speed * 0.95:
-            self.mode = "cruising"
-            self.time = 0
-        elif self.mode == "cruising" and self.time > random.uniform(8, 15):
-            self.mode = "decelerating"
-            self.time = 0
-        elif self.mode == "decelerating" and self.speed < 5:
-            self.mode = "idle"
-            self.gear = "P"
-            self.time = 0
-
-        # 速度與轉速
-        if self.mode == "idle":
-            self.speed = max(0.0, self.speed - 2 * dt)
-            self.rpm = 0.8
-        elif self.mode == "accelerating":
-            self.speed = min(self.target_speed, self.speed + 3 * dt)
-            self.rpm = 0.8 + (self.speed / 100.0) * 4.5
-        elif self.mode == "cruising":
-            self.speed += random.uniform(-0.5, 0.5) * dt
-            self.rpm = 1.5 + (self.speed / 100.0) * 2.5
-        elif self.mode == "decelerating":
-            self.speed = max(0.0, self.speed - 3 * dt)
-            self.rpm = 1.2 + (self.speed / 100.0) * 2.0
-
-        # 渦輪
-        if self.rpm < 2.5:
-            target_turbo = -0.6 if self.mode in ("idle", "decelerating") and self.speed < 5 else -0.2 + (self.rpm - 2.5) / 1.5 * 0.6
-        else:
-            target_turbo = 0.4 + (self.rpm - 4.0) / 3.0 * 0.4
-
-        self.turbo = self.turbo + (target_turbo - self.turbo) * 0.15
-        if self.rpm > 2.0:
-            self.turbo += random.uniform(-0.02, 0.02)
-        self.turbo = max(-1.0, min(1.0, self.turbo))
-
-        # 電瓶
-        if self.rpm < 1.0:
-            target_voltage = 12.4
-        elif self.rpm < 2.0:
-            target_voltage = 13.2
-        else:
-            target_voltage = 13.8 + (self.rpm - 2.0) / 5.0 * 0.4
-        self.battery = self.battery + (target_voltage - self.battery) * 0.1
-        self.battery += random.uniform(-0.05, 0.05)
-        self.battery = max(11.0, min(14.5, self.battery))
-
-        # 油量
-        if self.speed > 0:
-            self.fuel = max(5.0, self.fuel - 0.005 * dt)
-
-        # 水溫
-        target_temp = 50.0 if self.rpm > 1.5 else 45.0
-        if self.temp < target_temp:
-            self.temp += 0.5 * dt
-        elif self.temp > target_temp:
-            self.temp -= 0.3 * dt
-        self.temp += random.uniform(-0.1, 0.1)
-        self.temp = max(20.0, min(95.0, self.temp))
-
-        # 檔位
-        if self.mode == "idle" and self.speed < 1:
-            self.gear = "P"
-        else:
-            if self.speed < 20:
-                self.actual_gear = 1
-            elif self.speed < 40:
-                self.actual_gear = 2
-            elif self.speed < 60:
-                self.actual_gear = 3
-            elif self.speed < 80:
-                self.actual_gear = 4
-            else:
-                self.actual_gear = 5
-            self.gear = str(self.actual_gear)
-
-        # 音樂播放進度
-        self.music_time += dt
-        if self.music_time >= self.song_duration:
-            self.current_song_index = (self.current_song_index + 1) % len(self.playlist)
-            _, _, duration = self.playlist[self.current_song_index]
-            self.song_duration = duration
-            self.music_time = 0.0
+from ui.demo_control_window import DemoControlWindow
+from vehicle.demo_controller import DemoController, SimulationMode
 
 
 class ControlEventFilter(QObject):
-    """鍵盤控制數據模式"""
+    """Keep only the shortcut that shows or hides the test console."""
 
-    def __init__(self, simulator: VehicleSimulator) -> None:
+    def __init__(self, controller: DemoController) -> None:
         super().__init__()
-        self.simulator = simulator
+        self.controller = controller
+        self.console = None
 
-    def eventFilter(self, obj, event):  # noqa: N802 (Qt API naming)
+    def eventFilter(self, obj, event):  # noqa: N802
         if event.type() != QEvent.Type.KeyPress:
             return False
-
-        key = event.key()
-        handled = True
-
-        if key == Qt.Key.Key_W:
-            self.simulator.speed += 5
-        elif key == Qt.Key.Key_S:
-            self.simulator.speed -= 5
-        elif key == Qt.Key.Key_Q:
-            self.simulator.temp += 2
-        elif key == Qt.Key.Key_E:
-            self.simulator.temp -= 2
-        elif key == Qt.Key.Key_A:
-            self.simulator.fuel -= 1
-        elif key == Qt.Key.Key_D:
-            self.simulator.fuel += 1
-        elif key == Qt.Key.Key_Z:
-            self.simulator.battery -= 0.1
-        elif key == Qt.Key.Key_X:
-            self.simulator.battery += 0.1
-        elif key in (Qt.Key.Key_P, Qt.Key.Key_0):
-            self.simulator.gear = "P"
-        elif key in (Qt.Key.Key_1, Qt.Key.Key_2, Qt.Key.Key_3, Qt.Key.Key_4, Qt.Key.Key_5, Qt.Key.Key_6):
-            self.simulator.gear = str(int(event.text()))
-        else:
-            handled = False
-
-        return handled
+        if event.key() == Qt.Key.Key_F11 and self.console is not None:
+            self.console.setVisible(not self.console.isVisible())
+            if self.console.isVisible():
+                self.console.raise_()
+                self.console.activateWindow()
+            return True
+        return False
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Luxgen M7 儀表板演示模式")
-    parser.add_argument("--perf", action="store_true", help="啟用效能監控 (等同 PERF_MONITOR=1)")
-    parser.add_argument("--test-shutdown", type=float, nargs="?", const=5.0, default=None, metavar="DELAY", help="電壓歸零測試：幾秒後觸發 (預設 5 秒)")
-    parser.add_argument("--control-data", action="store_true", help="控制數據模式：鍵盤直接調整數值，停用自動模擬")
-    parser.add_argument("--spotify", action="store_true", help="啟用 Spotify Connect 整合（如未安裝模組則忽略）")
-    parser.add_argument("--mock-gps", action="store_true", help="啟用 Mock GPS 座標（用於測試速限顯示）")
+    parser.add_argument("--perf", action="store_true", help="啟用效能監控")
+    parser.add_argument("--test-shutdown", type=float, nargs="?", const=5.0, default=None, metavar="DELAY", help="幾秒後觸發電壓歸零")
+    parser.add_argument("--control-data", action="store_true", help="以手動控制模式啟動")
+    parser.add_argument("--spotify", action="store_true", help="保留的相容旗標")
+    parser.add_argument("--mock-gps", action="store_true", help="以 Mock GPS 定位狀態啟動")
     args = parser.parse_args()
 
     if args.perf:
         os.environ["PERF_MONITOR"] = "1"
-        print("🔍 效能監控模式已啟用")
-
-    test_shutdown_mode = args.test_shutdown is not None
-    shutdown_delay = args.test_shutdown if test_shutdown_mode else 5.0
-
-    control_data_mode = args.control_data
-    mock_gps_mode = args.mock_gps
-
-    if args.spotify:
-        try:
-            import spotify_auth  # noqa: F401
-            import spotify_listener  # noqa: F401
-            print("🎧 Spotify 旗標已啟用（此簡化 demo 僅接受旗標，不會連線）")
-        except Exception:
-            print("⚠️  Spotify 模組未安裝，略過 Spotify 整合")
-
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    print("=" * 50)
-    print("演示模式 - Luxgen M7 數位儀表板")
-    print("無需 CAN Bus 硬體")
-    print("=" * 50)
-    print()
-    if control_data_mode:
-        print("控制數據模式：")
-        print("  W/S 調整速度  +5/-5")
-        print("  Q/E 調整水溫  +2/-2")
-        print("  A/D 調整油量  -1/+1")
-        print("  Z/X 調整電壓  -0.1/+0.1")
-        print("  1-6 選擇檔位，0 或 P 進入 P 檔")
-        print()
-    else:
-        print("自動場景：怠速 → 加速 → 巡航 → 減速 循環")
-        print()
-
-    if mock_gps_mode:
-        print("📍 Mock GPS 模式已啟用")
-        print()
-
-    signals = VehicleSignals()
-    simulator = VehicleSimulator(test_shutdown_mode=test_shutdown_mode, shutdown_delay=shutdown_delay)
+    controller = DemoController(SimulationMode.MANUAL if args.control_data else SimulationMode.AUTO)
+    if args.mock_gps:
+        controller.update_values(gps_fixed=True, gps_internal=True, gps_fresh=True)
 
     def setup_demo_data(dashboard):
-        timer = QTimer()
-        last_time = time.time()
+        dashboard.connect_worker_signals(controller)
+        controller.parking_brake_changed.connect(dashboard.set_parking_brake)
+        controller.cruise_changed.connect(dashboard.set_cruise)
+        controller.radar_changed.connect(dashboard.signal_update_radar)
 
-        event_filter = ControlEventFilter(simulator) if control_data_mode else None
+        def update_gps(fixed, internal, fresh, speed, latitude, longitude):
+            dashboard._update_gps_status(fixed)
+            dashboard._update_gps_source(is_internal=internal, is_fresh=fresh)
+            dashboard._update_gps_device(True)
+            dashboard._update_gps_speed(speed)
+            if fixed:
+                dashboard._update_gps_position(latitude, longitude)
+                dashboard.gps_lat, dashboard.gps_lon = latitude, longitude
 
-        try:
-            from PyQt6.QtWidgets import QApplication
+        controller.gps_changed.connect(update_gps)
+        controller.shutdown_requested.connect(dashboard.trigger_voltage_zero_test)
 
-            qt_app = QApplication.instance()
-        except Exception:
-            qt_app = None
-
-        if control_data_mode and qt_app and event_filter:
-            qt_app.installEventFilter(event_filter)
-
-        def tick():
-            nonlocal last_time
-            now = time.time()
-            dt = now - last_time
-            last_time = now
-            simulator.update(dt=dt, manual_override=control_data_mode)
-
-            signals.update_rpm.emit(simulator.rpm)
-            signals.update_speed.emit(simulator.speed)
-            signals.update_temp.emit(simulator.temp)
-            signals.update_fuel.emit(simulator.fuel)
-            signals.update_gear.emit(simulator.gear)
-            signals.update_turbo.emit(simulator.turbo)
-            signals.update_battery.emit(simulator.battery)
-
-        timer.timeout.connect(tick)
+        timer = QTimer(dashboard)
+        timer.timeout.connect(controller.tick)
         timer.start(100)
 
-        # Mock GPS 模式
-        gps_timer = QTimer()
-        gps_coord_index = [0]  # 用 list 以便在 nested function 中修改
+        event_filter = ControlEventFilter(controller)
+        app = QApplication.instance()
+        app.installEventFilter(event_filter)
 
-        def gps_tick():
-            if not mock_gps_mode:
-                return
-            # 切換到下一個座標
-            gps_coord_index[0] = (gps_coord_index[0] + 1) % len(MOCK_GPS_COORDS)
-            lat, lon, desc = MOCK_GPS_COORDS[gps_coord_index[0]]
-            print(f"   Mock GPS: {desc} ({lat}, {lon})")
-            # 發射 GPS 訊號
-            dashboard._update_gps_status(True)  # GPS fixed
-            dashboard._update_gps_source(is_internal=True, is_fresh=True)  # Internal GPS
-            dashboard._update_gps_device(True)  # Device found
-            dashboard._update_gps_position(lat, lon)
-            dashboard.gps_lat = lat
-            dashboard.gps_lon = lon
+        console = DemoControlWindow(controller)
+        event_filter.console = console
+        dashboard._demo_control_window = console
+        dashboard._demo_event_filter = event_filter
+        console.show()
+        controller.emit_state()
 
-        if mock_gps_mode:
-            # 初始 GPS 狀態
-            lat, lon, desc = MOCK_GPS_COORDS[0]
-            print(f"   Mock GPS: {desc} ({lat}, {lon})")
-            dashboard._update_gps_status(True)
-            dashboard._update_gps_source(is_internal=True, is_fresh=True)
-            dashboard._update_gps_device(True)
-            dashboard._update_gps_position(lat, lon)
-            dashboard.gps_lat = lat
-            dashboard.gps_lon = lon
-            # 定期更新（每 5 秒切換座標）
-            gps_timer.timeout.connect(gps_tick)
-            gps_timer.start(5000)
-
-        # 連接 Dashboard 接收端（WorkerSignals 直接接到最終 slot / signal）
-        dashboard.connect_worker_signals(signals)
+        shutdown_timer = None
+        if args.test_shutdown is not None:
+            shutdown_timer = QTimer(dashboard)
+            shutdown_timer.setSingleShot(True)
+            shutdown_timer.timeout.connect(lambda: controller.apply_scenario("低電壓"))
+            shutdown_timer.start(max(0, int(args.test_shutdown * 1000)))
 
         def cleanup():
             timer.stop()
-            if mock_gps_mode:
-                gps_timer.stop()
-            if control_data_mode and qt_app and event_filter:
-                qt_app.removeEventFilter(event_filter)
+            if shutdown_timer is not None:
+                shutdown_timer.stop()
+            app.removeEventFilter(event_filter)
+            console.shutdown()
 
         return cleanup
 
-    window_title = "Luxgen M7 儀表板 - 演示模式"
-    if control_data_mode:
-        window_title += " (控制數據)"
-
-    run_dashboard(
-        window_title=window_title,
-        setup_data_source=setup_demo_data,
-        skip_gps=mock_gps_mode,
-    )
+    title = "Luxgen M7 儀表板 - 演示模式"
+    if args.control_data:
+        title += "（手動控制）"
+    run_dashboard(window_title=title, setup_data_source=setup_demo_data, skip_gps=args.mock_gps)
 
 
 if __name__ == "__main__":

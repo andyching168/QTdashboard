@@ -2407,7 +2407,7 @@ class Dashboard(QWidget):
         # 更新顯示邏輯
         new_speed = max(0, min(200, speed))
         self.obd_speed_smoothed = smoothed_obd_speed
-        # 兼容性：保留 distance_speed 供其他模擬/測試使用 (例如鍵盤模擬)
+        # 兼容性：保留 distance_speed 供其他模擬/測試資料來源使用
         self.distance_speed = max(0.0, new_speed)
         
         # 里程/卡片顯示使用顯示速度（實際累積由 _physics_tick 驅動）
@@ -3607,7 +3607,7 @@ class Dashboard(QWidget):
             print("長按按鈕B: 不在 Trip 焦點狀態，忽略")
     
     def keyPressEvent(self, a0):  # type: ignore
-        """鍵盤模擬控制"""
+        """桌面開發環境的面板與卡片導覽快捷鍵。"""
         if a0 is None:
             return
         key = a0.key()
@@ -3661,142 +3661,8 @@ class Dashboard(QWidget):
             self.switch_card(1)
             return
         
-        # W/S: 速度與轉速
-        if key == Qt.Key.Key_W:
-            self.speed = min(180, self.speed + 5)
-            self.distance_speed = self.speed
-            # 轉速與速度成比例，但不超過紅區
-            self.rpm = min(7, 0.8 + (self.speed / 180.0) * 5.0)
-        elif key == Qt.Key.Key_S:
-            self.speed = max(0, self.speed - 5)
-            self.distance_speed = self.speed
-            # 減速時轉速下降到怠速
-            if self.speed < 5:
-                self.rpm = 0.8  # 怠速
-            else:
-                self.rpm = max(0.8, 0.8 + (self.speed / 180.0) * 5.0)
-            
-        # Q/E: 水溫
-        elif key == Qt.Key.Key_Q:
-            self.temp = max(0, self.temp - 3)
-        elif key == Qt.Key.Key_E:
-            self.temp = min(100, self.temp + 3)
-            
-        # A/D: 油量
-        elif key == Qt.Key.Key_A:
-            self.fuel = max(0, self.fuel - 5)
-        elif key == Qt.Key.Key_D:
-            self.fuel = min(100, self.fuel + 5)
-            
-        # 1-6: 檔位
-        elif key == Qt.Key.Key_1:
-            self.gear = "P"
-        elif key == Qt.Key.Key_2:
-            self.gear = "R"
-        elif key == Qt.Key.Key_3:
-            self.gear = "N"
-        elif key == Qt.Key.Key_4:
-            self.gear = "D"
-        elif key == Qt.Key.Key_5:
-            self.gear = "S"
-        elif key == Qt.Key.Key_6:
-            self.gear = "L"
-        
-        # Z/X/C: 方向燈測試（模擬 CAN 訊號的切換）
-        elif key == Qt.Key.Key_Z:
-            # 左轉燈切換
-            if self.left_turn_on:
-                self.set_turn_signal("left_off")
-            else:
-                self.set_turn_signal("left_on")
-        elif key == Qt.Key.Key_X:
-            # 右轉燈切換
-            if self.right_turn_on:
-                self.set_turn_signal("right_off")
-            else:
-                self.set_turn_signal("right_on")
-        elif key == Qt.Key.Key_C:
-            # 雙閃切換
-            if self.left_turn_on and self.right_turn_on:
-                self.set_turn_signal("both_off")
-            else:
-                self.set_turn_signal("both_on")
-        
-        # 7/8/9/0/-: 門狀態測試
-        elif key == Qt.Key.Key_7:
-            # 左前門切換
-            if hasattr(self, 'door_card'):
-                new_state = not self.door_card.door_fl_closed
-                self.set_door_status("FL", new_state)
-        elif key == Qt.Key.Key_8:
-            # 右前門切換
-            if hasattr(self, 'door_card'):
-                new_state = not self.door_card.door_fr_closed
-                self.set_door_status("FR", new_state)
-        elif key == Qt.Key.Key_9:
-            # 左後門切換
-            if hasattr(self, 'door_card'):
-                new_state = not self.door_card.door_rl_closed
-                self.set_door_status("RL", new_state)
-        elif key == Qt.Key.Key_0:
-            # 右後門切換
-            if hasattr(self, 'door_card'):
-                new_state = not self.door_card.door_rr_closed
-                self.set_door_status("RR", new_state)
-        elif key == Qt.Key.Key_Minus:
-            # 尾門切換
-            if hasattr(self, 'door_card'):
-                new_state = not self.door_card.door_bk_closed
-                self.set_door_status("BK", new_state)
-        
-        # V: 定速巡航開關切換
-        elif key == Qt.Key.Key_V:
-            self.toggle_cruise_switch()
-        # B: 定速巡航作動切換
-        elif key == Qt.Key.Key_B:
-            self.toggle_cruise_engaged()
-        
-        # F10 / =: 電壓歸零測試（觸發關機對話框）
-        elif key == Qt.Key.Key_F10 or key == Qt.Key.Key_Equal:
-            self.trigger_voltage_zero_test()
-
-        # R: 雷達測試 (循環切換測試資料)
-        elif key == Qt.Key.Key_R:
-            if not hasattr(self, '_radar_test_idx'):
-                self._radar_test_idx = 0
-            
-            test_patterns = [
-                "(LR:0,RR:0,LF:0,RF:0)", # 全關
-                "(LR:1,RR:0,LF:0,RF:0)", # 左後黃
-                "(LR:2,RR:0,LF:0,RF:0)", # 左後紅
-                "(LR:0,RR:1,LF:0,RF:0)", # 右後黃
-                "(LR:0,RR:2,LF:0,RF:0)", # 右後紅
-                "(LR:0,RR:0,LF:1,RF:0)", # 左前黃
-                "(LR:0,RR:0,LF:2,RF:0)", # 左前紅
-                "(LR:0,RR:0,LF:0,RF:1)", # 右前黃
-                "(LR:0,RR:0,LF:0,RF:2)", # 右前紅
-                "(LR:1,RR:1,LF:1,RF:1)", # 全黃
-                "(LR:2,RR:2,LF:2,RF:2)", # 全紅
-            ]
-            pattern = test_patterns[self._radar_test_idx]
-            self.signal_update_radar.emit(pattern)
-            print(f"雷達測試: {pattern}")
-            
-            # 切換到門卡片看效果
-            DOOR_ROW_INDEX = 0
-            DOOR_CARD_INDEX = 2
-            self.current_row_index = DOOR_ROW_INDEX
-            self.current_card_index = DOOR_CARD_INDEX
-            self.row_stack.setCurrentIndex(DOOR_ROW_INDEX)
-            self.rows[DOOR_ROW_INDEX].setCurrentIndex(DOOR_CARD_INDEX)
-            self.update_indicators()
-            
-            self._radar_test_idx = (self._radar_test_idx + 1) % len(test_patterns)
-
-        self.update_display()
-
     def toggle_cruise_switch(self):
-        """切換定速巡航開關（V 鍵）"""
+        """切換定速巡航開關。"""
         self.cruise_switch = not self.cruise_switch
         if not self.cruise_switch:
             self.cruise_engaged = False
@@ -3804,7 +3670,7 @@ class Dashboard(QWidget):
         print(f"定速巡航開關: {'開' if self.cruise_switch else '關'}")
     
     def toggle_cruise_engaged(self):
-        """切換定速巡航作動（B 鍵）"""
+        """切換定速巡航作動。"""
         if self.cruise_switch:  # 只有開關開啟時才能作動
             self.cruise_engaged = not self.cruise_engaged
             self.update_cruise_display()
@@ -3893,7 +3759,7 @@ class Dashboard(QWidget):
                 self._shutdown_monitor.update_trip_info(trip_info['elapsed_time'], trip_info['trip_distance'], trip_info['avg_fuel'])
     
     def trigger_voltage_zero_test(self):
-        """觸發電壓歸零測試（F10 或 = 鍵）"""
+        """觸發電壓歸零測試。"""
         # 如果已經在測試中，忽略
         if getattr(self, '_voltage_test_locked', False):
             print("⚡ [測試] 電壓測試已在進行中...")
@@ -4115,7 +3981,7 @@ class Dashboard(QWidget):
         self.update_parking_brake_display()
 
     def update_display(self):
-        """更新所有儀表顯示。保留給鍵盤模擬與全量刷新使用。"""
+        """更新所有儀表顯示。保留給外部模擬與全量刷新使用。"""
         self._update_quad_gauge_display(update_rpm=True, update_temp=True)
         self._update_fuel_display()
         self._update_speed_display()
