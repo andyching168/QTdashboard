@@ -8,6 +8,233 @@ from PyQt6.QtGui import *
 
 from ui.theme import get_theme_manager, T
 
+
+class ClickableStatusCard(QWidget):
+    clicked = pyqtSignal()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
+class SmartCalibrationChart(QWidget):
+    """輕量的分層校正係數折線圖。"""
+    def __init__(self, statuses, fallback, parent=None):
+        super().__init__(parent)
+        self.statuses = tuple(statuses)
+        self.fallback = float(fallback)
+        self._points = []
+        self.setMinimumHeight(165)
+        self.setMouseTracking(True)
+
+    def _range(self):
+        values = [s["coefficient"] for s in self.statuses if s["coefficient"] is not None]
+        values.append(self.fallback)
+        if len(values) <= 1:
+            return 0.95, 1.05
+        low, high = min(values), max(values)
+        margin = max(0.01, (high - low) * 0.2)
+        return low - margin, high + margin
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor("#15151a"))
+        rect = self.rect().adjusted(55, 12, -20, -30)
+        painter.setPen(QPen(QColor("#555b66"), 1))
+        painter.drawRect(rect)
+        if not any(s["samples"] for s in self.statuses):
+            painter.setPen(QColor("#a0a4aa"))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "尚未取得有效校正資料")
+            return
+        y_min, y_max = self._range()
+        count = max(1, len(self.statuses) - 1)
+        def point_for(index, value):
+            x = rect.left() + rect.width() * index / count
+            y = rect.bottom() - rect.height() * (value - y_min) / max(0.0001, y_max - y_min)
+            return QPointF(x, y)
+        fallback_y = point_for(0, self.fallback).y()
+        fallback_pen = QPen(QColor("#8a8f98"), 1, Qt.PenStyle.DashLine)
+        painter.setPen(fallback_pen)
+        painter.drawLine(QPointF(rect.left(), fallback_y), QPointF(rect.right(), fallback_y))
+        painter.drawText(4, int(fallback_y + 4), f"{self.fallback:.3f}")
+        self._points = []
+        previous = None
+        for index, status in enumerate(self.statuses):
+            value = status["coefficient"]
+            x = rect.left() + rect.width() * index / count
+            painter.setPen(QColor("#8a8f98"))
+            painter.drawText(QRectF(x - 25, rect.bottom() + 5, 50, 20), Qt.AlignmentFlag.AlignCenter, status["label"])
+            if value is None:
+                continue
+            point = point_for(index, value)
+            mature = status["mature"]
+            color = QColor("#4CAF50" if mature else "#FFB74D")
+            if previous is not None:
+                pen = QPen(color, 2, Qt.PenStyle.SolidLine if mature and previous[1] else Qt.PenStyle.DashLine)
+                painter.setPen(pen)
+                painter.drawLine(previous[0], point)
+            painter.setPen(QPen(color, 2))
+            painter.setBrush(color if mature else Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(point, 5, 5)
+            self._points.append((point, status))
+            previous = (point, mature)
+        painter.setPen(QColor("#a0a4aa"))
+        painter.drawText(4, rect.top() + 5, f"{y_max:.3f}")
+        painter.drawText(4, rect.bottom(), f"{y_min:.3f}")
+
+    def mousePressEvent(self, event):
+        pos = event.position()
+        for point, status in self._points:
+            if (point.x() - pos.x()) ** 2 + (point.y() - pos.y()) ** 2 <= 196:
+                state = "已成熟" if status["mature"] else "學習中"
+                QToolTip.showText(event.globalPosition().toPoint(), f"{status['label']} km/h\n係數 {status['coefficient']:.4f}\n樣本 {status['samples']}\n{state}", self)
+                break
+        super().mousePressEvent(event)
+
+
+class SmartCalibrationDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("全時智慧速度校正")
+        self.setFixedSize(1100, 440)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        self.setStyleSheet("""
+            SmartCalibrationDialog {
+                background-color: #111318;
+                color: #f2f4f8;
+            }
+            QTableWidget {
+                background-color: #1b1e24;
+                alternate-background-color: #22262e;
+                color: #f2f4f8;
+                gridline-color: #454b57;
+                border: 1px solid #454b57;
+                selection-background-color: #315f85;
+                selection-color: #ffffff;
+                font-size: 15px;
+            }
+            QTableWidget::item {
+                background-color: #1b1e24;
+                color: #f2f4f8;
+                padding: 4px;
+            }
+            QTableWidget::item:alternate {
+                background-color: #22262e;
+            }
+            QTableWidget::item:selected {
+                background-color: #315f85;
+                color: #ffffff;
+            }
+            QHeaderView::section {
+                background-color: #292e37;
+                color: #ffffff;
+                border: 1px solid #454b57;
+                padding: 5px;
+                font-size: 15px;
+                font-weight: bold;
+            }
+            QTableCornerButton::section {
+                background-color: #292e37;
+                border: 1px solid #454b57;
+            }
+            QScrollBar:vertical {
+                background: #171a20;
+                width: 20px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #5d6675;
+                min-height: 32px;
+                border-radius: 8px;
+                margin: 2px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+            QPushButton {
+                background-color: #2d333d;
+                color: #ffffff;
+                border: 1px solid #596273;
+                border-radius: 8px;
+                padding: 8px 18px;
+                min-height: 28px;
+                font-size: 15px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #3a4350;
+            }
+            QPushButton:pressed {
+                background-color: #20252d;
+            }
+            QPushButton#resetCalibrationButton {
+                background-color: #8b2f36;
+                border-color: #c05259;
+            }
+            QPushButton#resetCalibrationButton:hover {
+                background-color: #a43a42;
+            }
+        """)
+        self._build()
+
+    def _build(self):
+        from vehicle import datagrab
+        statuses = datagrab.get_smart_calibration_status()
+        layout = QVBoxLayout(self)
+        table = QTableWidget(len(statuses), 5)
+        table.setHorizontalHeaderLabels(["速度層 km/h", "校正係數", "有效樣本", "狀態", "最後更新"])
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().hide()
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setMaximumHeight(155)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        for row, status in enumerate(statuses):
+            updated = time.strftime("%m-%d %H:%M:%S", time.localtime(status["updated_at"])) if status["updated_at"] else "--"
+            values = [status["label"], f"{status['coefficient']:.4f}" if status["coefficient"] is not None else "--", str(status["samples"]), "已成熟" if status["mature"] else "學習中", updated]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if column == 3:
+                    item.setForeground(QColor("#70d98b" if status["mature"] else "#ffc46b"))
+                table.setItem(row, column, item)
+        layout.addWidget(table)
+        layout.addWidget(SmartCalibrationChart(statuses, datagrab.get_speed_correction(), self))
+        buttons = QHBoxLayout()
+        reset = QPushButton("重置學習資料")
+        reset.setObjectName("resetCalibrationButton")
+        close = QPushButton("關閉")
+        reset.clicked.connect(self._reset)
+        close.clicked.connect(self.accept)
+        buttons.addStretch()
+        buttons.addWidget(reset)
+        buttons.addWidget(close)
+        layout.addLayout(buttons)
+
+    def _reset(self):
+        answer = QMessageBox.question(self, "確認重置", "確定要清除所有速度層的學習資料？\n目前顯示模式不會改變。", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            from vehicle import datagrab
+            datagrab.reset_smart_calibration()
+            self.accept()
+            QMessageBox.information(self.parentWidget(), "已重置", "智慧校正資料已清除。")
+
+
+class BackgroundTask(QThread):
+    """執行單一阻塞工作，所有 UI 更新由 result_ready 回主執行緒。"""
+    result_ready = pyqtSignal(object)
+
+    def __init__(self, task, parent=None):
+        super().__init__(parent)
+        self._task = task
+
+    def run(self):
+        try:
+            self.result_ready.emit({'ok': True, 'value': self._task()})
+        except Exception as exc:
+            self.result_ready.emit({'ok': False, 'error': exc})
+
+
 class TurnSignalBar(QWidget):
     """方向燈漸層條 - 使用 QPainter 繪製，避免 CSS 效能問題
     
@@ -102,6 +329,9 @@ class ControlPanel(QWidget):
         # WiFi 狀態
         self.wifi_ssid = None
         self.wifi_signal = 0
+        self.wifi_interface = None
+        self.wifi_ip_address = None
+        self.wifi_view_mode = "status"
         self.speed_sync_mode = "calibrated"  # 速度同步初始模式
         
         # 主佈局
@@ -188,10 +418,13 @@ class ControlPanel(QWidget):
         status_layout.setSpacing(20)
         
         # WiFi 狀態卡片
-        wifi_card = QWidget()
+        wifi_card = ClickableStatusCard()
         wifi_card.setFixedSize(280, 80)
+        wifi_card.setCursor(Qt.CursorShape.PointingHandCursor)
+        wifi_card.setToolTip("點擊切換 Wi-Fi 狀態與 IP 位址")
+        wifi_card.clicked.connect(self.toggle_wifi_view)
         wifi_card.setStyleSheet(f"""
-            QWidget {{
+            ClickableStatusCard {{
                 background: rgba(255, 255, 255, 0.08);
                 border-radius: 12px;
             }}
@@ -329,151 +562,62 @@ class ControlPanel(QWidget):
         self.update_wifi_status()
     
     def update_wifi_status(self):
-        """更新 WiFi 狀態 - 使用 /proc/net/wireless + iw（輕量快速）"""
-        import random
-        
-        # 檢查是否在 Linux 環境
-        if platform.system() != 'Linux':
-            # macOS/Windows: 顯示模擬資料
-            dummy_networks = ["Home-WiFi", "Office-5G", "Starbucks_Free", "iPhone 熱點"]
-            ssid = random.choice(dummy_networks)
-            signal = random.randint(60, 95)
-            
-            self.wifi_ssid = ssid
-            self.wifi_signal = signal
-            self.wifi_status_label.setText(ssid)
-            
-            if signal >= 80:
-                signal_text = "信號極佳"
-                signal_color = "#6f6"
-            elif signal >= 60:
-                signal_text = "信號良好"
-                signal_color = "#6f6"
-            else:
-                signal_text = "信號普通"
-                signal_color = "#fa0"
-            
-            self.wifi_detail_label.setText(signal_text)
-            self.wifi_signal_label.setText(f"{signal}%")
-            self.wifi_signal_label.setStyleSheet(f"""
-                color: {signal_color};
-                font-size: 18px;
-                font-weight: bold;
-                background: transparent;
-            """)
-            return
-        
-        # Linux: 使用 /proc/net/wireless 讀取信號強度（超快，<1ms）
-        try:
-            ssid = None
-            signal = 0
-            interface = None
-            
-            # 1. 從 /proc/net/wireless 讀取信號強度和介面名稱
-            # 格式：Inter-| sta-|   Quality        |   Discarded packets
-            #        face | tus | link level noise |  nwid  crypt   frag  retry   misc
-            #       wlp6s0: 0000   57.  -53.  -256        0      0      0      0    578
-            if os.path.exists('/proc/net/wireless'):
-                with open('/proc/net/wireless', 'r') as f:
-                    lines = f.readlines()
-                    for line in lines[2:]:  # 跳過標題行
-                        line = line.strip()
-                        if ':' in line:
-                            parts = line.split()
-                            if len(parts) >= 3:
-                                interface = parts[0].rstrip(':')
-                                # link quality 通常是 0-70，轉換為百分比
-                                try:
-                                    link_quality = float(parts[2].rstrip('.'))
-                                    signal = min(100, int(link_quality * 100 / 70))
-                                except (ValueError, IndexError):
-                                    signal = 0
-                                break
-            
-            # 2. 使用 iw 取得 SSID（比 iwgetid 更常見，不會觸發掃描）
-            if interface and signal > 0:
-                import subprocess
-                try:
-                    # iw dev <interface> link 可以取得當前連接的 SSID
-                    result = subprocess.run(
-                        ['iw', 'dev', interface, 'link'],
-                        capture_output=True,
-                        text=True,
-                        timeout=1  # 1秒超時
-                    )
-                    if result.returncode == 0:
-                        for line in result.stdout.split('\n'):
-                            line = line.strip()
-                            if line.startswith('SSID:'):
-                                ssid = line[5:].strip()
-                                break
-                except FileNotFoundError:
-                    # iw 不存在，嘗試使用 nmcli（只查詢當前連接，不掃描）
-                    try:
-                        result = subprocess.run(
-                            ['nmcli', '-t', '-f', 'active,ssid', 'dev', 'wifi'],
-                            capture_output=True,
-                            text=True,
-                            timeout=1
-                        )
-                        if result.returncode == 0:
-                            for line in result.stdout.strip().split('\n'):
-                                # 格式: 是:SSID 或 yes:SSID
-                                if line.startswith('是:') or line.lower().startswith('yes:'):
-                                    ssid = line.split(':', 1)[1]
-                                    break
-                    except Exception:
-                        ssid = None
-                except Exception:
-                    ssid = None
-            
-            # 3. 更新 UI
-            if ssid and signal > 0:
-                self.wifi_ssid = ssid
-                self.wifi_signal = signal
-                self.wifi_status_label.setText(ssid)
-                
-                if signal >= 80:
-                    signal_text = "信號極佳"
-                    signal_color = "#6f6"
-                elif signal >= 60:
-                    signal_text = "信號良好"
-                    signal_color = "#6f6"
-                elif signal >= 40:
-                    signal_text = "信號普通"
-                    signal_color = "#fa0"
-                else:
-                    signal_text = "信號較弱"
-                    signal_color = "#f66"
-                
-                self.wifi_detail_label.setText(signal_text)
-                self.wifi_signal_label.setText(f"{signal}%")
-                self.wifi_signal_label.setStyleSheet(f"""
-                    color: {signal_color};
-                    font-size: 16px;
-                    font-weight: bold;
-                    background: transparent;
-                """)
-            else:
-                # 未連線或無法取得
-                self.wifi_ssid = None
-                self.wifi_signal = 0
-                self.wifi_status_label.setText("未連線")
-                self.wifi_detail_label.setText("點擊 WiFi 按鈕進行連線")
-                self.wifi_signal_label.setText("")
-                self.wifi_detail_label.setStyleSheet(f"""
-                    color: {T('DANGER')};
-                    font-size: 14px;
-                    background: transparent;
-                """)
-                
-        except Exception as e:
-            self.wifi_status_label.setText("無法取得狀態")
-            self.wifi_detail_label.setText(str(e)[:30])
-            self.wifi_signal_label.setText("")
-        
-        # 更新「更新」按鈕狀態 (只在有網路時啟用)
+        """要求既有 NetworkMonitor 立即刷新；本方法不執行 subprocess。"""
+        parent = self.parent()
+        monitor = getattr(parent, 'network_monitor', None) if parent is not None else None
+        if monitor is not None:
+            monitor.request_check_now()
         self._update_update_button_state()
+
+    def apply_wifi_status(self, snapshot):
+        """套用背景 worker 取得的 SSID/訊號快照。"""
+        snapshot = snapshot or {}
+        ssid = snapshot.get('ssid')
+        signal = int(snapshot.get('signal') or 0)
+        self.wifi_ssid = ssid
+        self.wifi_signal = signal
+        self.wifi_interface = snapshot.get('interface')
+        self.wifi_ip_address = snapshot.get('ip_address')
+        self._render_wifi_card()
+
+    def toggle_wifi_view(self):
+        """在 SSID/訊號與本機 IP 顯示之間切換。"""
+        self.wifi_view_mode = "ip" if self.wifi_view_mode == "status" else "status"
+        self._render_wifi_card()
+
+    def _render_wifi_card(self):
+        """依目前顯示模式重繪 Wi-Fi 狀態卡。"""
+        ssid = self.wifi_ssid
+        signal = self.wifi_signal
+        if self.wifi_view_mode == "ip":
+            if not ssid:
+                self.wifi_status_label.setText("未連線")
+                self.wifi_detail_label.setText("無可用 IP 位址")
+            else:
+                self.wifi_status_label.setText(self.wifi_ip_address or "取得中...")
+                interface_text = f" · {self.wifi_interface}" if self.wifi_interface else ""
+                self.wifi_detail_label.setText(f"IP 位址{interface_text}")
+            self.wifi_signal_label.setText("")
+            return
+        if not ssid:
+            self.wifi_status_label.setText("未連線")
+            self.wifi_detail_label.setText("點擊 WiFi 按鈕進行連線")
+            self.wifi_signal_label.setText("")
+            return
+        self.wifi_status_label.setText(ssid)
+        if signal >= 80:
+            signal_text, signal_color = "信號極佳", "#6f6"
+        elif signal >= 60:
+            signal_text, signal_color = "信號良好", "#6f6"
+        elif signal >= 40:
+            signal_text, signal_color = "信號普通", "#fa0"
+        else:
+            signal_text, signal_color = "信號較弱", "#f66"
+        self.wifi_detail_label.setText(signal_text)
+        self.wifi_signal_label.setText(f"{signal}%" if signal else "")
+        self.wifi_signal_label.setStyleSheet(
+            f"color: {signal_color}; font-size: 16px; font-weight: bold; background: transparent;"
+        )
     
     def _update_update_button_state(self):
         """根據網路狀態更新「更新」按鈕"""
@@ -609,64 +753,9 @@ class ControlPanel(QWidget):
         return container
     
     def _on_speed_sync_long_press(self, btn):
-        """速度同步按鈕長按：切換速度校正模式"""
+        """速度同步按鈕長按：顯示全時智慧校正狀態。"""
         btn._is_long_press = True
-        
-        try:
-            import datagrab
-            current_enabled = datagrab.is_speed_calibration_enabled()
-            current_val = datagrab.get_speed_correction()
-        except Exception:
-            current_enabled = False
-            current_val = 1.01
-        
-        # 彈出確認對話框
-        from PyQt6.QtWidgets import QMessageBox
-        
-        msg = QMessageBox()
-        
-        if current_enabled:
-            # 已開啟 → 長按 = 存檔並關閉
-            msg.setWindowTitle("💾 儲存速度校正")
-            msg.setText(f"速度校正模式執行中\n\n目前校正係數：{current_val:.4f}\n\n是否儲存並關閉校正模式？")
-            msg.setIcon(QMessageBox.Icon.Question)
-        else:
-            # 未開啟 → 長按 = 開啟校正模式
-            msg.setWindowTitle("🔧 速度校正模式")
-            msg.setText(f"是否啟用速度校正模式？\n\n目前校正係數：{current_val:.4f}\n\n啟用後，系統會根據 GPS 速度\n逐漸修正 OBD 速度係數。\n\n💡 再次長按可手動儲存")
-            msg.setIcon(QMessageBox.Icon.Question)
-        
-        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
-        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-        
-        result = msg.exec()
-        
-        if result == QMessageBox.StandardButton.Yes:
-            try:
-                import datagrab
-                new_state = not current_enabled
-                datagrab.set_speed_calibration_enabled(new_state)
-                
-                # 顯示結果
-                status_msg = QMessageBox()
-                if new_state:
-                    # 開啟校正模式
-                    status_msg.setWindowTitle("🔧 校正模式已啟用")
-                    status_msg.setText(f"✅ 速度校正模式已啟用\n\n目前校正係數：{current_val:.4f}\n\n請在 GPS 訊號良好的情況下行駛，\n系統會自動調整校正值。\n\n💡 完成後長按此按鈕可儲存")
-                    status_msg.setIcon(QMessageBox.Icon.Information)
-                else:
-                    # 關閉並儲存
-                    datagrab.persist_speed_correction()
-                    final_val = datagrab.get_speed_correction()
-                    status_msg.setWindowTitle("💾 校正已儲存")
-                    status_msg.setText(f"✅ 速度校正係數已儲存！\n\n最終校正係數：{final_val:.4f}\n\n校正模式已關閉")
-                    status_msg.setIcon(QMessageBox.Icon.Information)
-                status_msg.setWindowFlags(status_msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-                status_msg.exec()
-                
-            except Exception as e:
-                print(f"[速度校正] 切換失敗: {e}")
+        SmartCalibrationDialog(self).exec()
     
     def adjust_color(self, hex_color, factor):
         """調整顏色亮度"""
@@ -763,7 +852,6 @@ class ControlPanel(QWidget):
     def do_time_sync(self):
         """執行 NTP 時間校正"""
         from PyQt6.QtWidgets import QMessageBox
-        import subprocess
         
         # 檢查網路狀態
         main_window = self.parent()
@@ -775,107 +863,14 @@ class ControlPanel(QWidget):
             msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
             msg.exec()
             return
-        
-        # 更新按鈕狀態為同步中
+
+        worker = getattr(self, '_time_sync_worker', None)
+        if worker is not None and worker.isRunning():
+            return
         self._update_time_button_syncing(True)
-        
-        try:
-            result_text = ""
-            success = False
-            
-            # 嘗試使用 timedatectl (systemd-timesyncd)
-            if os.path.exists('/usr/bin/timedatectl'):
-                print("[時間校正] 使用 timedatectl...")
-                
-                # 啟用 NTP
-                subprocess.run(['sudo', 'timedatectl', 'set-ntp', 'true'], 
-                              capture_output=True, timeout=5)
-                
-                # 重啟 timesyncd 強制同步
-                subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-timesyncd'],
-                              capture_output=True, timeout=10)
-                
-                # 等待同步
-                import time
-                time.sleep(2)
-                
-                # 檢查同步狀態
-                result = subprocess.run(['timedatectl', 'show', '--property=NTPSynchronized'],
-                                       capture_output=True, text=True, timeout=5)
-                
-                if 'NTPSynchronized=yes' in result.stdout:
-                    success = True
-                    result_text = "NTP 同步成功"
-                else:
-                    # 即使沒有顯示同步成功，也可能已經更新
-                    success = True
-                    result_text = "已嘗試 NTP 同步"
-                    
-            # 備用：嘗試使用 ntpdate
-            elif os.path.exists('/usr/sbin/ntpdate'):
-                print("[時間校正] 使用 ntpdate...")
-                result = subprocess.run(
-                    ['sudo', 'ntpdate', '-u', 'pool.ntp.org'],
-                    capture_output=True, text=True, timeout=15
-                )
-                if result.returncode == 0:
-                    success = True
-                    result_text = "NTP 同步成功"
-                else:
-                    # 嘗試備用伺服器
-                    result = subprocess.run(
-                        ['sudo', 'ntpdate', '-u', 'time.google.com'],
-                        capture_output=True, text=True, timeout=15
-                    )
-                    success = result.returncode == 0
-                    result_text = "NTP 同步成功" if success else "同步失敗"
-            else:
-                result_text = "未找到 NTP 工具"
-                success = False
-            
-            # 如果有 RTC，也同步到 RTC
-            if success and os.path.exists('/dev/rtc0'):
-                print("[時間校正] 同步時間到 RTC...")
-                subprocess.run(['sudo', 'hwclock', '-w'], capture_output=True, timeout=5)
-                result_text += "\n已同步到 RTC"
-            
-            # 顯示結果
-            from datetime import datetime
-            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            msg = QMessageBox()
-            if success:
-                msg.setWindowTitle("時間校正完成")
-                msg.setText(f"{result_text}\n\n目前時間：{current_time}")
-                msg.setIcon(QMessageBox.Icon.Information)
-            else:
-                msg.setWindowTitle("時間校正失敗")
-                msg.setText(f"{result_text}\n\n請檢查網路連線後重試。")
-                msg.setIcon(QMessageBox.Icon.Warning)
-            
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            msg.exec()
-            
-            # 更新日期時間顯示
-            self.update_status_info()
-            
-        except subprocess.TimeoutExpired:
-            msg = QMessageBox()
-            msg.setWindowTitle("時間校正逾時")
-            msg.setText("NTP 同步逾時，請檢查網路連線後重試。")
-            msg.setIcon(QMessageBox.Icon.Warning)
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            msg.exec()
-        except Exception as e:
-            msg = QMessageBox()
-            msg.setWindowTitle("時間校正錯誤")
-            msg.setText(f"發生錯誤：{str(e)}")
-            msg.setIcon(QMessageBox.Icon.Critical)
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            msg.exec()
-        finally:
-            # 恢復按鈕狀態
-            self._update_time_button_syncing(False)
+        self._time_sync_worker = BackgroundTask(self._perform_time_sync_task, self)
+        self._time_sync_worker.result_ready.connect(self._on_time_sync_finished)
+        self._time_sync_worker.start()
     
     def _update_time_button_syncing(self, syncing):
         """更新時間按鈕的同步狀態"""
@@ -914,6 +909,55 @@ class ControlPanel(QWidget):
                         background-color: #3367d6;
                     }
                 """)
+
+    @staticmethod
+    def _perform_time_sync_task():
+        import subprocess
+        if os.path.exists('/usr/bin/timedatectl'):
+            subprocess.run(['sudo', 'timedatectl', 'set-ntp', 'true'], capture_output=True, timeout=5)
+            subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-timesyncd'], capture_output=True, timeout=10)
+            time.sleep(2)
+            result = subprocess.run(
+                ['timedatectl', 'show', '--property=NTPSynchronized'],
+                capture_output=True, text=True, timeout=5,
+            )
+            success = True
+            text = "NTP 同步成功" if 'NTPSynchronized=yes' in result.stdout else "已嘗試 NTP 同步"
+        elif os.path.exists('/usr/sbin/ntpdate'):
+            result = subprocess.run(
+                ['sudo', 'ntpdate', '-u', 'pool.ntp.org'],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode != 0:
+                result = subprocess.run(
+                    ['sudo', 'ntpdate', '-u', 'time.google.com'],
+                    capture_output=True, text=True, timeout=15,
+                )
+            success = result.returncode == 0
+            text = "NTP 同步成功" if success else "同步失敗"
+        else:
+            success, text = False, "未找到 NTP 工具"
+        if success and os.path.exists('/dev/rtc0'):
+            subprocess.run(['sudo', 'hwclock', '-w'], capture_output=True, timeout=5)
+            text += "\n已同步到 RTC"
+        return {'success': success, 'message': text}
+
+    def _on_time_sync_finished(self, result):
+        from datetime import datetime
+        self._update_time_button_syncing(False)
+        msg = QMessageBox(self)
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        if result.get('ok'):
+            payload = result['value']
+            msg.setWindowTitle("時間校正完成" if payload['success'] else "時間校正失敗")
+            msg.setIcon(QMessageBox.Icon.Information if payload['success'] else QMessageBox.Icon.Warning)
+            msg.setText(f"{payload['message']}\n\n目前時間：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            msg.setWindowTitle("時間校正錯誤")
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setText(f"發生錯誤：{result['error']}")
+        msg.exec()
+        self.update_status_info()
 
     def cycle_brightness(self):
         """循環切換亮度"""
@@ -1091,7 +1135,7 @@ class ControlPanel(QWidget):
         update_btn = QPushButton("更新（Pull + 重啟）")
         update_btn.setToolTip("執行 git pull 並重新啟動")
         switch_btn = QPushButton("切換分支（僅 Checkout）")
-        switch_btn.setToolTip="僅切換分支，不更新代碼"
+        switch_btn.setToolTip("僅切換分支，不更新代碼")
         cancel_btn = QPushButton("取消")
         
         layout.addWidget(update_btn)
@@ -1115,78 +1159,57 @@ class ControlPanel(QWidget):
             return
         
         do_pull = (result == 1)
-        
-        try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            
-            if do_pull:
-                print(f"[更新] 正在執行 git pull origin {selected_branch}...")
-                result = subprocess.run(
-                    ['git', 'pull', 'origin', selected_branch],
-                    cwd=script_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                action_desc = "更新"
-            else:
-                print(f"[分支] 正在執行 git checkout {selected_branch}...")
-                result = subprocess.run(
-                    ['git', 'checkout', selected_branch],
-                    cwd=script_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                action_desc = "分支切換"
-            
-            if result.returncode != 0:
-                error_msg = result.stderr or result.stdout or "未知錯誤"
-                err_box = QMessageBox()
-                err_box.setWindowTitle(f"{action_desc}失敗")
-                err_box.setText(f"Git {'pull' if do_pull else 'checkout'} 失敗:\n{error_msg}")
-                err_box.setIcon(QMessageBox.Icon.Critical)
-                err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-                err_box.exec()
-                return
-            
-            print(f"[{action_desc}] Git {'pull' if do_pull else 'checkout'} 結果: {result.stdout}")
-            
-            # 顯示成功訊息
-            success_box = QMessageBox()
-            success_box.setWindowTitle(f"{action_desc}完成")
-            success_box.setText(f"已成功{action_desc}！")
-            success_box.setInformativeText(f"{result.stdout}\n\n程式將在 2 秒後重新啟動...")
-            success_box.setIcon(QMessageBox.Icon.Information)
-            success_box.setWindowFlags(success_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            success_box.exec()
-            
-            # 延遲重啟 (給使用者看到訊息)
-            from PyQt6.QtCore import QTimer
-            QTimer.singleShot(2000, lambda: self._restart_application(script_dir))
-            
-        except subprocess.TimeoutExpired:
-            err_box = QMessageBox()
-            err_box.setWindowTitle("更新逾時")
-            err_box.setText("Git pull 執行逾時，請檢查網路連線後重試。")
-            err_box.setIcon(QMessageBox.Icon.Critical)
-            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            err_box.exec()
-        except FileNotFoundError:
-            err_box = QMessageBox()
-            err_box.setWindowTitle("Git 未安裝")
-            err_box.setText("找不到 git 指令，請確認已安裝 Git。")
-            err_box.setIcon(QMessageBox.Icon.Critical)
-            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            err_box.exec()
-        except Exception as e:
-            err_box = QMessageBox()
-            err_box.setWindowTitle("更新錯誤")
-            err_box.setText(f"更新過程發生錯誤:\n{str(e)}")
-            err_box.setIcon(QMessageBox.Icon.Critical)
-            err_box.setWindowFlags(err_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-            err_box.exec()
+
+        worker = getattr(self, '_git_update_worker', None)
+        if worker is not None and worker.isRunning():
+            return
+        repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self._git_update_context = (repo_dir, do_pull)
+        self._git_update_worker = BackgroundTask(
+            lambda: self._perform_git_task(repo_dir, selected_branch, do_pull),
+            self,
+        )
+        self._git_update_worker.result_ready.connect(self._on_git_task_finished)
+        self._git_update_worker.start()
     
+    @staticmethod
+    def _perform_git_task(repo_dir, selected_branch, do_pull):
+        import subprocess
+        command = (
+            ['git', 'pull', 'origin', selected_branch]
+            if do_pull else
+            ['git', 'checkout', selected_branch]
+        )
+        result = subprocess.run(
+            command, cwd=repo_dir, capture_output=True, text=True, timeout=30,
+        )
+        return {
+            'success': result.returncode == 0,
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'action': "更新" if do_pull else "分支切換",
+        }
+
+    def _on_git_task_finished(self, result):
+        repo_dir, _ = self._git_update_context
+        if not result.get('ok'):
+            QMessageBox.critical(self, "更新錯誤", f"更新過程發生錯誤：\n{result['error']}")
+            return
+        payload = result['value']
+        if not payload['success']:
+            QMessageBox.critical(
+                self,
+                f"{payload['action']}失敗",
+                payload['stderr'] or payload['stdout'] or "未知錯誤",
+            )
+            return
+        QMessageBox.information(
+            self,
+            f"{payload['action']}完成",
+            f"已成功{payload['action']}！\n\n程式將在 2 秒後重新啟動。",
+        )
+        QTimer.singleShot(2000, lambda: self._restart_application(repo_dir))
+
     def on_accent_color_changed(self, color_hex: str):
         """當強調色改變時通知 ControlPanel；實際 UI 刷新由集中主題邏輯處理。"""
         # 保留此 slot 以維持既有 signal/slot 相容性。
@@ -1577,6 +1600,18 @@ class ControlPanel(QWidget):
         
         dialog.exec()
     
+    def _prepare_dashboard_exit(self):
+        """讓 Dashboard 在任何手動退出前同步保存並停止背景資源。"""
+        parent = self.parent()
+        if parent is not None and hasattr(parent, 'prepare_for_exit'):
+            parent.prepare_for_exit()
+
+    def _execute_system_power_action(self, command):
+        """保存資料後才交給系統 reboot/shutdown。"""
+        import subprocess
+        self._prepare_dashboard_exit()
+        subprocess.run(command, check=False)
+
     def _power_action(self, action, dialog):
         """執行電源操作"""
         from PyQt6.QtWidgets import QMessageBox, QApplication
@@ -1637,9 +1672,9 @@ class ControlPanel(QWidget):
                     pass
                 self._show_power_countdown("關閉程式", 1)
                 def force_exit():
-                    print("[電源] 強制退出應用程式...")
-                    import os
-                    os._exit(0)
+                    print("[電源] 正在安全退出應用程式...")
+                    self._prepare_dashboard_exit()
+                    QApplication.quit()
                 QTimer.singleShot(1000, force_exit)
             # 取消則不做任何事
             return
@@ -1671,7 +1706,7 @@ class ControlPanel(QWidget):
                 if is_linux:
                     print("[電源] 準備系統重啟...")
                     self._show_power_countdown("系統重啟", 3)
-                    QTimer.singleShot(3000, lambda: subprocess.run(['sudo', 'reboot']))
+                    QTimer.singleShot(3000, lambda: self._execute_system_power_action(['sudo', 'reboot']))
                 else:
                     # macOS 模擬
                     info_box = QMessageBox()
@@ -1685,7 +1720,7 @@ class ControlPanel(QWidget):
                 if is_linux:
                     print("[電源] 準備關機...")
                     self._show_power_countdown("關機", 3)
-                    QTimer.singleShot(3000, lambda: subprocess.run(['sudo', 'shutdown', '-h', 'now']))
+                    QTimer.singleShot(3000, lambda: self._execute_system_power_action(['sudo', 'shutdown', '-h', 'now']))
                 else:
                     # macOS 模擬
                     info_box = QMessageBox()
@@ -1737,6 +1772,8 @@ class ControlPanel(QWidget):
         import subprocess
         import sys
         import os
+
+        self._prepare_dashboard_exit()
         
         python_exe = sys.executable
         env = os.environ.copy()

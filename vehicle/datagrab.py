@@ -6,6 +6,10 @@ import platform
 import subprocess
 import os
 import json
+import tempfile
+from collections import deque
+from statistics import median
+from types import MappingProxyType
 import can
 import cantools
 import serial.tools.list_ports
@@ -15,6 +19,7 @@ from rich.align import Align
 
 # 硬體初始化模組（RPi 啟動時的硬體重試檢測）
 from vehicle.hardware_init import initialize_hardware, is_raspberry_pi as hw_is_raspberry_pi, HardwareStatus
+from vehicle.can_config import CAN_FILTERS, configured_slcan_port, slcan_debug_allowed
 
 # 設定入口點環境變數 (供程式重啟時判斷)
 os.environ['DASHBOARD_ENTRY'] = 'datagrab'
@@ -48,7 +53,7 @@ class WorkerSignals(QObject):
     必須繼承自 QObject 才能使用 pyqtSignal。
     """
     update_rpm = pyqtSignal(float)   # 發送轉速 (float)
-    update_speed = pyqtSignal(float) # 發送車速 (float)
+    update_speed = pyqtSignal(float) # 發送依目前模式處理後的 OBD 顯示車速 (float)
     update_temp = pyqtSignal(float)  # 發送水溫百分比 (float)
     update_fuel = pyqtSignal(float)  # 發送油量百分比 (float)
     update_gear = pyqtSignal(str)    # 發送檔位 (str)
@@ -90,8 +95,24 @@ cached_rpm = 0.0
 cached_speed = 0.0
 FUEL_DENSITY = 0.775  # 汽油密度 (g/mL)
 
-# 校正會話控制（僅透過 UI 長按手動啟用）
-calibration_enabled = False  # 僅手動啟用時才允許自動校正
+# OBD 車速由 receiver 執行緒更新、Dashboard 的物理積分器讀取。
+# UI signal 會在整數速度不變時節流，因此不能拿 UI 更新時間判斷資料是否失聯。
+_obd_speed_snapshot_lock = threading.Lock()
+_obd_speed_snapshot = {"raw_speed": 0.0, "updated_at": 0.0}
+
+
+def update_obd_speed_snapshot(raw_speed: float, updated_at: float = None):
+    """記錄每一筆 PID 0D 回應，供里程積分判斷資料新鮮度。"""
+    with _obd_speed_snapshot_lock:
+        _obd_speed_snapshot["raw_speed"] = max(0.0, float(raw_speed))
+        _obd_speed_snapshot["updated_at"] = time.time() if updated_at is None else float(updated_at)
+
+
+def get_obd_speed_snapshot():
+    """回傳 (raw_speed, updated_at) 的一致快照。"""
+    with _obd_speed_snapshot_lock:
+        return _obd_speed_snapshot["raw_speed"], _obd_speed_snapshot["updated_at"]
+
 # 速度校正設定
 SPEED_CALIBRATION_DIR = os.path.join(os.path.expanduser("~"), ".config", "qtdashboard")
 SPEED_CALIBRATION_FILE = os.path.join(SPEED_CALIBRATION_DIR, "speed_calibration.json")
@@ -100,23 +121,71 @@ SPEED_CORRECTION_MIN = 0.7
 SPEED_CORRECTION_MAX = 1.3
 _speed_correction_lock = threading.Lock()
 _speed_correction_value = SPEED_CORRECTION_DEFAULT
+SMART_BAND_STARTS = tuple(range(20, 140, 10))
+SMART_MIN_SAMPLES = 30
+_smart_calibration_lock = threading.Lock()
+_smart_bands = {}
+_smart_history = deque(maxlen=80)
+_smart_last_sample_at = 0.0
+_smart_last_persist_at = 0.0
+_smart_dirty = False
 
-def _load_speed_correction(default=SPEED_CORRECTION_DEFAULT):
-    """讀取速度校正係數"""
-    global _speed_correction_value
+def _empty_smart_bands():
+    return {
+        start: {"coefficient": None, "samples": 0, "updated_at": 0.0, "ratios": []}
+        for start in SMART_BAND_STARTS
+    }
+
+_smart_bands = _empty_smart_bands()
+
+def _band_start(speed):
+    if speed < 20:
+        return None
+    return min(130, int(speed // 10) * 10)
+
+def _band_label(start):
+    return "130+" if start == 130 else f"{start}–{start + 10}"
+
+def _load_speed_settings(default=SPEED_CORRECTION_DEFAULT, config_path=None):
+    """讀取速度校正係數與最後使用的顯示模式。"""
+    global _speed_correction_value, speed_sync_mode, gps_speed_mode, _smart_bands
     value = default
+    mode = "calibrated"
+    path = config_path or SPEED_CALIBRATION_FILE
+    _smart_bands = _empty_smart_bands()
     try:
-        with open(SPEED_CALIBRATION_FILE, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             payload = json.load(f)
             candidate = float(payload.get("speed_correction", value))
             candidate = max(SPEED_CORRECTION_MIN, min(SPEED_CORRECTION_MAX, candidate))
             value = candidate
+            candidate_mode = payload.get("speed_sync_mode", mode)
+            if candidate_mode in {"calibrated", "fixed", "gps"}:
+                mode = candidate_mode
+            loaded_bands = _empty_smart_bands()
+            smart = payload.get("smart_calibration", {})
+            for key, item in smart.get("bands", {}).items():
+                start = int(key)
+                if start not in loaded_bands or not isinstance(item, dict):
+                    continue
+                coefficient = item.get("coefficient")
+                if coefficient is not None:
+                    coefficient = max(SPEED_CORRECTION_MIN, min(SPEED_CORRECTION_MAX, float(coefficient)))
+                loaded_bands[start].update({
+                    "coefficient": coefficient,
+                    "samples": max(0, int(item.get("samples", 0))),
+                    "updated_at": max(0.0, float(item.get("updated_at", 0.0))),
+                    "ratios": [],
+                })
+            _smart_bands = loaded_bands
     except FileNotFoundError:
         pass
     except Exception as e:
         logger.warning(f"讀取速度校正檔失敗，使用預設值: {e}")
     _speed_correction_value = value
-    return value
+    speed_sync_mode = mode
+    gps_speed_mode = (mode == "gps")
+    return value, mode
 
 def get_speed_correction():
     """取得目前速度校正係數"""
@@ -133,31 +202,179 @@ def set_speed_correction(new_value, persist=False):
         persist_speed_correction()
     return clamped
 
-def persist_speed_correction():
-    """將目前速度校正係數寫入磁碟"""
+def persist_speed_settings(config_path=None):
+    """將目前速度校正係數與顯示模式寫入磁碟。"""
     value = get_speed_correction()
+    path = config_path or SPEED_CALIBRATION_FILE
+    global _smart_dirty, _smart_last_persist_at
+    temp_path = None
     try:
-        os.makedirs(SPEED_CALIBRATION_DIR, exist_ok=True)
-        with open(SPEED_CALIBRATION_FILE, "w", encoding="utf-8") as f:
-            json.dump({"speed_correction": value, "updated_at": time.time()}, f)
+        directory = os.path.dirname(path) or "."
+        os.makedirs(directory, exist_ok=True)
+        with _smart_calibration_lock:
+            bands_payload = {
+                str(start): {
+                    "coefficient": state["coefficient"],
+                    "samples": state["samples"],
+                    "updated_at": state["updated_at"],
+                }
+                for start, state in _smart_bands.items()
+            }
+        payload = {
+            "speed_correction": value,
+            "speed_sync_mode": speed_sync_mode,
+            "updated_at": time.time(),
+            "smart_calibration": {"version": 1, "bands": bands_payload},
+        }
+        fd, temp_path = tempfile.mkstemp(prefix="speed_calibration.", suffix=".tmp", dir=directory)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
             f.flush()
-            os.fsync(f.fileno())  # 確保寫入磁碟
+            os.fsync(f.fileno())
+        os.replace(temp_path, path)
+        _smart_dirty = False
+        _smart_last_persist_at = time.time()
         logger.info(f"速度校正係數已儲存: {value:.4f}")
     except Exception as e:
         logger.warning(f"寫入速度校正檔失敗: {e}")
+        if temp_path:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
 
-# 初始化校正係數
-_load_speed_correction()
+def persist_speed_correction():
+    """向後相容：儲存完整速度設定。"""
+    persist_speed_settings()
+
+# 初始化校正係數與顯示模式
+_load_speed_settings()
 
 def is_speed_calibration_enabled():
-    return calibration_enabled
+    """向後相容：智慧校正現在永久啟用。"""
+    return True
 
 def set_speed_calibration_enabled(enabled: bool):
-    global calibration_enabled
-    calibration_enabled = bool(enabled)
-    logger.info(f"速度校正模式 {'啟用' if calibration_enabled else '停用'}")
+    logger.info("智慧速度校正為全時啟用，忽略啟停請求: %s", enabled)
 
-def set_speed_sync_mode(mode: str):
+def get_speed_sync_mode():
+    return speed_sync_mode
+
+def calculate_obd_display_speed(smoothed_speed, mode=None):
+    """將 OBD 平滑速度轉換為目前模式的顯示速度。"""
+    selected_mode = mode or speed_sync_mode
+    speed = max(0.0, float(smoothed_speed))
+    if selected_mode == "fixed":
+        return speed * 1.05 + 0.8
+    coefficient, _ = get_smart_speed_correction(speed)
+    return speed * coefficient
+
+def get_smart_speed_correction(speed):
+    """回傳 (係數, 是否來自成熟分層)，成熟層之間線性插值。"""
+    target = max(0.0, float(speed))
+    with _smart_calibration_lock:
+        mature = [
+            (start + (5 if start < 130 else 5), state["coefficient"])
+            for start, state in _smart_bands.items()
+            if state["coefficient"] is not None and state["samples"] >= SMART_MIN_SAMPLES
+        ]
+    if not mature:
+        return get_speed_correction(), False
+    mature.sort()
+    if target <= mature[0][0]:
+        return mature[0][1], True
+    if target >= mature[-1][0]:
+        return mature[-1][1], True
+    for (left_speed, left), (right_speed, right) in zip(mature, mature[1:]):
+        if left_speed <= target <= right_speed:
+            weight = (target - left_speed) / (right_speed - left_speed)
+            return left + (right - left) * weight, True
+    return get_speed_correction(), False
+
+def submit_smart_calibration_sample(obd_speed, obd_timestamp, gps_speed, gps_timestamp, quality, now=None):
+    """提交同步車速樣本；回傳本次是否已納入學習。"""
+    global _smart_last_sample_at, _smart_dirty
+    now = time.time() if now is None else float(now)
+    try:
+        obd_speed = float(obd_speed)
+        gps_speed = float(gps_speed)
+        quality_age = now - float(quality.get("timestamp", 0.0))
+        valid_quality = (
+            quality.get("rmc_valid") is True
+            and int(quality.get("fix_quality", 0)) >= 1
+            and int(quality.get("satellites", 0)) >= 6
+            and float(quality.get("hdop", 99.0)) <= 1.5
+            and 0 <= quality_age <= 2.0
+            and 0 <= now - float(quality.get("rmc_timestamp", 0.0)) <= 2.0
+        )
+    except (TypeError, ValueError, AttributeError):
+        return False
+    if not valid_quality or obd_speed < 20 or abs(float(obd_timestamp) - float(gps_timestamp)) > 0.75:
+        return False
+    if abs(gps_speed - obd_speed) > 15:
+        return False
+    ratio = gps_speed / max(obd_speed, 0.1)
+    if not SPEED_CORRECTION_MIN <= ratio <= SPEED_CORRECTION_MAX:
+        return False
+    with _smart_calibration_lock:
+        _smart_history.append((now, obd_speed, gps_speed))
+        recent = [item for item in _smart_history if now - item[0] <= 4.0]
+        if len(recent) < 8 or recent[-1][0] - recent[0][0] < 3.0:
+            return False
+        if max(x[1] for x in recent) - min(x[1] for x in recent) > 3.0:
+            return False
+        if max(x[2] for x in recent) - min(x[2] for x in recent) > 3.0:
+            return False
+        if now - _smart_last_sample_at < 1.0:
+            return False
+        start = _band_start(gps_speed)
+        if start is None:
+            return False
+        state = _smart_bands[start]
+        ratios = state["ratios"]
+        if len(ratios) >= 5:
+            center = median(ratios[-15:])
+            if abs(ratio - center) > 0.03:
+                return False
+        ratios.append(ratio)
+        if len(ratios) > 30:
+            del ratios[:-30]
+        robust_ratio = median(ratios)
+        previous = state["coefficient"]
+        state["coefficient"] = robust_ratio if previous is None else previous * 0.95 + robust_ratio * 0.05
+        state["samples"] += 1
+        state["updated_at"] = now
+        _smart_last_sample_at = now
+        _smart_dirty = True
+    maybe_persist_smart_calibration(now)
+    return True
+
+def maybe_persist_smart_calibration(now=None):
+    now = time.time() if now is None else float(now)
+    if _smart_dirty and now - _smart_last_persist_at >= 60.0:
+        persist_speed_settings()
+
+def get_smart_calibration_status():
+    with _smart_calibration_lock:
+        return tuple(MappingProxyType({
+            "start": start,
+            "label": _band_label(start),
+            "coefficient": state["coefficient"],
+            "samples": state["samples"],
+            "mature": state["samples"] >= SMART_MIN_SAMPLES,
+            "updated_at": state["updated_at"],
+        }) for start, state in sorted(_smart_bands.items()))
+
+def reset_smart_calibration():
+    global _smart_bands, _smart_dirty, _smart_last_sample_at
+    with _smart_calibration_lock:
+        _smart_bands = _empty_smart_bands()
+        _smart_history.clear()
+        _smart_last_sample_at = 0.0
+        _smart_dirty = True
+    persist_speed_settings()
+
+def set_speed_sync_mode(mode: str, persist=False):
     """設定速度同步模式，並同步 gps_speed_mode 旗標"""
     global speed_sync_mode, gps_speed_mode
     allowed = {"calibrated", "fixed", "gps"}
@@ -166,8 +383,15 @@ def set_speed_sync_mode(mode: str):
         return speed_sync_mode
     speed_sync_mode = mode
     gps_speed_mode = (mode == "gps")
+    if persist:
+        persist_speed_settings()
     logger.info(f"速度模式切換為 {mode}，gps_speed_mode={gps_speed_mode}")
     return speed_sync_mode
+
+
+def should_emit_gear_update(gear_str: str, last_emitted_gear_str: str) -> bool:
+    """只有檔位實際變化時才需要通知 UI。"""
+    return gear_str != last_emitted_gear_str
 
 
 def quick_read_gear(bus, timeout=1.0):
@@ -310,12 +534,13 @@ def setup_socketcan_interface(interface='can0', bitrate=500000):
         return False
 
 
-def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0):
+def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0,
+                 allow_slcan=None, slcan_port=None):
     """
     初始化 CAN Bus 連線
     優先順序：
-    1. Linux: SocketCAN (如果有可用介面)
-    2. 所有平台: SLCAN (USB CAN adapter)
+    1. Linux/RPi: SocketCAN（can0 優先）
+    2. macOS/Windows debug: SLCAN (USB CAN adapter)
     
     Args:
         bitrate: CAN Bus 速率
@@ -327,17 +552,9 @@ def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0):
     bus = None
     interface_type = None
     
-    # === CAN 過濾器：只接收我們需要的 ID ===
-    # 這可以大幅減少 CPU 負擔，特別是在高流量 CAN Bus 上
-    can_filters = [
-        {"can_id": 0x7E8, "can_mask": 0x7FF},  # OBD ECU 回應
-        {"can_id": 0x7E9, "can_mask": 0x7FF},  # OBD TCM 回應
-        {"can_id": 0x340, "can_mask": 0x7FF},  # ENGINE_RPM1 (檔位)
-        {"can_id": 0x335, "can_mask": 0x7FF},  # THROTTLE_STATUS (油量、巡航)
-        {"can_id": 0x38A, "can_mask": 0x7FF},  # SPEED_FL (車速)
-        {"can_id": 0x410, "can_mask": 0x7FF},  # CONSOLE_STATUS (方向燈撥桿)
-        {"can_id": 0x420, "can_mask": 0x7FF},  # BODY_ECU_STATUS (方向燈、門狀態)
-    ]
+    can_filters = CAN_FILTERS
+    if allow_slcan is None:
+        allow_slcan = slcan_debug_allowed()
     
     for attempt in range(max_retries):
         if attempt > 0:
@@ -349,6 +566,7 @@ def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0):
         if platform.system() == 'Linux':
             console.print("[cyan]偵測 SocketCAN 介面...[/cyan]")
             socketcan_interfaces = detect_socketcan_interfaces()
+            socketcan_interfaces.sort(key=lambda item: (item[0] != 'can0', item[0]))
             
             if socketcan_interfaces:
                 for iface, status in socketcan_interfaces:
@@ -382,10 +600,13 @@ def init_can_bus(bitrate=500000, max_retries=3, retry_delay=2.0):
             else:
                 console.print("  [yellow]未發現 SocketCAN 介面[/yellow]")
         
-        # === 2. Fallback 到 SLCAN ===
+        # === 2. Desktop debug fallback 到 SLCAN ===
+        if not allow_slcan:
+            logger.info("Linux/RPi production policy: skip SLCAN serial probing")
+            continue
         console.print("[cyan]嘗試 SLCAN 模式...[/cyan]")
         
-        port = select_serial_port()
+        port = slcan_port or configured_slcan_port() or select_serial_port()
         if not port:
             console.print("[red]未找到可用的 CAN 裝置[/red]")
             # 繼續下一次重試
@@ -439,22 +660,31 @@ class BusManager:
         self._bus = bus
         self.interface_type = interface_type
         self._reconnecting = False
+        self._stop_event = threading.Event()
+        self._reconnect_thread = None
 
     def get(self):
         """取得現行 bus；斷線重連期間回傳 None"""
-        return self._bus
+        with self._lock:
+            return self._bus
 
     def reconnect(self):
-        """關閉死掉的 bus 並重建連線（阻塞呼叫端執行緒直到成功或 stop_threads）。
-
-        若另一條執行緒已在重連，直接返回；呼叫端應改為輪詢 get()。
-        """
+        """非阻塞要求背景重連；receiver/OBD thread 立即返回。"""
         with self._lock:
-            if self._reconnecting:
-                return
+            if self._reconnecting or self._stop_event.is_set():
+                return False
             self._reconnecting = True
             dead_bus, self._bus = self._bus, None
+            self._reconnect_thread = threading.Thread(
+                target=self._reconnect_loop,
+                args=(dead_bus,),
+                daemon=True,
+                name="CAN-Reconnect",
+            )
+            self._reconnect_thread.start()
+        return True
 
+    def _reconnect_loop(self, dead_bus):
         try:
             if dead_bus is not None:
                 try:
@@ -462,17 +692,22 @@ class BusManager:
                 except Exception:
                     pass
 
-            while not stop_threads:
-                logger.warning(f"CAN Bus 斷線，{self.RECONNECT_INTERVAL:.0f} 秒後嘗試重連...")
-                time.sleep(self.RECONNECT_INTERVAL)
-                if stop_threads:
-                    return
+            while not stop_threads and not self._stop_event.is_set():
+                logger.warning("CAN Bus 未連線，嘗試在背景重建...")
                 new_bus, interface_type = init_can_bus(max_retries=1)
                 if new_bus is not None:
                     with self._lock:
+                        if self._stop_event.is_set():
+                            try:
+                                new_bus.shutdown()
+                            except Exception:
+                                pass
+                            return
                         self._bus = new_bus
                         self.interface_type = interface_type
                     logger.info(f"CAN Bus 重連成功: {interface_type}")
+                    return
+                if self._stop_event.wait(self.RECONNECT_INTERVAL):
                     return
         finally:
             with self._lock:
@@ -480,6 +715,7 @@ class BusManager:
 
     def shutdown(self):
         """關閉現行 bus（程式結束時呼叫）"""
+        self._stop_event.set()
         with self._lock:
             bus, self._bus = self._bus, None
         if bus is not None:
@@ -487,6 +723,9 @@ class BusManager:
                 bus.shutdown()
             except Exception:
                 pass
+        thread = self._reconnect_thread
+        if thread is not None and thread is not threading.current_thread() and thread.is_alive():
+            thread.join(timeout=self.RECONNECT_INTERVAL + 1)
 
 
 # 以 bus 物件為 key 快取 manager：receiver 與 obd_query 傳入同一個 raw bus
@@ -509,17 +748,8 @@ def ensure_bus_manager(bus_or_manager):
 
 
 def select_serial_port():
-    import glob
-    
-    # 自動偵測的 serial ports
+    """選擇 desktop SLCAN debug port；非互動環境絕不等待輸入。"""
     ports = list(serial.tools.list_ports.comports())
-    
-    # 手動搜尋虛擬 serial ports (macOS/Linux)
-    virtual_ports = []
-    for pattern in ['/dev/ttys*', '/dev/pts/*', '/dev/ttyUSB*', '/dev/ttyACM*']:
-        virtual_ports.extend(glob.glob(pattern))
-    
-    # 合併所有可用的 ports
     all_ports = []
     canable_port = None  # 記錄 CANable 裝置
     
@@ -529,11 +759,6 @@ def select_serial_port():
         if 'canable' in p.description.lower():
             canable_port = p.device
             logger.info(f"偵測到 CANable 裝置: {p.device} - {p.description}")
-    
-    for vp in virtual_ports:
-        if not any(vp == p[0] for p in all_ports):  # 避免重複
-            all_ports.append((vp, "Virtual Serial Port"))
-    
     if not all_ports:
         console.print("[red]未找到任何 Serial 裝置！[/red]")
         console.print("[yellow]提示: 如要測試，請先建立虛擬 port 對：[/yellow]")
@@ -560,6 +785,10 @@ def select_serial_port():
         console.print(f"[green]自動選擇唯一裝置: {all_ports[0][0]}[/green]")
         return all_ports[0][0]
     
+    if not sys.stdin.isatty():
+        logger.warning("多個 serial port 且未指定 QTDASHBOARD_SLCAN_PORT，略過 SLCAN")
+        return None
+
     choice = console.input("請輸入裝置編號或路徑 [0]: ").strip()
     
     # 檢查是否為直接輸入路徑
@@ -603,7 +832,7 @@ def unified_receiver(bus, db, signals):
     # 速度平滑參數 (OBD)
     current_speed_smoothed = 0.0
     speed_alpha = 0.3  # 速度平滑係數
-    last_obd_speed_int = None  # OBD 速度緩存
+    last_obd_speed_key = None  # (模式, 整數速度) 緩存
     
     # 油量平滑演算法參數
     # 使用移動平均 + 變化率限制，避免浮動
@@ -617,6 +846,7 @@ def unified_receiver(bus, db, signals):
     
     # 檔位切換狀態追蹤
     last_gear_str = None
+    last_emitted_gear_str = None
     last_gear_change_time = 0
     
     # === RPI4 優化：狀態緩存，只在變化時 emit ===
@@ -727,6 +957,8 @@ def unified_receiver(bus, db, signals):
                         if len(msg.data) < 4:
                             continue
                         raw_speed = msg.data[3]  # 單位: km/h
+                        speed_received_at = time.time()
+                        update_obd_speed_snapshot(raw_speed, speed_received_at)
                         
                         # 平滑處理
                         if current_speed_smoothed == 0:
@@ -740,20 +972,16 @@ def unified_receiver(bus, db, signals):
                         
                         data_store["OBD"]["speed"] = raw_speed
                         data_store["OBD"]["speed_smoothed"] = current_speed_smoothed
-                        data_store["OBD"]["last_update"] = time.time()
+                        data_store["OBD"]["last_update"] = speed_received_at
                         
                         # 套用校正係數後更新 UI（依據速度模式）
                         mode = speed_sync_mode
-                        if mode == "fixed":
-                            speed_correction = 1.05
-                            corrected_speed = current_speed_smoothed * speed_correction + 0.8
-                        else:
-                            speed_correction = get_speed_correction()
-                            corrected_speed = current_speed_smoothed * speed_correction
+                        corrected_speed = calculate_obd_display_speed(current_speed_smoothed, mode)
                         speed_int = int(corrected_speed)
-                        if last_obd_speed_int is None or abs(speed_int - last_obd_speed_int) >= 1:
+                        speed_key = (mode, speed_int)
+                        if last_obd_speed_key is None or mode != last_obd_speed_key[0] or abs(speed_int - last_obd_speed_key[1]) >= 1:
                             signals.update_speed.emit(corrected_speed)
-                            last_obd_speed_int = speed_int
+                            last_obd_speed_key = speed_key
                     
                     # PID 05 (Coolant Temp) - 格式: [03, 41, 05, Temp, ...]
                     elif pid == 0x05 and msg.arbitration_id == 0x7E8:
@@ -857,8 +1085,10 @@ def unified_receiver(bus, db, signals):
                     # 記錄當前檔位供下次使用
                     last_gear_str = gear_str
                     
-                    # 更新前端檔位顯示
-                    signals.update_gear.emit(gear_str)
+                    # 更新前端檔位顯示：0x340 可能高頻重複送同一檔位，只在變化時 emit
+                    if should_emit_gear_update(gear_str, last_emitted_gear_str):
+                        signals.update_gear.emit(gear_str)
+                        last_emitted_gear_str = gear_str
                     
                     # [已移除] 複雜的 CAN RPM 解析邏輯
                     # 由於 Luxgen M7 的 RPM 訊號在 D/R 檔位使用了特殊的 Base+Delta 編碼，
@@ -1383,46 +1613,33 @@ def main():
         # === 設定資料來源回調 ===
         def setup_can_data_source(dashboard):
             """設定 CAN Bus 資料來源 - 在 dashboard 準備好後呼叫"""
+            global stop_threads
             
             # 如果是 RPi 環境，此時 state.bus 應該已經由 hardware_init_with_gui 設定好
             # 如果是開發環境，state.bus 在上面已經初始化
             
             if state.bus is None:
-                # CAN Bus 未初始化 - 在 RPi 環境下顯示 "--" 而不是退出
-                if hw_is_raspberry_pi():
-                    logger.warning("CAN Bus 未初始化，儀表板將顯示 '--'")
-                    console.print("[yellow]⚠️  CAN Bus 未連接，儀表板將顯示 '--'[/yellow]")
-                    console.print("[yellow]   儀表板仍正常運行，等待 CAN 設備...[/yellow]")
-                    # 不設定資料來源，Dashboard 會顯示預設值 "--"
-                    return None
-                else:
-                    logger.error("CAN Bus 未初始化，無法設定資料來源")
-                    return None
+                logger.warning("CAN Bus 未初始化，背景將持續等待介面出現")
+                console.print("[yellow]⚠️ CAN Bus 未連接，儀表板將等待 SocketCAN[/yellow]")
             
-            # 連接信號到 Dashboard
-            state.signals.update_rpm.connect(dashboard.set_rpm)
-            state.signals.update_speed.connect(dashboard.set_speed)
-            state.signals.update_temp.connect(dashboard.set_temperature)
-            state.signals.update_obd_batch.connect(dashboard.set_obd_batch)
-            state.signals.update_fuel.connect(dashboard.set_fuel)
-            state.signals.update_gear.connect(dashboard.set_gear)
-            state.signals.update_turn_signal.connect(dashboard.set_turn_signal)
-            state.signals.update_door_status.connect(dashboard.set_door_status)
-            state.signals.update_turbo.connect(dashboard.set_turbo)
-            state.signals.update_battery.connect(dashboard.set_battery)
-            state.signals.update_fuel_consumption.connect(dashboard.set_fuel_consumption)
+            # 連接信號到 Dashboard（WorkerSignals 直接接到最終 slot / signal）
+            dashboard.connect_worker_signals(state.signals)
+            stop_threads = False
+            bus_manager = ensure_bus_manager(state.bus)
+            if state.bus is None:
+                bus_manager.reconnect()
             
             # 啟動背景執行緒
             logger.info("正在啟動背景執行緒...")
             t_receiver = threading.Thread(
                 target=unified_receiver, 
-                args=(state.bus, state.db, state.signals), 
+                args=(bus_manager, state.db, state.signals),
                 daemon=True, 
                 name="CAN-Receiver"
             )
             t_query = threading.Thread(
                 target=obd_query, 
-                args=(state.bus, state.signals), 
+                args=(bus_manager, state.signals),
                 daemon=True, 
                 name="OBD-Query"
             )
@@ -1437,9 +1654,9 @@ def main():
                 global stop_threads
                 logger.info("正在關閉系統...")
                 stop_threads = True
-                if state.bus:
-                    # 經 BusManager 關閉：重連後現行 bus 可能已不是啟動時那一個
-                    ensure_bus_manager(state.bus).shutdown()
+                bus_manager.shutdown()
+                t_receiver.join(timeout=2)
+                t_query.join(timeout=2)
                 console.print("[green]程式已安全結束[/green]")
             
             return cleanup

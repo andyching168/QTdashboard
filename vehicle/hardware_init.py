@@ -2,7 +2,7 @@
 硬體初始化模組 - RPi 啟動時的硬體檢測與重試機制
 
 在樹莓派上啟動時，會持續檢測以下硬體：
-- CAN Bus (SocketCAN 或 SLCAN)
+- CAN Bus (僅 SocketCAN；SLCAN 只供 macOS/Windows 除錯)
 - GPS 模組 (Serial)
 - GPIO 按鈕 (gpiozero)
 
@@ -146,95 +146,26 @@ class HardwareInitializer:
         self._stop_requested = True
     
     def _check_can(self) -> bool:
-        """
-        檢測 CAN Bus（簡化版）
-        
-        優先順序：
-        1. 嘗試 SocketCAN can0（最常見的設定）
-        2. 嘗試 SLCAN（掃描 USB 串口）
-        
-        Returns:
-            bool: True 如果 CAN Bus 可用
-        """
+        """透過與執行期重連相同的 connector 檢測 CAN Bus。"""
         try:
-            import can
-            import subprocess
-            
-            # === 0. 嘗試啟動 CAN 介面（如果存在的話）===
-            if platform.system() == 'Linux':
-                try:
-                    # 檢查介面是否存在
-                    result = subprocess.run(
-                        ['ip', '-details', 'link', 'show', 'can0'],
-                        capture_output=True, text=True, timeout=2
-                    )
-                    if result.returncode == 0 and 'can0' in result.stdout:
-                        # 介面存在但可能沒有啟動，嘗試啟動它
-                        subprocess.run(
-                            ['sudo', 'ip', 'link', 'set', 'can0', 'up', 'type', 'can', 
-                             'bitrate', str(self.CAN_BITRATE)],
-                            capture_output=True, timeout=5
-                        )
-                        logger.info("CAN 介面 can0 已啟動")
-                except Exception as e:
-                    logger.debug(f"嘗試啟動 CAN 介面失敗: {e}")
-            
-            # === 1. 直接嘗試 SocketCAN can0 ===
-            if platform.system() == 'Linux':
-                try:
-                    bus = can.interface.Bus(
-                        interface='socketcan',
-                        channel='can0',
-                        bitrate=self.CAN_BITRATE,
-                        receive_own_messages=False
-                    )
-                    self._can_bus = bus
-                    self._status.can_interface = "SocketCAN (can0)"
-                    self._status.can_ready = True
-                    self._status.can_error = ""
-                    logger.info("CAN Bus 連接成功: SocketCAN can0")
-                    return True
-                except Exception as e:
-                    logger.debug(f"SocketCAN can0 失敗: {e}")
-                    self._status.can_error = f"can0: {str(e)[:30]}"
-            
-            # === 2. 嘗試 SLCAN（掃描所有 USB 串口）===
-            try:
-                import serial.tools.list_ports
-                ports = list(serial.tools.list_ports.comports())
-                
-                for port in ports:
-                    # 跳過藍牙等非 USB 裝置
-                    if 'bluetooth' in port.device.lower():
-                        continue
-                    
-                    try:
-                        bus = can.interface.Bus(
-                            interface='slcan',
-                            channel=port.device,
-                            bitrate=self.CAN_BITRATE,
-                            timeout=0.1,
-                            receive_own_messages=False
-                        )
-                        self._can_bus = bus
-                        self._status.can_interface = f"SLCAN ({port.device})"
-                        self._status.can_ready = True
-                        self._status.can_error = ""
-                        logger.info(f"CAN Bus 連接成功: SLCAN {port.device}")
-                        return True
-                    except Exception as e:
-                        logger.debug(f"SLCAN {port.device} 失敗: {e}")
-                        continue
-                
-                if not self._status.can_error:
-                    self._status.can_error = "未找到 CAN 裝置"
-            except ImportError:
-                self._status.can_error = "缺少 pyserial"
-            
-            return False
-            
+            # 延後 import 避免 hardware_init/datagrab 的模組載入循環；實際建立流程只有一份。
+            from vehicle.datagrab import init_can_bus
+
+            bus, interface_type = init_can_bus(
+                bitrate=self.CAN_BITRATE,
+                max_retries=1,
+            )
+            if bus is None:
+                self._status.can_error = "未找到可用 CAN 介面"
+                return False
+
+            self._can_bus = bus
+            self._status.can_interface = interface_type or "CAN"
+            self._status.can_ready = True
+            self._status.can_error = ""
+            return True
         except ImportError as e:
-            self._status.can_error = f"缺少 python-can"
+            self._status.can_error = f"缺少 CAN 相依套件: {e}"
             return False
         except Exception as e:
             self._status.can_error = str(e)[:50]

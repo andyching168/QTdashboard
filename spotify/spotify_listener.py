@@ -37,6 +37,8 @@ class SpotifyListener:
         self.running = False
         self.thread = None
         self.interpolation_thread = None  # 進度補間執行緒
+        self._wake_event = threading.Event()
+        self._stop_event = threading.Event()
         
         # 快取上次的播放資訊
         self.last_track_id = None
@@ -102,14 +104,9 @@ class SpotifyListener:
         self._last_progress_emit_second = None
     
     def force_update_now(self):
-        """強制立即更新一次（用於進入音樂卡片時的即時更新）"""
-        try:
-            logger.info("強制立即更新 Spotify 資訊")
-            self._update_playback_state()
-            self.consecutive_errors = 0
-            self.error_backoff = 1.0
-        except Exception as e:
-            logger.error(f"強制更新失敗: {e}")
+        """喚醒 listener thread；呼叫端不執行任何網路 I/O。"""
+        logger.info("排程立即更新 Spotify 資訊")
+        self._wake_event.set()
     
     def start(self):
         """啟動監聽器"""
@@ -118,6 +115,8 @@ class SpotifyListener:
             return
             
         self.running = True
+        self._stop_event.clear()
+        self._wake_event.clear()
         
         # 啟動 API 輪詢執行緒
         self.thread = threading.Thread(target=self._listen_loop, daemon=True)
@@ -132,6 +131,8 @@ class SpotifyListener:
     def stop(self):
         """停止監聽器"""
         self.running = False
+        self._stop_event.set()
+        self._wake_event.set()
         if self.thread:
             self.thread.join(timeout=2)
         if self.interpolation_thread:
@@ -162,11 +163,11 @@ class SpotifyListener:
                         }
                         self.callbacks['on_progress_update'](progress_data)
                 
-                time.sleep(sleep_interval)
+                self._stop_event.wait(sleep_interval)
                 
             except Exception as e:
                 logger.debug(f"進度補間錯誤: {e}")
-                time.sleep(0.5)
+                self._stop_event.wait(0.5)
     
     def _listen_loop(self):
         """監聽循環（在背景執行緒運行）"""
@@ -176,7 +177,8 @@ class SpotifyListener:
                 # 成功後重置錯誤計數和退避
                 self.consecutive_errors = 0
                 self.error_backoff = 1.0
-                time.sleep(self.update_interval)
+                self._wake_event.wait(self.update_interval)
+                self._wake_event.clear()
                 
             except Exception as e:
                 self.consecutive_errors += 1
@@ -189,7 +191,8 @@ class SpotifyListener:
                 
                 # 指數退避：錯誤次數越多，等待時間越長
                 self.error_backoff = min(self.error_backoff * 1.5, 30.0)  # 最多 30 秒
-                time.sleep(self.update_interval * self.error_backoff)
+                self._wake_event.wait(self.update_interval * self.error_backoff)
+                self._wake_event.clear()
     
     def _update_playback_state(self):
         """更新播放狀態（從 Spotify API 同步）"""

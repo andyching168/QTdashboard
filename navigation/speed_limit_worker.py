@@ -39,10 +39,13 @@ class SpeedLimitWorker(QObject):
             self._pending = (lat, lon, bearing)
             self._cond.notify()
 
-    def stop(self):
+    def stop(self, timeout=2.0):
         with self._cond:
             self._stop = True
             self._cond.notify()
+        if self._thread.is_alive():
+            self._thread.join(timeout=timeout)
+        return not self._thread.is_alive()
 
     def _run(self):
         # 延遲到 worker 執行緒才載入，避免 CSV 解析阻塞主執行緒

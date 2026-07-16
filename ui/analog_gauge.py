@@ -16,6 +16,8 @@ class AnalogGauge(QWidget):
         self.labels = labels # Dictionary {value: "Label"} or None for auto numbers
         self.title = title
         self.red_zone_start = red_zone_start
+        self._static_cache = None
+        self._static_cache_key = None
         self.setSizePolicy(
             self.sizePolicy().horizontalPolicy(),
             self.sizePolicy().verticalPolicy()
@@ -33,16 +35,67 @@ class AnalogGauge(QWidget):
         width = self.width()
         height = self.height()
         side = min(width, height)
-        
+        if width <= 0 or height <= 0 or side <= 0:
+            return
+
+        self._ensure_static_cache(width, height, side)
+        if self._static_cache is not None:
+            painter.drawPixmap(0, 0, self._static_cache)
+
         painter.translate(width / 2, height / 2)
         painter.scale(side / 200.0, side / 200.0) # Normalize coordinate system to -100 to 100
 
-        self.draw_background(painter)
-        self.draw_ticks(painter)
-        self.draw_labels(painter)
         self.draw_needle(painter)
         self.draw_center_circle(painter)
         self.draw_title(painter)
+
+    def _style_cache_key(self, width, height, side):
+        return (
+            width,
+            height,
+            side,
+            self.min_val,
+            self.max_val,
+            tuple(sorted(self.labels.items())) if self.labels else None,
+            self.title,
+            self.red_zone_start,
+            self.gauge_style.major_ticks,
+            self.gauge_style.minor_ticks,
+            self.gauge_style.start_angle,
+            self.gauge_style.span_angle,
+            QColor(self.gauge_style.label_color).rgba(),
+            QColor(self.gauge_style.tick_color).rgba(),
+            QColor(self.gauge_style.needle_color).rgba(),
+            self.gauge_style.text_scale,
+            self.gauge_style.show_center_circle,
+        )
+
+    def _ensure_static_cache(self, width, height, side):
+        key = self._style_cache_key(width, height, side)
+        if self._static_cache is not None and self._static_cache_key == key:
+            return
+
+        cache = QPixmap(width, height)
+        cache.fill(Qt.GlobalColor.transparent)
+        cache_painter = QPainter(cache)
+        cache_painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        cache_painter.translate(width / 2, height / 2)
+        cache_painter.scale(side / 200.0, side / 200.0)
+        self.draw_background(cache_painter)
+        self.draw_ticks(cache_painter)
+        self.draw_labels(cache_painter)
+        cache_painter.end()
+
+        self._static_cache = cache
+        self._static_cache_key = key
+
+    def invalidate_static_cache(self):
+        self._static_cache = None
+        self._static_cache_key = None
+
+    def resizeEvent(self, event):  # type: ignore
+        self.invalidate_static_cache()
+        super().resizeEvent(event)
 
     def draw_background(self, painter):
         # Draw outer circle with gradient
@@ -180,6 +233,5 @@ class AnalogGauge(QWidget):
         painter.setFont(font)
         rect = QRectF(-50, 35, 100, 20)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.title)
-
 
 

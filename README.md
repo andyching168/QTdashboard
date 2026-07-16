@@ -78,7 +78,9 @@
 
 ### 硬體需求
 - **顯示螢幕**: 1920x480 解析度 (針對此規格優化)
-- **CAN Bus 轉接器**: CANable 或其他支援 slcan 協定的 CAN-USB 轉接器
+- **CAN Bus 轉接器**: Raspberry Pi 實機使用 Linux SocketCAN（預設 can0）；
+  SLCAN 僅保留給 macOS/Windows 桌面除錯，可用
+  QTDASHBOARD_SLCAN_PORT 明確指定 serial port。
 - **車輛介面**: 連接到 Luxgen M7 的 OBD-II 接口
 - **運算平台**:
   - Raspberry Pi 4/5 (推薦)

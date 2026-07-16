@@ -278,7 +278,7 @@ class ShutdownDialog(QDialog):
         """執行關機或退出程式"""
         # 關機前再次儲存速度校正係數（確保最新值被保存）
         try:
-            import datagrab
+            from vehicle import datagrab
             datagrab.persist_speed_correction()
             print(f"[速度校正] 關機前儲存校正係數 {datagrab.get_speed_correction():.3f}")
         except Exception as e:

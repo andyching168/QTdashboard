@@ -1,40 +1,53 @@
-#!/usr/bin/env python3
-"""
-速限查詢功能測試
-"""
-from navigation.speed_limit import query_speed_limit, get_speed_limit_loader
+"""速限規則與實際標誌座標的回歸測試。"""
+import pytest
+
+from navigation.speed_limit import SpeedLimitLoader
 
 
-def test_speed_limit():
-    """測試速限查詢功能"""
-    loader = get_speed_limit_loader()
-    print(f"Loaded {len(loader._signs)} speed limit signs\n")
-    
-    # 測試案例
-    tests = [
-        # (lat, lon, bearing, expected_desc)
-        (24.985379, 121.474948, None, "國道3號 37K 附近"),
-        (25.0330, 121.5654, None, "台北市區 (非國道)"),
-        (25.016681, 121.472560, None, "未知位置"),
-        # 國道1號
-        (25.0795, 121.5570, None, "國道1號"),
-    ]
-    
-    print("=== 速限查詢測試 ===\n")
-    
-    for lat, lon, bearing, desc in tests:
-        limit = query_speed_limit(lat, lon, bearing)
-        result = f"{limit} km/h" if limit else "None (不顯示)"
-        print(f"{desc}: {result}")
-        
-        if bearing is not None:
-            limit_bearing = query_speed_limit(lat, lon, bearing)
-            result_bearing = f"{limit_bearing} km/h" if limit_bearing else "None"
-            print(f"  (with bearing={bearing}): {result_bearing}")
-        print()
-    
-    print("=== 完成 ===")
+@pytest.fixture(scope="module")
+def loader():
+    return SpeedLimitLoader()
 
 
-if __name__ == "__main__":
-    test_speed_limit()
+@pytest.mark.parametrize(
+    ("highway", "km", "expected_limit"),
+    [
+        ("國道1號", 50.0, 100),
+        ("國道2號", 0.5, 80),
+        ("國道2號", 5.0, 100),
+        ("國道3號", 20.0, 90),
+        ("國道5號", 10.0, 80),
+        ("國道5號", 20.0, 90),
+    ],
+)
+def test_query_uses_geographic_rule_for_actual_sign(loader, highway, km, expected_limit):
+    """每一組都直接使用 CSV 中最接近目標里程的實際標誌座標。"""
+    sign = min(
+        (item for item in loader._signs if item["highway"] == highway),
+        key=lambda item: abs(item["km"] - km),
+    )
+
+    limit, _direction, dual_limits = loader.query(sign["lat"], sign["lon"], bearing=0)
+
+    assert sign["km"] == km
+    assert limit == expected_limit
+    assert dual_limits is None
+
+
+@pytest.mark.parametrize(
+    ("highway", "km", "expected_limit"),
+    [
+        ("國道1號", 154.449, 100),
+        ("國道1號", 154.451, 110),
+        ("國道3號", 34.999, 90),
+        ("國道3號", 35.0, 100),
+        ("國道3號", 35.001, 100),
+        ("國道4號", 0.0, 100),
+    ],
+)
+def test_rule_boundaries_and_full_route(loader, highway, km, expected_limit):
+    assert loader._get_speed_limit_for_km(km, highway) == expected_limit
+
+
+def test_unknown_road_has_no_speed_limit(loader):
+    assert loader._get_speed_limit_for_km(10.0, "省道台2己") is None
