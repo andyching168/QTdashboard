@@ -1,5 +1,7 @@
 # Luxgen M7 數位儀表板系統
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andyching168/QTdashboard)
+
 ## 功能說明
 
 這是一個針對 Luxgen 7 MPV 的數位儀表板系統，整合了 CAN Bus 監聽、OBD-II 診斷功能、Spotify 音樂播放器、MQTT 導航資訊、WiFi 管理、速限顯示，以及車輛方向燈指示，並透過 PyQt6 提供現代化的儀表板顯示介面。
