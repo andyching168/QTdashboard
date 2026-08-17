@@ -316,37 +316,37 @@ class Dashboard(QWidget):
         # 優先判斷：無裝置
         if self.gps_device_found == False:
             self.gps_icon_label.setText("GPS!")
-            self.gps_icon_label.setStyleSheet(f"color: {T('GPS_NOT_FOUND')}; font-size: 18px; font-weight: bold; background: transparent;")
+            self.gps_icon_label.setStyleSheet(f"color: {T('GPS_NOT_FOUND')}; font-size: 24px; font-weight: bold; background: transparent;")
             self.gps_icon_label.setToolTip("GPS: 未偵測到裝置")
             self.gps_speed_label.setText("--")
-            self.gps_speed_label.setStyleSheet(f"color: {T('GPS_NOT_FOUND')}; font-size: 16px; font-weight: bold; background: transparent;")
+            self.gps_speed_label.setStyleSheet(f"color: {T('GPS_NOT_FOUND')}; font-size: 24px; font-weight: bold; background: transparent;")
         elif self.is_gps_fixed:
             if self.is_using_external_gps:
                 if self.is_external_gps_fresh:
                     # 黃色 (External GPS - 即時)
                     self.gps_icon_label.setText("GPS*")
-                    self.gps_icon_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_FRESH')}; font-size: 18px; font-weight: bold; background: transparent;")
+                    self.gps_icon_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_FRESH')}; font-size: 24px; font-weight: bold; background: transparent;")
                     self.gps_icon_label.setToolTip("GPS: External (MQTT) - 即時")
-                    self.gps_speed_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_FRESH')}; font-size: 16px; font-weight: bold; background: transparent;")
+                    self.gps_speed_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_FRESH')}; font-size: 24px; font-weight: bold; background: transparent;")
                 else:
                     # 灰色 (External GPS - 過時但可用)
                     self.gps_icon_label.setText("GPS*")
-                    self.gps_icon_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_STALE')}; font-size: 18px; font-weight: bold; background: transparent;")
+                    self.gps_icon_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_STALE')}; font-size: 24px; font-weight: bold; background: transparent;")
                     self.gps_icon_label.setToolTip("GPS: External (MQTT) - 最後位置")
-                    self.gps_speed_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_STALE')}; font-size: 16px; font-weight: bold; background: transparent;")
+                    self.gps_speed_label.setStyleSheet(f"color: {T('GPS_EXTERNAL_STALE')}; font-size: 24px; font-weight: bold; background: transparent;")
             else:
                 # 綠色 (Internal Fix)
                 self.gps_icon_label.setText("GPS")
-                self.gps_icon_label.setStyleSheet(f"color: {T('GPS_INTERNAL')}; font-size: 18px; font-weight: bold; background: transparent;")
+                self.gps_icon_label.setStyleSheet(f"color: {T('GPS_INTERNAL')}; font-size: 24px; font-weight: bold; background: transparent;")
                 self.gps_icon_label.setToolTip("GPS: Fixed (3D)")
-                self.gps_speed_label.setStyleSheet(f"color: {T('GPS_INTERNAL')}; font-size: 16px; font-weight: bold; background: transparent;")
+                self.gps_speed_label.setStyleSheet(f"color: {T('GPS_INTERNAL')}; font-size: 24px; font-weight: bold; background: transparent;")
         else:
             # 灰色 (No Fix - 搜尋中)
             self.gps_icon_label.setText("GPS")
-            self.gps_icon_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 18px; font-weight: bold; background: transparent;")
+            self.gps_icon_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 24px; font-weight: bold; background: transparent;")
             self.gps_icon_label.setToolTip("GPS: Searching...")
             self.gps_speed_label.setText("--")
-            self.gps_speed_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 16px; font-weight: bold; background: transparent;")
+            self.gps_speed_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 24px; font-weight: bold; background: transparent;")
         
         # Force Style Update
         self.gps_icon_label.style().unpolish(self.gps_icon_label)
@@ -361,10 +361,10 @@ class Dashboard(QWidget):
         # 更新左上角的 GPS 速度顯示
         if self.is_gps_fixed:
             self.gps_speed_label.setText(f"{int(speed_kmh)}")
-            self.gps_speed_label.setFixedWidth(50)
+            self.gps_speed_label.setFixedWidth(70)
         else:
             self.gps_speed_label.setText("--")
-            self.gps_speed_label.setFixedWidth(50)
+            self.gps_speed_label.setFixedWidth(70)
         
         # 檢查是否應該顯示 GPS 速度
         # 條件: 速度同步開啟(datagrab.gps_speed_mode) AND GPS 定位完成 AND OBD速度 >= 20
@@ -566,9 +566,9 @@ class Dashboard(QWidget):
         
         # 1. 左側 GPS 速度顯示 (與右側 GPS Icon 平衡)
         self.gps_speed_label = QLabel("--")
-        self.gps_speed_label.setFixedWidth(50)
+        self.gps_speed_label.setFixedWidth(70)
         self.gps_speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.gps_speed_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 16px; font-weight: bold; background: transparent;")
+        self.gps_speed_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 24px; font-weight: bold; background: transparent;")
         self.gps_speed_label.setToolTip("GPS 速度")
         
         # 2. 時間顯示 (中央)
@@ -577,7 +577,7 @@ class Dashboard(QWidget):
         self.time_label.setStyleSheet(f"""
             QLabel {{
                 color: {T('PRIMARY')};
-                font-size: 24px;
+                font-size: 32px;
                 font-weight: bold;
                 background: transparent;
                 letter-spacing: 2px;
@@ -586,9 +586,9 @@ class Dashboard(QWidget):
         
         # 3. GPS 狀態 (右側)
         self.gps_icon_label = QLabel("GPS") 
-        self.gps_icon_label.setFixedWidth(40)
+        self.gps_icon_label.setFixedWidth(60)
         self.gps_icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.gps_icon_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 18px; font-weight: bold; background: transparent;")
+        self.gps_icon_label.setStyleSheet(f"color: {T('TEXT_DISABLED')}; font-size: 24px; font-weight: bold; background: transparent;")
         self.gps_icon_label.setToolTip("GPS: Searching...")
         
         # 使用 Stretch 確保整體置中
